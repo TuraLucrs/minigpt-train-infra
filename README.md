@@ -44,19 +44,19 @@ DDP / FSDP / DeepSpeed 很重要，但它们应该是第二、第三阶段。否
 把单卡 GPT 预训练系统写完整、注释写明白、能跑、能断点续训、能记录指标。
 ```
 
-## 哪些部分是自己实现的？
+## 当前版本与教学基线
 
-本项目刻意避免使用会隐藏关键学习点的高级封装。
+Git 标签 `baseline-v0.1` 保存了完整教学实现，其中 LayerNorm、GELU、
+cross entropy、AdamW、梯度裁剪和 loss scaling 都是手写版本。
 
-自己实现：
+当前工程化分支已经把学完且官方实现更成熟的部分逐步替换为 PyTorch 原生算子。
+
+当前仍显式实现：
 
 - 字符级 tokenizer：`src/minigpt/tokenizer.py`
 - GPT 数据 batcher：`src/minigpt/data.py`
-- LayerNorm：`MiniLayerNorm`
-- GELU：`gelu`
 - causal multi-head self-attention：`CausalSelfAttention`
 - Transformer block：`TransformerBlock`
-- next-token cross entropy：`manual_cross_entropy`
 - AdamW optimizer：`MiniAdamW`
 - cosine warmup learning rate scheduler：`cosine_lr`
 - gradient clipping：`clip_grad_norm`
@@ -64,18 +64,13 @@ DDP / FSDP / DeepSpeed 很重要，但它们应该是第二、第三阶段。否
 - training loop：`train.py`
 - checkpoint / resume glue：`train.py` + `checkpoint.py`
 
-正常使用 PyTorch 基础能力：
+已升级为 PyTorch 原生实现：
 
-- `torch.Tensor`
-- `torch.matmul` / `@`
-- `nn.Linear`
-- `nn.Embedding`
-- `nn.Dropout`
-- autograd 的 `loss.backward()`
-- `torch.save` / `torch.load`
-- `torch.amp.autocast`
+- LayerNorm：`nn.LayerNorm`
+- GELU：`torch.nn.functional.gelu`
+- next-token cross entropy：`torch.nn.functional.cross_entropy`
 
-原因很简单：这个阶段要学习的是训练系统和 Transformer 结构，不是从零写一个深度学习框架。
+升级必须通过核心测试、精确断点续训测试以及固定配置的 loss/吞吐对照。
 
 ## 项目结构
 
@@ -237,10 +232,10 @@ python train.py --config configs/tiny_cpu.json --resume runs/tiny_cpu/latest.pt 
 
 1. `src/minigpt/tokenizer.py`
 2. `src/minigpt/data.py`
-3. `src/minigpt/model.py` 里的 `MiniLayerNorm`
+3. `baseline-v0.1` 里的 `MiniLayerNorm`，再对照当前 `nn.LayerNorm`
 4. `src/minigpt/model.py` 里的 `CausalSelfAttention`
 5. `src/minigpt/model.py` 里的 `TransformerBlock`
-6. `src/minigpt/model.py` 里的 `manual_cross_entropy`
+6. `baseline-v0.1` 里的 `manual_cross_entropy`，再对照当前 `next_token_cross_entropy`
 7. `src/minigpt/optim.py`
 8. `train.py`
 9. `src/minigpt/checkpoint.py`

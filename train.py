@@ -48,7 +48,7 @@ from minigpt.checkpoint import (  # noqa: E402
 from minigpt.config import load_experiment_config, resolve_project_path  # noqa: E402
 from minigpt.data import RandomTokenBatcher, split_train_val  # noqa: E402
 from minigpt.logging_utils import CSVLogger, memory_stats_mb, reset_peak_memory, synchronize_if_cuda  # noqa: E402
-from minigpt.model import MiniGPT, MiniGPTConfig, count_parameters, manual_cross_entropy  # noqa: E402
+from minigpt.model import MiniGPT, MiniGPTConfig, count_parameters, next_token_cross_entropy  # noqa: E402
 from minigpt.optim import MiniAdamW, SimpleGradScaler, clip_grad_norm, cosine_lr  # noqa: E402
 from minigpt.tokenizer import CharTokenizer  # noqa: E402
 
@@ -169,7 +169,7 @@ def estimate_loss(
         x, y = batcher.get_batch()
         with autocast_context():
             logits = model(x)
-            loss = manual_cross_entropy(logits, y, debug_checks=debug_checks)
+            loss = next_token_cross_entropy(logits, y, debug_checks=debug_checks)
         losses.append(loss.float().item())
     model.train()
     return sum(losses) / len(losses)
@@ -478,7 +478,7 @@ def main() -> None:
                 x, y = train_batcher.get_batch()
                 with autocast_context():
                     logits = model(x)
-                    loss = manual_cross_entropy(logits, y, debug_checks=args.debug_checks)
+                    loss = next_token_cross_entropy(logits, y, debug_checks=args.debug_checks)
 
                     # 关键点：loss 要除以 accumulation steps。
                     # 否则累积 N 次 backward 后，梯度会比原来大 N 倍。

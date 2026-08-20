@@ -26,7 +26,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from minigpt.checkpoint import build_checkpoint_payload, load_checkpoint, save_checkpoint  # noqa: E402
 from minigpt.data import RandomTokenBatcher  # noqa: E402
-from minigpt.model import MiniGPT, MiniGPTConfig, manual_cross_entropy  # noqa: E402
+from minigpt.model import MiniGPT, MiniGPTConfig, next_token_cross_entropy  # noqa: E402
 from minigpt.optim import MiniAdamW, SimpleGradScaler  # noqa: E402
 from minigpt.tokenizer import CharTokenizer  # noqa: E402
 from train import checkpoint_run_dir, find_resume_tokenizer_path, tokenizer_fingerprint, validate_resume_metadata  # noqa: E402
@@ -56,13 +56,13 @@ def main() -> None:
     logits = model(x)
     assert logits.shape == (2, 8, tokenizer.vocab_size)
 
-    loss = manual_cross_entropy(logits, y)
+    loss = next_token_cross_entropy(logits, y)
     expected_loss = torch.nn.functional.cross_entropy(logits.reshape(-1, tokenizer.vocab_size), y.reshape(-1))
     assert torch.allclose(loss, expected_loss, atol=1e-6)
     assert loss.ndim == 0
 
     try:
-        manual_cross_entropy(logits, torch.full_like(y, tokenizer.vocab_size), debug_checks=True)
+        next_token_cross_entropy(logits, torch.full_like(y, tokenizer.vocab_size), debug_checks=True)
     except ValueError:
         pass
     else:

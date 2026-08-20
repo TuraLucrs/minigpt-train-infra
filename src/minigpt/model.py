@@ -1,26 +1,17 @@
-"""MiniGPT model implemented with explicit Transformer building blocks.
+"""MiniGPT model with explicit Transformer structure and native PyTorch primitives.
 
-这个文件是项目最重要的学习材料之一。它刻意不用：
+最初的教学基线刻意不用：
 - torch.nn.Transformer
 - torch.nn.TransformerEncoder
 - torch.nn.MultiheadAttention
-- torch.nn.LayerNorm
-- torch.nn.functional.cross_entropy
 
-我们自己写：
-- LayerNorm
-- GELU
+当前工程化版本仍然显式保留：
 - causal self-attention
 - Transformer block
 - GPT forward
-- next-token cross entropy loss
 
-但我们仍然使用 PyTorch 的基础能力：
-- Tensor 运算
-- nn.Linear / nn.Embedding / nn.Dropout
-- autograd 自动求导
-
-完全手写矩阵乘和反向传播不是这个阶段的重点；理解训练系统和 Transformer 结构才是。
+已经学完且官方实现更成熟的 LayerNorm、GELU 和 cross entropy 改用
+PyTorch 原生算子。原始手写版本保存在 Git 标签 ``baseline-v0.1``。
 """
 
 from __future__ import annotations
@@ -31,6 +22,7 @@ from typing import Optional
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 
 @dataclass
@@ -51,46 +43,6 @@ class MiniGPTConfig:
     n_head: int
     n_embd: int
     dropout: float = 0.1
-
-
-class MiniLayerNorm(nn.Module):
-    """手写 LayerNorm。
-
-    LayerNorm 对每个 token 的最后一维 hidden dimension 做归一化。
-
-    输入 x shape: [B, T, C]
-    B = batch size
-    T = sequence length
-    C = hidden dimension / n_embd
-
-    对于每个 [B, T] 位置上的 C 维向量：
-    1. 减去均值；
-    2. 除以标准差；
-    3. 乘可学习参数 gamma；
-    4. 加可学习参数 beta。
-    """
-
-    def __init__(self, n_embd: int, eps: float = 1e-5) -> None:
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(n_embd))
-        self.bias = nn.Parameter(torch.zeros(n_embd))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        mean = x.mean(dim=-1, keepdim=True)
-        variance = (x - mean).pow(2).mean(dim=-1, keepdim=True)
-        normalized = (x - mean) * torch.rsqrt(variance + self.eps)
-        return self.weight * normalized + self.bias
-
-
-def gelu(x: torch.Tensor) -> torch.Tensor:
-    """手写 GELU 激活函数的 tanh 近似版本。
-
-    GPT 系列模型常用 GELU，而不是 ReLU。这里不用 torch.nn.GELU，
-    是为了让你看到它本质上只是一个逐元素非线性变换。
-    """
-
-    return 0.5 * x * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (x + 0.044715 * x.pow(3))))
 
 
 class CausalSelfAttention(nn.Module):
@@ -188,7 +140,7 @@ class FeedForward(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.fc(x)
-        x = gelu(x)
+        x = F.gelu(x, approximate="tanh")
         x = self.proj(x)
         x = self.dropout(x)
         return x
@@ -207,9 +159,9 @@ class TransformerBlock(nn.Module):
 
     def __init__(self, config: MiniGPTConfig) -> None:
         super().__init__()
-        self.ln_1 = MiniLayerNorm(config.n_embd)
+        self.ln_1 = nn.LayerNorm(config.n_embd)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = MiniLayerNorm(config.n_embd)
+        self.ln_2 = nn.LayerNorm(config.n_embd)
         self.mlp = FeedForward(config)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -239,7 +191,7 @@ class MiniGPT(nn.Module):
         self.dropout = nn.Dropout(config.dropout)
 
         self.blocks = nn.ModuleList([TransformerBlock(config) for _ in range(config.n_layer)])
-        self.ln_f = MiniLayerNorm(config.n_embd)
+        self.ln_f = nn.LayerNorm(config.n_embd)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
         # 权重共享：输入 token embedding 和输出 lm_head 使用同一份权重。
@@ -311,20 +263,8 @@ class MiniGPT(nn.Module):
         return input_ids
 
 
-def manual_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, debug_checks: bool = False) -> torch.Tensor:
-    """手写 next-token cross entropy。
-
-    PyTorch 里通常会写：
-        F.cross_entropy(logits.view(-1, V), targets.view(-1))
-
-    这里不用它，而是自己展开公式，方便你理解 loss 到底在算什么。
-
-    对一个位置来说：
-        loss = -log softmax(logits)[target]
-             = log(sum(exp(logits))) - logits[target]
-
-    为了数值稳定，logsumexp 用“减最大值”的方式计算。
-    """
+def next_token_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, debug_checks: bool = False) -> torch.Tensor:
+    """Compute next-token loss with PyTorch's optimized cross-entropy kernel."""
 
     if logits.ndim != 3:
         raise ValueError("logits must have shape [B, T, V]")
@@ -335,20 +275,11 @@ def manual_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, debug_chec
     if targets.shape != (B, T):
         raise ValueError(f"targets shape must be [B, T], got {tuple(targets.shape)} for logits {tuple(logits.shape)}")
 
-    # Under fp16/bf16 autocast, logits can be low precision. Keep the loss math in fp32:
-    # exp/sum/log are exactly where low precision tends to hurt numerical stability.
     logits_flat = logits.reshape(B * T, V).float()
     targets_flat = targets.reshape(B * T)
     if debug_checks and torch.any((targets_flat < 0) | (targets_flat >= V)):
         raise ValueError("targets contain token ids outside the vocabulary range")
-
-    max_logits = logits_flat.max(dim=-1, keepdim=True).values
-    shifted = logits_flat - max_logits
-    logsumexp = max_logits.squeeze(-1) + torch.log(torch.exp(shifted).sum(dim=-1))
-
-    target_logits = logits_flat.gather(dim=-1, index=targets_flat.unsqueeze(-1)).squeeze(-1)
-    losses = logsumexp - target_logits
-    return losses.mean()
+    return F.cross_entropy(logits_flat, targets_flat)
 
 
 def count_parameters(model: nn.Module) -> int:
