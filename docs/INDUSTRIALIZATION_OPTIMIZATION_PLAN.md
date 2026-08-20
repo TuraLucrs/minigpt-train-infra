@@ -1016,27 +1016,53 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 
 ### 阶段 A：完成并冻结教学单卡版本
 
-- [ ] 看完 `checkpoint.py`；
-- [ ] 看完 `config.py`；
-- [ ] 看完 `logging_utils.py`；
-- [ ] 看完 `tests/test_core.py`；
-- [ ] 完成连续训练与断点续训一致性实验；
-- [ ] 建立 FP32 基准：loss、tokens/s、step time、峰值显存；
-- [ ] 标记 `v0.1-learning-baseline`。
+- [x] 看完 `checkpoint.py`；
+- [x] 看完 `config.py`；
+- [x] 看完 `logging_utils.py`；
+- [x] 看完 `tests/test_core.py`；
+- [x] 完成连续训练与断点续训一致性实验；
+- [x] 建立 CPU FP32 基准：loss、tokens/s、step time；GPU 显存基准待 GPU 环境补测；
+- [x] 标记 Git 标签 `baseline-v0.1`，提交 `3468858`。
 
 ### 阶段 B：建立优化单卡版本
 
-- [ ] 替换 LayerNorm、GELU、cross entropy；
-- [ ] 替换 AdamW、gradient clipping、GradScaler；
+- [x] 替换 LayerNorm、GELU、cross entropy；
+- [x] 替换 AdamW、gradient clipping、GradScaler；
 - [ ] 建立 optimizer 参数组；
-- [ ] 合并 QKV；
-- [ ] 替换为 SDPA；
+- [x] 合并 QKV，并支持旧模型权重与 optimizer 动量迁移；
+- [x] 替换为 SDPA；
 - [ ] 删除 micro-batch 热路径 `.item()`；
 - [ ] 用窗口/CUDA event 测量，不再每 step 全局同步；
 - [ ] 去掉重复 `zero_grad`；
 - [ ] 原子 checkpoint，避免 numbered/latest 重复写完整文件；
 - [ ] 增加 reference-vs-optimized 测试；
-- [ ] 重新记录正确性、吞吐和显存基线。
+- [ ] 重新记录正确性、吞吐和显存基线：CPU 已完成，GPU 待补测。
+
+#### 2026-08-20 CPU 升级验收记录
+
+固定条件：PyTorch `2.13.0+cpu`、FP32、`tiny_cpu.json`、107,008 参数、30 step；
+吞吐使用排除第 1 步后的逐步 `tokens/s` 中位数。这个模型过小且共享 CPU 容易抖动，
+结果只用于本机回归，不代表 GPU 收益。
+
+| 版本 | 30-step 中位吞吐 | 相对教学基线 | step 30 train loss | best val loss |
+| --- | ---: | ---: | ---: | ---: |
+| 教学基线：手写模型原子组件与训练组件 | 30,744.76 tok/s | 1.000x | 2.9852 | 3.1050626 |
+| 原生 LayerNorm/GELU/CE | 41,936.99 tok/s | 1.364x | 2.9852 | 3.1051 |
+| 再替换 AdamW/clip/GradScaler | 35,887.48 tok/s | 1.167x | 2.9852 | 3.1051 |
+| 再切换 SDPA | 36,741.51 tok/s | 1.195x | 2.9852 | 3.1051 |
+| 再合并 QKV（当前版本） | 43,104.37 tok/s | 1.402x | 2.9852 | 3.1050604 |
+
+当前版本相对教学基线的最终模型参数最大绝对差为 `2.18e-4`，best val loss 绝对差为
+`2.24e-6`。差异来自官方 AdamW 的数值路径与算子浮点顺序，训练曲线保持一致。
+
+额外验收：
+
+- `tests/test_core.py` 通过；
+- `tests/test_resume_consistency.py` 通过，连续训练与当前格式 checkpoint 恢复结果逐项完全一致；
+- `baseline-v0.1` 的分离 Q/K/V 权重、causal mask、MiniAdamW 动量和 SimpleGradScaler 状态可迁移；
+- SDPA 因果性测试通过：改变未来 token 不影响此前位置 logits；
+- CPU 上官方 AdamW 单项没有加速，采用它是为了标准状态格式、维护性、GPU fused 路径和分布式兼容；
+- GPU/BF16/FP16、Flash Attention 实际 dispatch、显存峰值仍待 GPU 环境验收。
 
 ### 阶段 C：数据和可观测性
 
