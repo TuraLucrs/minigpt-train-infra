@@ -129,7 +129,7 @@ def main() -> None:
             for parameter in parameters
         ],
     }
-    load_optimizer_state(migrated_optimizer, legacy_optimizer_state)
+    load_optimizer_state(migrated_optimizer, legacy_optimizer_state, model)
     assert migrated_optimizer.state[parameters[0]]["step"].item() == 3
     assert migrated_optimizer.param_groups[0]["betas"] == (0.9, 0.95)
 
@@ -147,12 +147,29 @@ def main() -> None:
     )
     assert migrated_scaler.get_scale() == 4096.0
 
-    # Native SDPA no longer stores an O(T^2) causal-mask buffer. Old model
-    # checkpoints are migrated before strict state loading.
+    # Native SDPA drops the mask buffer and fused QKV replaces three Linear
+    # modules. Reconstruct the old layout and require lossless strict loading.
     legacy_model_state = dict(model.state_dict())
-    legacy_model_state["blocks.0.attn.causal_mask"] = torch.ones(1, 1, 8, 8, dtype=torch.bool)
+    for block_index in range(config.n_layer):
+        prefix = f"blocks.{block_index}.attn."
+        qkv_weight = legacy_model_state.pop(prefix + "qkv_proj.weight")
+        qkv_bias = legacy_model_state.pop(prefix + "qkv_proj.bias")
+        q_weight, k_weight, v_weight = qkv_weight.chunk(3, dim=0)
+        q_bias, k_bias, v_bias = qkv_bias.chunk(3, dim=0)
+        for projection, weight, bias in (
+            ("q_proj", q_weight, q_bias),
+            ("k_proj", k_weight, k_bias),
+            ("v_proj", v_weight, v_bias),
+        ):
+            legacy_model_state[prefix + projection + ".weight"] = weight
+            legacy_model_state[prefix + projection + ".bias"] = bias
+        legacy_model_state[prefix + "causal_mask"] = torch.ones(1, 1, 8, 8, dtype=torch.bool)
     migrated_model_state = migrate_model_state_dict(legacy_model_state)
     assert "blocks.0.attn.causal_mask" not in migrated_model_state
+    assert torch.equal(
+        migrated_model_state["blocks.0.attn.qkv_proj.weight"],
+        model.state_dict()["blocks.0.attn.qkv_proj.weight"],
+    )
     model.load_state_dict(migrated_model_state, strict=True)
 
     with tempfile.TemporaryDirectory() as tmpdir:

@@ -417,7 +417,7 @@ def main() -> None:
     best_val_loss: float | None = None
     if checkpoint is not None:
         model.load_state_dict(migrate_model_state_dict(checkpoint["model_state"]))
-        load_optimizer_state(optimizer, checkpoint["optimizer_state"])
+        load_optimizer_state(optimizer, checkpoint["optimizer_state"], model)
         load_grad_scaler_state(scaler, checkpoint["scaler_state"])
         restore_rng_state(checkpoint)
         if "train_batcher_state" in checkpoint:

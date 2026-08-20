@@ -20,39 +20,132 @@ def set_optimizer_lr(optimizer: torch.optim.Optimizer, lr: float) -> None:
         group["lr"] = lr
 
 
-def load_optimizer_state(optimizer: torch.optim.Optimizer, payload: dict[str, Any]) -> None:
-    """Load native state or migrate a ``baseline-v0.1`` MiniAdamW state.
+def _optimizer_named_parameters(
+    optimizer: torch.optim.Optimizer,
+    model: torch.nn.Module,
+) -> list[tuple[str, torch.nn.Parameter]]:
+    name_by_id = {id(parameter): name for name, parameter in model.named_parameters()}
+    result = []
+    for group in optimizer.param_groups:
+        for parameter in group["params"]:
+            name = name_by_id.get(id(parameter))
+            if name is None:
+                raise ValueError("Optimizer contains a parameter that is not present in the model")
+            result.append((name, parameter))
+    return result
 
-    The teaching optimizer stored state as a list aligned with model parameter
-    order. Native PyTorch optimizers store parameter IDs plus parameter-group
-    metadata. Supporting both formats keeps old checkpoints resumable.
-    """
+
+def _separate_qkv_parameter_names(current_names: list[str]) -> list[str]:
+    """Expand current fused-QKV names into the parameter order used before fusion."""
+
+    legacy_names = []
+    for name in current_names:
+        if name.endswith(".attn.qkv_proj.weight"):
+            prefix = name[: -len("qkv_proj.weight")]
+            for projection in ("q_proj", "k_proj", "v_proj"):
+                legacy_names.extend([prefix + projection + ".weight", prefix + projection + ".bias"])
+        elif name.endswith(".attn.qkv_proj.bias"):
+            continue
+        else:
+            legacy_names.append(name)
+    return legacy_names
+
+
+def _merge_qkv_optimizer_states(name: str, states_by_name: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    suffix = "qkv_proj.weight" if name.endswith("qkv_proj.weight") else "qkv_proj.bias"
+    prefix = name[: -len(suffix)]
+    old_suffix = "weight" if suffix.endswith("weight") else "bias"
+    sources = [states_by_name[prefix + projection + "." + old_suffix] for projection in ("q_proj", "k_proj", "v_proj")]
+    if not all(sources):
+        return {}
+
+    merged: dict[str, Any] = {}
+    for key in sources[0]:
+        values = [state[key] for state in sources]
+        first = values[0]
+        if isinstance(first, torch.Tensor) and first.ndim > 0:
+            merged[key] = torch.cat(values, dim=0)
+        else:
+            merged[key] = first
+    return merged
+
+
+def _move_optimizer_state(state: dict[str, Any], parameter: torch.nn.Parameter) -> dict[str, Any]:
+    moved = {}
+    for key, value in state.items():
+        if not isinstance(value, torch.Tensor):
+            moved[key] = value
+        elif key == "step":
+            moved[key] = value.to(device=parameter.device, dtype=torch.float32)
+        else:
+            moved[key] = value.to(device=parameter.device, dtype=parameter.dtype)
+    return moved
+
+
+def load_optimizer_state(
+    optimizer: torch.optim.Optimizer,
+    payload: dict[str, Any],
+    model: torch.nn.Module,
+) -> None:
+    """Load native state and migrate teaching or separate-QKV checkpoints."""
+
+    named_parameters = _optimizer_named_parameters(optimizer, model)
+    current_names = [name for name, _ in named_parameters]
+    current_count = len(current_names)
 
     if "param_groups" in payload:
-        optimizer.load_state_dict(payload)
-        return
-
-    old_states = payload.get("state")
-    if not isinstance(old_states, list):
-        raise ValueError("Unsupported optimizer checkpoint format")
-
-    params = [parameter for group in optimizer.param_groups for parameter in group["params"]]
-    if len(old_states) != len(params):
-        raise ValueError("Optimizer state does not match model parameter count")
+        saved_ids = [parameter_id for group in payload["param_groups"] for parameter_id in group["params"]]
+        if len(saved_ids) == current_count:
+            optimizer.load_state_dict(payload)
+            return
+        if len(payload["param_groups"]) != 1:
+            raise ValueError("QKV optimizer migration currently requires one saved parameter group")
+        source_names = _separate_qkv_parameter_names(current_names)
+        if len(saved_ids) != len(source_names):
+            raise ValueError("Optimizer state does not match current or separate-QKV model parameters")
+        states_by_name = {
+            name: payload["state"].get(parameter_id, {})
+            for name, parameter_id in zip(source_names, saved_ids)
+        }
+        hyperparameters = payload["param_groups"][0]
+    else:
+        old_states = payload.get("state")
+        if not isinstance(old_states, list):
+            raise ValueError("Unsupported optimizer checkpoint format")
+        source_names = (
+            current_names
+            if len(old_states) == current_count
+            else _separate_qkv_parameter_names(current_names)
+        )
+        if len(old_states) != len(source_names):
+            raise ValueError("Optimizer state does not match current or separate-QKV model parameters")
+        step = torch.tensor(float(payload["step_num"]), dtype=torch.float32)
+        states_by_name = {
+            name: {"step": step, **state}
+            for name, state in zip(source_names, old_states)
+        }
+        hyperparameters = {
+            "lr": float(payload["lr"]),
+            "betas": (float(payload["beta1"]), float(payload["beta2"])),
+            "eps": float(payload["eps"]),
+            "weight_decay": float(payload["weight_decay"]),
+        }
 
     for group in optimizer.param_groups:
-        group["lr"] = float(payload["lr"])
-        group["betas"] = (float(payload["beta1"]), float(payload["beta2"]))
-        group["eps"] = float(payload["eps"])
-        group["weight_decay"] = float(payload["weight_decay"])
+        for key in ("lr", "betas", "eps", "weight_decay", "amsgrad", "maximize"):
+            if key in hyperparameters:
+                group[key] = hyperparameters[key]
 
-    step = float(payload["step_num"])
-    for parameter, old_state in zip(params, old_states):
-        optimizer.state[parameter] = {
-            "step": torch.tensor(step, dtype=torch.float32, device=parameter.device),
-            "exp_avg": old_state["exp_avg"].to(device=parameter.device, dtype=parameter.dtype),
-            "exp_avg_sq": old_state["exp_avg_sq"].to(device=parameter.device, dtype=parameter.dtype),
-        }
+    optimizer.state.clear()
+    for name, parameter in named_parameters:
+        if name in states_by_name:
+            state = states_by_name[name]
+        elif name.endswith(("qkv_proj.weight", "qkv_proj.bias")):
+            state = _merge_qkv_optimizer_states(name, states_by_name)
+        else:
+            state = {}
+        if state:
+            optimizer.state[parameter] = _move_optimizer_state(state, parameter)
 
 
 def load_grad_scaler_state(scaler: torch.amp.GradScaler, payload: dict[str, Any]) -> None:

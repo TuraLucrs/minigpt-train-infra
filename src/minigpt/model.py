@@ -67,10 +67,8 @@ class CausalSelfAttention(nn.Module):
         self.block_size = config.block_size
         self.dropout = config.dropout
 
-        # 这里不用 nn.MultiheadAttention，而是显式写出 Q/K/V 三个投影。
-        self.q_proj = nn.Linear(config.n_embd, config.n_embd)
-        self.k_proj = nn.Linear(config.n_embd, config.n_embd)
-        self.v_proj = nn.Linear(config.n_embd, config.n_embd)
+        # 一次 GEMM 同时产生 Q/K/V，减少 kernel launch 和重复读取 x。
+        self.qkv_proj = nn.Linear(config.n_embd, 3 * config.n_embd)
         self.out_proj = nn.Linear(config.n_embd, config.n_embd)
 
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -80,10 +78,8 @@ class CausalSelfAttention(nn.Module):
         if T > self.block_size:
             raise ValueError(f"Sequence length {T} exceeds block_size {self.block_size}")
 
-        # q/k/v 原始 shape 都是 [B, T, C]。
-        q = self.q_proj(x)
-        k = self.k_proj(x)
-        v = self.v_proj(x)
+        # qkv shape [B, T, 3*C]，按最后一维切成三份 [B, T, C]。
+        q, k, v = self.qkv_proj(x).split(C, dim=-1)
 
         # 把 C 拆成 n_head * head_dim。
         # 变换后 shape: [B, n_head, T, head_dim]
@@ -270,12 +266,33 @@ def next_token_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, debug_
 
 
 def migrate_model_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-    """Remove state entries that became obsolete after native-op upgrades."""
+    """Migrate teaching/separate-QKV checkpoints to the current model layout."""
 
     migrated = dict(state_dict)
     for key in tuple(migrated):
         if key.endswith(".attn.causal_mask"):
             del migrated[key]
+
+    q_weight_suffix = ".attn.q_proj.weight"
+    for q_weight_key in tuple(migrated):
+        if not q_weight_key.endswith(q_weight_suffix):
+            continue
+        prefix = q_weight_key[: -len("q_proj.weight")]
+        q_bias_key = prefix + "q_proj.bias"
+        k_weight_key = prefix + "k_proj.weight"
+        k_bias_key = prefix + "k_proj.bias"
+        v_weight_key = prefix + "v_proj.weight"
+        v_bias_key = prefix + "v_proj.bias"
+        migrated[prefix + "qkv_proj.weight"] = torch.cat(
+            [migrated[q_weight_key], migrated[k_weight_key], migrated[v_weight_key]],
+            dim=0,
+        )
+        migrated[prefix + "qkv_proj.bias"] = torch.cat(
+            [migrated[q_bias_key], migrated[k_bias_key], migrated[v_bias_key]],
+            dim=0,
+        )
+        for old_key in (q_weight_key, q_bias_key, k_weight_key, k_bias_key, v_weight_key, v_bias_key):
+            del migrated[old_key]
     return migrated
 
 

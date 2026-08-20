@@ -66,6 +66,7 @@ cross entropy、AdamW、梯度裁剪和 loss scaling 都是手写版本。
 - LayerNorm：`nn.LayerNorm`
 - GELU：`torch.nn.functional.gelu`
 - next-token cross entropy：`torch.nn.functional.cross_entropy`
+- Q/K/V projection：单个 `nn.Linear(n_embd, 3*n_embd)`
 - causal attention kernel：`torch.nn.functional.scaled_dot_product_attention`
 - optimizer：`torch.optim.AdamW`
 - gradient clipping：`torch.nn.utils.clip_grad_norm_`
