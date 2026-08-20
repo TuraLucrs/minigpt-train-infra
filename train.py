@@ -8,7 +8,7 @@
 4. 编码文本为 token ids
 5. 构造 batcher
 6. 创建 MiniGPT 模型
-7. 创建手写 AdamW optimizer
+7. 创建 PyTorch AdamW optimizer
 8. 选择 fp32/fp16/bf16
 9. 执行 forward/loss/backward/optimizer step
 10. 记录日志
@@ -49,7 +49,12 @@ from minigpt.config import load_experiment_config, resolve_project_path  # noqa:
 from minigpt.data import RandomTokenBatcher, split_train_val  # noqa: E402
 from minigpt.logging_utils import CSVLogger, memory_stats_mb, reset_peak_memory, synchronize_if_cuda  # noqa: E402
 from minigpt.model import MiniGPT, MiniGPTConfig, count_parameters, next_token_cross_entropy  # noqa: E402
-from minigpt.optim import MiniAdamW, SimpleGradScaler, clip_grad_norm, cosine_lr  # noqa: E402
+from minigpt.optim import (  # noqa: E402
+    cosine_lr,
+    load_grad_scaler_state,
+    load_optimizer_state,
+    set_optimizer_lr,
+)
 from minigpt.tokenizer import CharTokenizer  # noqa: E402
 
 
@@ -179,8 +184,8 @@ def save_training_checkpoint(
     *,
     path: Path,
     model: MiniGPT,
-    optimizer: MiniAdamW,
-    scaler: SimpleGradScaler,
+    optimizer: torch.optim.Optimizer,
+    scaler: torch.amp.GradScaler,
     step: int,
     config_dict: dict,
     best_val_loss: float | None,
@@ -388,21 +393,26 @@ def main() -> None:
     )
     model = MiniGPT(model_config).to(device)
 
-    optimizer = MiniAdamW(
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=cfg.train.learning_rate,
         betas=(cfg.train.beta1, cfg.train.beta2),
         eps=cfg.train.adam_eps,
         weight_decay=cfg.train.weight_decay,
+        fused=(device.type == "cuda"),
     )
-    scaler = SimpleGradScaler(enabled=(precision_name == "fp16"))
+    scaler = torch.amp.GradScaler(
+        device.type,
+        enabled=(precision_name == "fp16"),
+        init_scale=2.0**12,
+    )
 
     start_step = 0
     best_val_loss: float | None = None
     if checkpoint is not None:
         model.load_state_dict(checkpoint["model_state"])
-        optimizer.load_state_dict(checkpoint["optimizer_state"])
-        scaler.load_state_dict(checkpoint["scaler_state"])
+        load_optimizer_state(optimizer, checkpoint["optimizer_state"])
+        load_grad_scaler_state(scaler, checkpoint["scaler_state"])
         restore_rng_state(checkpoint)
         if "train_batcher_state" in checkpoint:
             train_batcher.generator.set_state(checkpoint["train_batcher_state"])
@@ -467,7 +477,7 @@ def main() -> None:
                 warmup_steps=cfg.train.warmup_steps,
                 max_steps=cfg.train.max_steps,
             )
-            optimizer.set_lr(lr)
+            set_optimizer_lr(optimizer, lr)
             optimizer.zero_grad(set_to_none=True)
 
             # gradient accumulation:
@@ -484,23 +494,17 @@ def main() -> None:
                     # 否则累积 N 次 backward 后，梯度会比原来大 N 倍。
                     loss_for_backward = loss / cfg.train.gradient_accumulation_steps
 
-                scaled_loss = scaler.scale_loss(loss_for_backward)
-                scaled_loss.backward()
+                scaler.scale(loss_for_backward).backward()
                 accumulated_loss += loss.float().item()
 
-            # fp16 下先把梯度除回原尺度，再检查是否出现 inf/nan。
-            scaler.unscale_(model.parameters())
-            found_inf = scaler.has_inf_or_nan(model.parameters())
-
-            skipped_step = False
-            grad_norm = 0.0
-            if found_inf:
-                skipped_step = True
-            else:
-                grad_norm = clip_grad_norm(model.parameters(), cfg.train.grad_clip)
-                optimizer.step()
-
-            scaler.update(found_inf)
+            # fp16 下先恢复真实梯度，再裁剪。GradScaler.step() 会在发现
+            # inf/nan 时自动跳过 optimizer.step()。
+            scaler.unscale_(optimizer)
+            grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip))
+            scale_before_step = scaler.get_scale()
+            scaler.step(optimizer)
+            scaler.update()
+            skipped_step = scaler.is_enabled() and scaler.get_scale() < scale_before_step
             optimizer.zero_grad(set_to_none=True)
 
             synchronize_if_cuda(device)
@@ -522,7 +526,7 @@ def main() -> None:
                         "gpu_mem_mb": f"{gpu_mem_mb:.2f}",
                         "gpu_peak_mb": f"{gpu_peak_mb:.2f}",
                         "grad_norm": f"{grad_norm:.6f}",
-                        "loss_scale": f"{scaler.scale:.1f}" if scaler.enabled else "",
+                        "loss_scale": f"{scaler.get_scale():.1f}" if scaler.is_enabled() else "",
                         "skipped_step": str(skipped_step),
                     }
                 )
@@ -553,7 +557,7 @@ def main() -> None:
                         "gpu_mem_mb": f"{gpu_mem_mb:.2f}",
                         "gpu_peak_mb": f"{gpu_peak_mb:.2f}",
                         "grad_norm": "",
-                        "loss_scale": f"{scaler.scale:.1f}" if scaler.enabled else "",
+                        "loss_scale": f"{scaler.get_scale():.1f}" if scaler.is_enabled() else "",
                         "skipped_step": "",
                     }
                 )

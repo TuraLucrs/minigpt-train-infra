@@ -57,10 +57,7 @@ cross entropy、AdamW、梯度裁剪和 loss scaling 都是手写版本。
 - GPT 数据 batcher：`src/minigpt/data.py`
 - causal multi-head self-attention：`CausalSelfAttention`
 - Transformer block：`TransformerBlock`
-- AdamW optimizer：`MiniAdamW`
 - cosine warmup learning rate scheduler：`cosine_lr`
-- gradient clipping：`clip_grad_norm`
-- fp16 loss scaling：`SimpleGradScaler`
 - training loop：`train.py`
 - checkpoint / resume glue：`train.py` + `checkpoint.py`
 
@@ -69,6 +66,9 @@ cross entropy、AdamW、梯度裁剪和 loss scaling 都是手写版本。
 - LayerNorm：`nn.LayerNorm`
 - GELU：`torch.nn.functional.gelu`
 - next-token cross entropy：`torch.nn.functional.cross_entropy`
+- optimizer：`torch.optim.AdamW`
+- gradient clipping：`torch.nn.utils.clip_grad_norm_`
+- fp16 loss scaling：`torch.amp.GradScaler`
 
 升级必须通过核心测试、精确断点续训测试以及固定配置的 loss/吞吐对照。
 

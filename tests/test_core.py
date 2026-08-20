@@ -3,8 +3,9 @@
 这个文件不追求覆盖所有训练行为，只检查最核心的部件能不能协同工作：
 - tokenizer 能 encode/decode
 - model forward shape 正确
-- 手写 loss 能 backward
-- 手写 AdamW 能更新参数
+- next-token loss 能 backward
+- PyTorch AdamW 能更新参数
+- 教学版 optimizer/scaler checkpoint 能迁移
 - checkpoint 能保存和加载
 
 运行：
@@ -27,7 +28,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from minigpt.checkpoint import build_checkpoint_payload, load_checkpoint, save_checkpoint  # noqa: E402
 from minigpt.data import RandomTokenBatcher  # noqa: E402
 from minigpt.model import MiniGPT, MiniGPTConfig, next_token_cross_entropy  # noqa: E402
-from minigpt.optim import MiniAdamW, SimpleGradScaler  # noqa: E402
+from minigpt.optim import load_grad_scaler_state, load_optimizer_state  # noqa: E402
 from minigpt.tokenizer import CharTokenizer  # noqa: E402
 from train import checkpoint_run_dir, find_resume_tokenizer_path, tokenizer_fingerprint, validate_resume_metadata  # noqa: E402
 
@@ -47,8 +48,8 @@ def main() -> None:
         dropout=0.0,
     )
     model = MiniGPT(config)
-    optimizer = MiniAdamW(model.parameters(), lr=1e-3)
-    scaler = SimpleGradScaler(enabled=False)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    scaler = torch.amp.GradScaler("cpu", enabled=False)
 
     x = torch.tensor([ids[:8], ids[1:9]], dtype=torch.long)
     y = torch.tensor([ids[1:9], ids[2:10]], dtype=torch.long)
@@ -101,6 +102,40 @@ def main() -> None:
     optimizer.zero_grad()
     after = model.token_embedding.weight.detach().clone()
     assert not torch.equal(before, after)
+
+    # Checkpoint migration: baseline-v0.1 stored one state dictionary per
+    # parameter instead of native optimizer parameter IDs/groups.
+    migrated_optimizer = torch.optim.AdamW(model.parameters(), lr=9e-4)
+    parameters = [parameter for group in migrated_optimizer.param_groups for parameter in group["params"]]
+    legacy_optimizer_state = {
+        "lr": 1e-3,
+        "beta1": 0.9,
+        "beta2": 0.95,
+        "eps": 1e-8,
+        "weight_decay": 0.01,
+        "step_num": 3,
+        "state": [
+            {"exp_avg": torch.zeros_like(parameter), "exp_avg_sq": torch.ones_like(parameter)}
+            for parameter in parameters
+        ],
+    }
+    load_optimizer_state(migrated_optimizer, legacy_optimizer_state)
+    assert migrated_optimizer.state[parameters[0]]["step"].item() == 3
+    assert migrated_optimizer.param_groups[0]["betas"] == (0.9, 0.95)
+
+    migrated_scaler = torch.amp.GradScaler("cpu", enabled=True, init_scale=2.0)
+    load_grad_scaler_state(
+        migrated_scaler,
+        {
+            "enabled": True,
+            "scale": 4096.0,
+            "growth_factor": 2.0,
+            "backoff_factor": 0.5,
+            "growth_interval": 2000,
+            "growth_tracker": 7,
+        },
+    )
+    assert migrated_scaler.get_scale() == 4096.0
 
     with tempfile.TemporaryDirectory() as tmpdir:
         ckpt_path = Path(tmpdir) / "ckpt.pt"
