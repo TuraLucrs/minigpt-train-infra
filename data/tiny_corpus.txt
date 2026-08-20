@@ -1,0 +1,29 @@
+MiniGPT is a tiny training system.
+It is small on purpose, so every line can be read.
+
+The model sees text as a stream of token ids.
+At each position it tries to predict the next token.
+When the prediction is wrong, the loss becomes larger.
+When the optimizer updates the weights, the loss can become smaller.
+
+A training system is more than a model.
+It also needs data loading, tokenization, logging, checkpoints, mixed precision,
+gradient accumulation, a learning rate schedule, and careful measurement.
+
+This corpus is intentionally tiny.
+It is not for producing a useful language model.
+It is for learning the mechanics of pretraining.
+
+Step by step, the project can grow:
+first single device training,
+then distributed data parallel training,
+then memory saving techniques,
+then larger datasets and better tokenizers.
+
+Reading code slowly is a good way to learn infrastructure.
+Run a small experiment.
+Change one parameter.
+Read the log.
+Break something.
+Fix it.
+Write down what happened.
