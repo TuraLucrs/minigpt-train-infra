@@ -27,7 +27,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from minigpt.checkpoint import build_checkpoint_payload, load_checkpoint, save_checkpoint  # noqa: E402
 from minigpt.data import RandomTokenBatcher  # noqa: E402
-from minigpt.model import MiniGPT, MiniGPTConfig, next_token_cross_entropy  # noqa: E402
+from minigpt.model import MiniGPT, MiniGPTConfig, migrate_model_state_dict, next_token_cross_entropy  # noqa: E402
 from minigpt.optim import load_grad_scaler_state, load_optimizer_state  # noqa: E402
 from minigpt.tokenizer import CharTokenizer  # noqa: E402
 from train import checkpoint_run_dir, find_resume_tokenizer_path, tokenizer_fingerprint, validate_resume_metadata  # noqa: E402
@@ -56,6 +56,16 @@ def main() -> None:
 
     logits = model(x)
     assert logits.shape == (2, 8, tokenizer.vocab_size)
+
+    # Causal attention: changing future tokens must not change earlier logits.
+    model.eval()
+    causal_a = x[:1].clone()
+    causal_b = causal_a.clone()
+    causal_b[:, 4:] = torch.flip(causal_b[:, 4:], dims=(1,))
+    logits_a = model(causal_a)
+    logits_b = model(causal_b)
+    assert torch.allclose(logits_a[:, :4], logits_b[:, :4], atol=1e-6)
+    model.train()
 
     loss = next_token_cross_entropy(logits, y)
     expected_loss = torch.nn.functional.cross_entropy(logits.reshape(-1, tokenizer.vocab_size), y.reshape(-1))
@@ -136,6 +146,14 @@ def main() -> None:
         },
     )
     assert migrated_scaler.get_scale() == 4096.0
+
+    # Native SDPA no longer stores an O(T^2) causal-mask buffer. Old model
+    # checkpoints are migrated before strict state loading.
+    legacy_model_state = dict(model.state_dict())
+    legacy_model_state["blocks.0.attn.causal_mask"] = torch.ones(1, 1, 8, 8, dtype=torch.bool)
+    migrated_model_state = migrate_model_state_dict(legacy_model_state)
+    assert "blocks.0.attn.causal_mask" not in migrated_model_state
+    model.load_state_dict(migrated_model_state, strict=True)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         ckpt_path = Path(tmpdir) / "ckpt.pt"

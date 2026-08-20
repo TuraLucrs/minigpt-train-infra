@@ -48,7 +48,13 @@ from minigpt.checkpoint import (  # noqa: E402
 from minigpt.config import load_experiment_config, resolve_project_path  # noqa: E402
 from minigpt.data import RandomTokenBatcher, split_train_val  # noqa: E402
 from minigpt.logging_utils import CSVLogger, memory_stats_mb, reset_peak_memory, synchronize_if_cuda  # noqa: E402
-from minigpt.model import MiniGPT, MiniGPTConfig, count_parameters, next_token_cross_entropy  # noqa: E402
+from minigpt.model import (  # noqa: E402
+    MiniGPT,
+    MiniGPTConfig,
+    count_parameters,
+    migrate_model_state_dict,
+    next_token_cross_entropy,
+)
 from minigpt.optim import (  # noqa: E402
     cosine_lr,
     load_grad_scaler_state,
@@ -410,7 +416,7 @@ def main() -> None:
     start_step = 0
     best_val_loss: float | None = None
     if checkpoint is not None:
-        model.load_state_dict(checkpoint["model_state"])
+        model.load_state_dict(migrate_model_state_dict(checkpoint["model_state"]))
         load_optimizer_state(optimizer, checkpoint["optimizer_state"])
         load_grad_scaler_state(scaler, checkpoint["scaler_state"])
         restore_rng_state(checkpoint)

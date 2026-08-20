@@ -17,7 +17,6 @@ PyTorch 原生算子。原始手写版本保存在 Git 标签 ``baseline-v0.1``�
 from __future__ import annotations
 
 from dataclasses import dataclass
-import math
 from typing import Optional
 
 import torch
@@ -66,6 +65,7 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.head_dim = config.n_embd // config.n_head
         self.block_size = config.block_size
+        self.dropout = config.dropout
 
         # 这里不用 nn.MultiheadAttention，而是显式写出 Q/K/V 三个投影。
         self.q_proj = nn.Linear(config.n_embd, config.n_embd)
@@ -73,13 +73,7 @@ class CausalSelfAttention(nn.Module):
         self.v_proj = nn.Linear(config.n_embd, config.n_embd)
         self.out_proj = nn.Linear(config.n_embd, config.n_embd)
 
-        self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
-
-        # causal_mask shape: [1, 1, block_size, block_size]
-        # 下三角为 True，表示当前位置可以看自己和过去；上三角为 False，表示不能看未来。
-        mask = torch.tril(torch.ones(config.block_size, config.block_size, dtype=torch.bool))
-        self.register_buffer("causal_mask", mask.view(1, 1, config.block_size, config.block_size))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, C = x.shape
@@ -98,23 +92,16 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
 
-        # attention scores shape: [B, n_head, T, T]
-        # 最后两个维度表示：每个 query token 对每个 key token 的分数。
-        scores = q @ k.transpose(-2, -1)
-        scores = scores / math.sqrt(self.head_dim)
-
-        # 把未来位置的分数设成 -inf，softmax 后概率会变成 0。
-        mask = self.causal_mask[:, :, :T, :T]
-        scores = scores.masked_fill(~mask, float("-inf"))
-
-        # attention weights shape: [B, n_head, T, T]
-        weights = torch.softmax(scores, dim=-1)
-        weights = self.attn_dropout(weights)
-
-        # weighted sum of values:
-        # [B, n_head, T, T] @ [B, n_head, T, head_dim]
-        # -> [B, n_head, T, head_dim]
-        y = weights @ v
+        # PyTorch SDPA dispatches to the best available attention kernel for the
+        # current device/dtype.  is_causal=True avoids materializing a [T, T]
+        # mask buffer while preserving GPT's no-look-ahead rule.
+        y = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            dropout_p=self.dropout if self.training else 0.0,
+            is_causal=True,
+        )
 
         # 把多头拼回 C 维：先转回 [B, T, n_head, head_dim]，再 view 成 [B, T, C]。
         y = y.transpose(1, 2).contiguous().view(B, T, C)
@@ -280,6 +267,16 @@ def next_token_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, debug_
     if debug_checks and torch.any((targets_flat < 0) | (targets_flat >= V)):
         raise ValueError("targets contain token ids outside the vocabulary range")
     return F.cross_entropy(logits_flat, targets_flat)
+
+
+def migrate_model_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Remove state entries that became obsolete after native-op upgrades."""
+
+    migrated = dict(state_dict)
+    for key in tuple(migrated):
+        if key.endswith(".attn.causal_mask"):
+            del migrated[key]
+    return migrated
 
 
 def count_parameters(model: nn.Module) -> int:
