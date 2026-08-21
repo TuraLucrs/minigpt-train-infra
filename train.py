@@ -22,14 +22,13 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import nullcontext
 import hashlib
 import json
-from pathlib import Path
 import random
 import shutil
 import sys
-import time
+from contextlib import nullcontext
+from pathlib import Path
 from typing import Callable, ContextManager
 
 import torch
@@ -44,10 +43,11 @@ from minigpt.checkpoint import (  # noqa: E402
     load_checkpoint,
     restore_rng_state,
     save_checkpoint,
+    update_latest_checkpoint,
 )
 from minigpt.config import load_experiment_config, resolve_project_path  # noqa: E402
 from minigpt.data import RandomTokenBatcher, split_train_val  # noqa: E402
-from minigpt.logging_utils import CSVLogger, memory_stats_mb, reset_peak_memory, synchronize_if_cuda  # noqa: E402
+from minigpt.logging_utils import CSVLogger, DeviceIntervalTimer, memory_stats_mb, reset_peak_memory  # noqa: E402
 from minigpt.model import (  # noqa: E402
     MiniGPT,
     MiniGPTConfig,
@@ -56,6 +56,7 @@ from minigpt.model import (  # noqa: E402
     next_token_cross_entropy,
 )
 from minigpt.optim import (  # noqa: E402
+    build_adamw_param_groups,
     cosine_lr,
     load_grad_scaler_state,
     load_optimizer_state,
@@ -175,20 +176,19 @@ def estimate_loss(
     """
 
     model.eval()
-    losses = []
+    loss_sum = torch.zeros((), dtype=torch.float32, device=next(model.parameters()).device)
     for _ in range(num_batches):
         x, y = batcher.get_batch()
         with autocast_context():
             logits = model(x)
             loss = next_token_cross_entropy(logits, y, debug_checks=debug_checks)
-        losses.append(loss.float().item())
+        loss_sum += loss.detach().float()
     model.train()
-    return sum(losses) / len(losses)
+    return (loss_sum / num_batches).item()
 
 
-def save_training_checkpoint(
+def build_training_checkpoint_payload(
     *,
-    path: Path,
     model: MiniGPT,
     optimizer: torch.optim.Optimizer,
     scaler: torch.amp.GradScaler,
@@ -201,8 +201,8 @@ def save_training_checkpoint(
     data_hash: str,
     vocab_size: int,
     tokenizer_path: Path,
-) -> None:
-    """保存完整训练状态。"""
+) -> dict:
+    """Build the complete training state once before writing checkpoint files."""
 
     payload = build_checkpoint_payload(
         model=model,
@@ -218,7 +218,7 @@ def save_training_checkpoint(
     payload["data_hash"] = data_hash
     payload["vocab_size"] = vocab_size
     payload["tokenizer_path"] = str(tokenizer_path)
-    save_checkpoint(path, payload)
+    return payload
 
 
 def sha256_text(text: str) -> str:
@@ -400,11 +400,10 @@ def main() -> None:
     model = MiniGPT(model_config).to(device)
 
     optimizer = torch.optim.AdamW(
-        model.parameters(),
+        build_adamw_param_groups(model, cfg.train.weight_decay),
         lr=cfg.train.learning_rate,
         betas=(cfg.train.beta1, cfg.train.beta2),
         eps=cfg.train.adam_eps,
-        weight_decay=cfg.train.weight_decay,
         fused=(device.type == "cuda"),
     )
     scaler = torch.amp.GradScaler(
@@ -470,11 +469,28 @@ def main() -> None:
         "device_used": str(device),
     }
 
+    interval_timer = DeviceIntervalTimer(device)
+    window_loss_sum = torch.zeros((), dtype=torch.float32, device=device)
+    window_micro_batches = 0
+    window_tokens = 0
+    window_steps = 0
+    reset_peak_memory(device)
+    interval_timer.start()
+
     with CSVLogger(log_path, fields, append=bool(resume_path)) as logger:
         while step < cfg.train.max_steps:
-            reset_peak_memory(device)
-            synchronize_if_cuda(device)
-            step_start = time.perf_counter()
+            next_step = step + 1
+            should_log = next_step % cfg.train.log_interval == 0 or next_step == 1
+            should_eval = next_step % cfg.train.eval_interval == 0 or next_step == cfg.train.max_steps
+            should_checkpoint = (
+                next_step % cfg.train.checkpoint_interval == 0 or next_step == cfg.train.max_steps
+            )
+            # Any slow side path closes the current pure-training timing window
+            # first, so evaluation/checkpoint I/O never inflates train step time.
+            should_close_window = should_log or should_eval or should_checkpoint
+            scale_before_step = (
+                scaler.get_scale() if should_close_window and scaler.is_enabled() else None
+            )
 
             lr = cosine_lr(
                 step=step,
@@ -489,7 +505,6 @@ def main() -> None:
             # gradient accumulation:
             # 多次 forward/backward 累积梯度，只在最后 optimizer.step()。
             # 等效 global tokens = batch_size * block_size * accumulation_steps。
-            accumulated_loss = 0.0
             for _micro_step in range(cfg.train.gradient_accumulation_steps):
                 x, y = train_batcher.get_batch()
                 with autocast_context():
@@ -501,27 +516,31 @@ def main() -> None:
                     loss_for_backward = loss / cfg.train.gradient_accumulation_steps
 
                 scaler.scale(loss_for_backward).backward()
-                accumulated_loss += loss.float().item()
+                window_loss_sum += loss.detach().float()
+                window_micro_batches += 1
 
             # fp16 下先恢复真实梯度，再裁剪。GradScaler.step() 会在发现
             # inf/nan 时自动跳过 optimizer.step()。
             scaler.unscale_(optimizer)
-            grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip))
-            scale_before_step = scaler.get_scale()
+            grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
             scaler.step(optimizer)
             scaler.update()
-            skipped_step = scaler.is_enabled() and scaler.get_scale() < scale_before_step
-            optimizer.zero_grad(set_to_none=True)
 
-            synchronize_if_cuda(device)
             step += 1
-            elapsed = time.perf_counter() - step_start
             tokens_this_step = cfg.train.batch_size * cfg.model.block_size * cfg.train.gradient_accumulation_steps
-            tokens_per_sec = tokens_this_step / max(elapsed, 1e-9)
-            train_loss = accumulated_loss / cfg.train.gradient_accumulation_steps
-            gpu_mem_mb, gpu_peak_mb = memory_stats_mb(device)
+            window_tokens += tokens_this_step
+            window_steps += 1
 
-            if step % cfg.train.log_interval == 0 or step == 1:
+            if should_close_window:
+                elapsed = interval_timer.elapsed_seconds()
+                tokens_per_sec = window_tokens / max(elapsed, 1e-9)
+                train_loss = (window_loss_sum / window_micro_batches).item()
+                grad_norm = grad_norm_tensor.detach().float().item()
+                scale_after_step = scaler.get_scale() if scaler.is_enabled() else 1.0
+                skipped_step = (
+                    scale_before_step is not None and scale_after_step < scale_before_step
+                )
+                gpu_mem_mb, gpu_peak_mb = memory_stats_mb(device)
                 logger.log(
                     {
                         "step": step,
@@ -532,7 +551,7 @@ def main() -> None:
                         "gpu_mem_mb": f"{gpu_mem_mb:.2f}",
                         "gpu_peak_mb": f"{gpu_peak_mb:.2f}",
                         "grad_norm": f"{grad_norm:.6f}",
-                        "loss_scale": f"{scaler.get_scale():.1f}" if scaler.is_enabled() else "",
+                        "loss_scale": f"{scale_after_step:.1f}" if scaler.is_enabled() else "",
                         "skipped_step": str(skipped_step),
                     }
                 )
@@ -540,10 +559,10 @@ def main() -> None:
                     f"step {step:5d} | train loss {train_loss:.4f} | "
                     f"lr {lr:.2e} | {tokens_per_sec:.0f} tok/s | "
                     f"gpu {gpu_mem_mb:.1f}/{gpu_peak_mb:.1f} MB | "
-                    f"grad {grad_norm:.3f}"
+                    f"grad {grad_norm:.3f} | window {window_steps}"
                 )
 
-            if step % cfg.train.eval_interval == 0 or step == cfg.train.max_steps:
+            if should_eval:
                 val_loss = estimate_loss(
                     model,
                     val_batcher,
@@ -563,17 +582,16 @@ def main() -> None:
                         "gpu_mem_mb": f"{gpu_mem_mb:.2f}",
                         "gpu_peak_mb": f"{gpu_peak_mb:.2f}",
                         "grad_norm": "",
-                        "loss_scale": f"{scaler.get_scale():.1f}" if scaler.is_enabled() else "",
+                        "loss_scale": f"{scale_after_step:.1f}" if scaler.is_enabled() else "",
                         "skipped_step": "",
                     }
                 )
                 print(f"          | val loss   {val_loss:.4f} | best {best_val_loss:.4f}")
 
-            if step % cfg.train.checkpoint_interval == 0 or step == cfg.train.max_steps:
+            if should_checkpoint:
                 numbered_path = out_dir / "checkpoints" / f"step_{step:06d}.pt"
                 latest_path = out_dir / "latest.pt"
-                save_training_checkpoint(
-                    path=numbered_path,
+                checkpoint_payload = build_training_checkpoint_payload(
                     model=model,
                     optimizer=optimizer,
                     scaler=scaler,
@@ -587,23 +605,18 @@ def main() -> None:
                     vocab_size=tokenizer.vocab_size,
                     tokenizer_path=tokenizer_path,
                 )
-                save_training_checkpoint(
-                    path=latest_path,
-                    model=model,
-                    optimizer=optimizer,
-                    scaler=scaler,
-                    step=step,
-                    config_dict=config_dict,
-                    best_val_loss=best_val_loss,
-                    train_batcher=train_batcher,
-                    val_batcher=val_batcher,
-                    tokenizer_hash=tokenizer_hash,
-                    data_hash=data_hash,
-                    vocab_size=tokenizer.vocab_size,
-                    tokenizer_path=tokenizer_path,
-                )
+                save_checkpoint(numbered_path, checkpoint_payload)
+                latest_method = update_latest_checkpoint(latest_path, numbered_path)
                 print(f"[checkpoint] saved {numbered_path}")
-                print(f"[checkpoint] updated {latest_path}")
+                print(f"[checkpoint] updated {latest_path} via {latest_method}")
+
+            if should_close_window and step < cfg.train.max_steps:
+                window_loss_sum = torch.zeros((), dtype=torch.float32, device=device)
+                window_micro_batches = 0
+                window_tokens = 0
+                window_steps = 0
+                reset_peak_memory(device)
+                interval_timer.start()
 
     if args.sample:
         model.eval()

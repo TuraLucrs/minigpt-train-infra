@@ -49,6 +49,9 @@ DDP / FSDP / DeepSpeed 很重要，但它们应该是第二、第三阶段。否
 Git 标签 `baseline-v0.1` 保存了完整教学实现，其中 LayerNorm、GELU、
 cross entropy、AdamW、梯度裁剪和 loss scaling 都是手写版本。
 
+Git 标签 `v0.2-native-single-device` 保存第一批原生算子升级；`v0.2.1-single-device-closeout`
+在此基础上完成单设备训练的可靠性、热路径和回归测试收尾。
+
 当前工程化分支已经把学完且官方实现更成熟的部分逐步替换为 PyTorch 原生算子。
 
 当前仍显式实现：
@@ -69,8 +72,12 @@ cross entropy、AdamW、梯度裁剪和 loss scaling 都是手写版本。
 - Q/K/V projection：单个 `nn.Linear(n_embd, 3*n_embd)`
 - causal attention kernel：`torch.nn.functional.scaled_dot_product_attention`
 - optimizer：`torch.optim.AdamW`
+- AdamW 参数组：矩阵/Embedding 权重 decay，bias 与 LayerNorm 参数 no-decay
 - gradient clipping：`torch.nn.utils.clip_grad_norm_`
 - fp16 loss scaling：`torch.amp.GradScaler`
+- 训练 loss 在设备上按窗口累计，只在记录边界取回 CPU
+- CUDA event/窗口计时，不再每个 optimizer step 全局同步
+- 原子 checkpoint；`latest.pt` 优先硬链接 numbered checkpoint，避免重复序列化
 
 升级必须通过核心测试、精确断点续训测试以及固定配置的 loss/吞吐对照。
 
@@ -88,6 +95,8 @@ minigpt-train/
   data/
     tiny_corpus.txt
   docs/
+    INDUSTRIALIZATION_OPTIMIZATION_PLAN.md
+    V0_2_1_SINGLE_DEVICE_CLOSEOUT.md
     PLAN_REVIEW.md
     LEARNING_GUIDE.md
     ROADMAP_DDP_FSDP_DEEPSPEED.md
@@ -106,6 +115,7 @@ minigpt-train/
       config.py
   tests/
     test_core.py
+    test_reference_parity.py
     test_resume_consistency.py
 ```
 
@@ -127,6 +137,7 @@ pip install -r requirements.txt
 ```powershell
 cd F:\ai-infra-projects\minigpt-train
 python tests/test_core.py
+python tests/test_reference_parity.py
 python tests/test_resume_consistency.py
 ```
 
@@ -134,11 +145,13 @@ python tests/test_resume_consistency.py
 
 ```text
 All core smoke tests passed.
+Reference-vs-optimized parity tests passed.
 Exact resume consistency test passed.
 ```
 
-第一项检查 tokenizer、model、loss、optimizer、checkpoint 的最小链路；第二项检查
-连续训练和从中间 checkpoint 恢复训练能否得到完全一致的最终训练状态。
+第一项检查 tokenizer、model、optimizer 参数组、checkpoint 原子保存和旧版本迁移；
+第二项对照教学公式与原生 LayerNorm、GELU、cross entropy、SDPA 的输出和梯度；
+第三项检查连续训练和从中间 checkpoint 恢复能否得到完全一致的最终训练状态。
 
 ## 跑一个 CPU 小训练
 
@@ -274,9 +287,9 @@ python train.py --config configs/tiny_cpu.json --max_steps 50 --out_dir runs/exp
 - `split`: `train` 或 `val`
 - `loss`: next-token prediction loss
 - `lr`: 当前学习率
-- `tokens_per_sec`: 每秒处理 token 数
+- `tokens_per_sec`: 当前纯训练计时窗口内的 wall-time tokens/s，不包含随后执行的 eval/checkpoint
 - `gpu_mem_mb`: 当前 GPU 显存占用
-- `gpu_peak_mb`: 这个 step 的峰值 GPU 显存
+- `gpu_peak_mb`: 当前计时窗口的峰值 GPU 显存
 - `grad_norm`: gradient clipping 前的梯度总 norm
 - `loss_scale`: fp16 时的 loss scale
 - `skipped_step`: fp16 梯度出现 inf/nan 时是否跳过更新
@@ -297,15 +310,20 @@ python train.py --config configs/tiny_cpu.json --max_steps 50 --out_dir runs/exp
 
 ## 后续怎么扩展？
 
-建议路线：
+暂定路线（每个版本验收、冻结并讲完变化后，才进入下一版本）：
 
 ```text
-v0.1 单卡训练闭环，也就是当前项目
-v0.2 支持更好的 tokenizer 和更大的文本数据
-v0.3 改成 DDP：torchrun + 多进程 + gradient all-reduce
-v0.4 加 FSDP：参数/梯度/optimizer state shard
-v0.5 加 DeepSpeed：ZeRO 配置和显存对比
-v0.6 加 profiler：把 step time 拆成 data/forward/backward/optimizer
+baseline-v0.1     教学单设备训练闭环
+v0.2 / v0.2.1    优化单设备训练
+v0.3              公共 Runtime、指标和实验记录
+v0.4              MiniGPT Prefill/Decode 与 KV Cache
+v0.5              DDP 分布式训练
+v0.6              真实开源模型单设备推理
+v0.7              Tensor Parallel
+v0.8              Continuous Batching 与 KV 生命周期
+v0.9              Ascend 适配、Profiler 与单机 Scaling
+v1.0              FSDP/ZeRO 训练支线与完整训推交付
+v1.x              训推结合专项研究
 ```
 
 这条路线比一开始直接冲 Megatron / DeepSpeed 源码健康很多。
@@ -320,7 +338,8 @@ v0.6 加 profiler：把 step time 拆成 data/forward/backward/optimizer
 - FSDP 参数切分
 - DeepSpeed ZeRO
 - TensorBoard / WandB
-- 高性能 fused kernel
-- FlashAttention
+- Continuous Batching / Paged KV Cache
+- Tensor Parallel
+- 外部 FlashAttention 或自定义 fused kernel
 
 这些不是不重要，而是第一阶段先别混在一起。你先把单卡训练闭环拿下，后面加分布式才有根。
