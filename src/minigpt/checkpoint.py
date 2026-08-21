@@ -16,6 +16,9 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Any, Dict
 
@@ -50,15 +53,80 @@ def build_checkpoint_payload(
 
 
 def save_checkpoint(path: str | Path, payload: Dict[str, Any]) -> None:
-    """保存 checkpoint。
+    """Atomically save a single-file checkpoint.
 
     torch.save 底层使用 pickle + tensor storage。真实大模型会用分片 checkpoint，
-    但单卡学习项目先用一个 .pt 文件最清楚。
+    但单卡学习项目先用一个 .pt 文件最清楚。数据先写入同目录临时文件，成功 flush/fsync
+    后再用 ``os.replace`` 原子替换目标，避免进程中断留下“名字正常、内容损坏”的 checkpoint。
     """
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(payload, path)
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(file_descriptor, "wb") as file:
+            torch.save(payload, file)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary_path, path)
+    except BaseException:
+        # fdopen owns the descriptor after it succeeds.  If it failed before
+        # taking ownership, close the descriptor here; an already-closed fd is
+        # harmlessly ignored.
+        try:
+            os.close(file_descriptor)
+        except OSError:
+            pass
+        temporary_path.unlink(missing_ok=True)
+        raise
+
+
+def update_latest_checkpoint(latest_path: str | Path, checkpoint_path: str | Path) -> str:
+    """Atomically point ``latest.pt`` at an already-saved numbered checkpoint.
+
+    A hard link avoids serializing and writing the same payload twice.  Some
+    filesystems do not support hard links; those environments fall back to an
+    atomic file copy while still avoiding a second ``torch.save`` call.
+
+    Returns ``"hardlink"`` or ``"copy"`` so tests and logs can record the path
+    actually used.
+    """
+
+    latest_path = Path(latest_path)
+    checkpoint_path = Path(checkpoint_path)
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(f"Checkpoint does not exist: {checkpoint_path}")
+
+    latest_path.parent.mkdir(parents=True, exist_ok=True)
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        dir=latest_path.parent,
+        prefix=f".{latest_path.name}.",
+        suffix=".tmp",
+    )
+    os.close(file_descriptor)
+    temporary_path = Path(temporary_name)
+    temporary_path.unlink()
+
+    method = "hardlink"
+    try:
+        try:
+            os.link(checkpoint_path, temporary_path)
+        except OSError:
+            method = "copy"
+            with checkpoint_path.open("rb") as source, temporary_path.open("wb") as destination:
+                shutil.copyfileobj(source, destination)
+                destination.flush()
+                os.fsync(destination.fileno())
+        os.replace(temporary_path, latest_path)
+    except BaseException:
+        temporary_path.unlink(missing_ok=True)
+        raise
+    return method
 
 
 def load_checkpoint(path: str | Path, map_location: torch.device | str) -> Dict[str, Any]:

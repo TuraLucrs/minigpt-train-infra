@@ -14,9 +14,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 import tempfile
+from pathlib import Path
 
 import torch
 
@@ -25,10 +25,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from minigpt.checkpoint import build_checkpoint_payload, load_checkpoint, save_checkpoint  # noqa: E402
+from minigpt.checkpoint import (  # noqa: E402
+    build_checkpoint_payload,
+    load_checkpoint,
+    save_checkpoint,
+    update_latest_checkpoint,
+)
 from minigpt.data import RandomTokenBatcher  # noqa: E402
 from minigpt.model import MiniGPT, MiniGPTConfig, migrate_model_state_dict, next_token_cross_entropy  # noqa: E402
-from minigpt.optim import load_grad_scaler_state, load_optimizer_state  # noqa: E402
+from minigpt.optim import build_adamw_param_groups, load_grad_scaler_state, load_optimizer_state  # noqa: E402
 from minigpt.tokenizer import CharTokenizer  # noqa: E402
 from train import checkpoint_run_dir, find_resume_tokenizer_path, tokenizer_fingerprint, validate_resume_metadata  # noqa: E402
 
@@ -48,8 +53,20 @@ def main() -> None:
         dropout=0.0,
     )
     model = MiniGPT(config)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    optimizer_groups = build_adamw_param_groups(model, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(optimizer_groups, lr=1e-3)
     scaler = torch.amp.GradScaler("cpu", enabled=False)
+
+    assert [group["group_name"] for group in optimizer.param_groups] == ["decay", "no_decay"]
+    assert optimizer.param_groups[0]["weight_decay"] == 0.01
+    assert optimizer.param_groups[1]["weight_decay"] == 0.0
+    grouped_parameters = [parameter for group in optimizer.param_groups for parameter in group["params"]]
+    trainable_parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    assert len({id(parameter) for parameter in grouped_parameters}) == len(grouped_parameters)
+    assert {id(parameter) for parameter in grouped_parameters} == {id(parameter) for parameter in trainable_parameters}
+    assert all(parameter.ndim >= 2 for parameter in optimizer.param_groups[0]["params"])
+    assert all(parameter.ndim < 2 for parameter in optimizer.param_groups[1]["params"])
+    assert optimizer.state_dict()["param_groups"][0]["param_names"]
 
     x = torch.tensor([ids[:8], ids[1:9]], dtype=torch.long)
     y = torch.tensor([ids[1:9], ids[2:10]], dtype=torch.long)
@@ -112,6 +129,25 @@ def main() -> None:
     optimizer.zero_grad()
     after = model.token_embedding.weight.detach().clone()
     assert not torch.equal(before, after)
+
+    # v0.2 used one AdamW group in model registration order.  Loading it into
+    # the new decay/no_decay layout must preserve moments by parameter name.
+    old_native_optimizer = torch.optim.AdamW(model.parameters(), lr=7e-4, weight_decay=0.02)
+    old_native_optimizer.zero_grad(set_to_none=True)
+    old_native_loss = next_token_cross_entropy(model(x), y)
+    old_native_loss.backward()
+    old_native_optimizer.step()
+    old_native_state = old_native_optimizer.state_dict()
+
+    grouped_optimizer = torch.optim.AdamW(build_adamw_param_groups(model, 0.01), lr=9e-4)
+    load_optimizer_state(grouped_optimizer, old_native_state, model)
+    assert len(grouped_optimizer.state) == len(old_native_optimizer.state)
+    assert torch.equal(
+        grouped_optimizer.state[model.token_embedding.weight]["exp_avg"],
+        old_native_optimizer.state[model.token_embedding.weight]["exp_avg"],
+    )
+    assert grouped_optimizer.param_groups[0]["weight_decay"] == 0.02
+    assert grouped_optimizer.param_groups[1]["weight_decay"] == 0.0
 
     # Checkpoint migration: baseline-v0.1 stored one state dictionary per
     # parameter instead of native optimizer parameter IDs/groups.
@@ -187,6 +223,37 @@ def main() -> None:
         assert loaded["step"] == 3
         assert loaded["config"]["test"] is True
         assert "model_state" in loaded
+
+        # A failed replacement must leave the previous valid checkpoint in
+        # place and remove its incomplete temporary file.
+        original_torch_save = torch.save
+
+        def fail_after_partial_write(_payload, file, *_args, **_kwargs):  # type: ignore[no-untyped-def]
+            file.write(b"partial checkpoint")
+            file.flush()
+            raise RuntimeError("simulated checkpoint interruption")
+
+        torch.save = fail_after_partial_write  # type: ignore[assignment]
+        try:
+            try:
+                save_checkpoint(ckpt_path, {"step": 999})
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("simulated checkpoint failure should propagate")
+        finally:
+            torch.save = original_torch_save  # type: ignore[assignment]
+
+        loaded_after_failure = load_checkpoint(ckpt_path, map_location="cpu")
+        assert loaded_after_failure["step"] == 3
+        assert not list(ckpt_path.parent.glob(f".{ckpt_path.name}.*.tmp"))
+
+        second_path = Path(tmpdir) / "checkpoints" / "step_000004.pt"
+        latest_path = Path(tmpdir) / "latest.pt"
+        save_checkpoint(second_path, {"step": 4})
+        method = update_latest_checkpoint(latest_path, second_path)
+        assert method in {"hardlink", "copy"}
+        assert load_checkpoint(latest_path, map_location="cpu")["step"] == 4
 
     with tempfile.TemporaryDirectory() as tmpdir:
         run_dir = Path(tmpdir) / "run"
