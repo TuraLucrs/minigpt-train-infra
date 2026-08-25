@@ -17,8 +17,6 @@ PyTorch 原生算子。原始手写版本保存在 Git 标签 ``baseline-v0.1``�
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
-
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -214,36 +212,6 @@ class MiniGPT(nn.Module):
         x = self.ln_f(x)
         logits = self.lm_head(x)
         return logits
-
-    @torch.no_grad()
-    def generate(
-        self,
-        input_ids: torch.Tensor,
-        max_new_tokens: int,
-        temperature: float = 1.0,
-    ) -> torch.Tensor:
-        """简单自回归采样，用来感受训练后的模型会输出什么。
-
-        这不是训练主线，但很适合调试：如果 loss 下降了，生成文本通常会变得
-        更像训练语料，即使这个小模型不会真的“聪明”。
-        """
-
-        if temperature <= 0:
-            raise ValueError("temperature must be positive")
-
-        for _ in range(max_new_tokens):
-            # 如果上下文太长，只取最后 block_size 个 token。
-            context = input_ids[:, -self.config.block_size :]
-            logits = self(context)
-
-            # 只看最后一个位置的 logits，因为它预测下一个 token。
-            next_logits = logits[:, -1, :] / temperature
-            probs = torch.softmax(next_logits, dim=-1)
-            next_id = torch.multinomial(probs, num_samples=1)
-            input_ids = torch.cat([input_ids, next_id], dim=1)
-
-        return input_ids
-
 
 def next_token_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, debug_checks: bool = False) -> torch.Tensor:
     """使用PyTorch优化后的cross-entropy kernel计算next-token loss。"""

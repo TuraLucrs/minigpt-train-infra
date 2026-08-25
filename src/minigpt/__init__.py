@@ -1,18 +1,25 @@
-"""MiniGPT-Train学习包。
+"""MiniGPT 推理 Infra 学习包。
 
-这个包故意很小：你可以从 tokenizer -> data -> model -> optim -> train
-一路读下来，看到一个 GPT 预训练系统最核心的骨架。
+训练基础保留 tokenizer、data、model、optim；推理主线从 runtime、inference、benchmark
+继续扩展。
 """
 
 from .config import ExperimentConfig, ModelConfig, TrainConfig
+from .inference import GenerationConfig, GenerationResult, InferenceEngine, MiniGPTModelRunner
 from .model import MiniGPT, MiniGPTConfig
+from .runtime import RuntimeContext
 from .tokenizer import CharTokenizer
 
 __all__ = [
     "CharTokenizer",
     "ExperimentConfig",
+    "GenerationConfig",
+    "GenerationResult",
+    "InferenceEngine",
     "MiniGPT",
     "MiniGPTConfig",
+    "MiniGPTModelRunner",
     "ModelConfig",
+    "RuntimeContext",
     "TrainConfig",
 ]

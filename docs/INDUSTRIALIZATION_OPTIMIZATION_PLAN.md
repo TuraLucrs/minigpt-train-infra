@@ -1,4 +1,9 @@
-# MiniGPT-Train 工业化升级与性能优化清单
+# MiniGPT Infra 工业化升级与性能优化清单
+
+> 路线更新（2026-08-25）：项目已经从训练入门阶段转入推理主线。训练是前置知识基础，
+> 推理 Infra 是后续主线、专项研究方向和最终交付。完整决策、DDP 边界、MiniGPT/真实模型
+> 分工和版本顺序见 `docs/INFERENCE_FIRST_ROADMAP.md`。本文较早的训练优化章节继续作为
+> 已完成记录和按需支线 backlog，不再意味着必须先完成完整训练 Infra 才能进入推理。
 
 ## 1. 文档目的
 
@@ -6,14 +11,14 @@
 attention、cross entropy、AdamW、梯度裁剪和 GradScaler，用透明性换取了性能、功能和
 生态兼容性。
 
-本项目最终目标不是长期维护这些教学实现，而是：
+本项目不会长期维护这些教学实现。训练阶段的目标是：
 
 1. 先用它们理解完整训练链路；
 2. 冻结一个可运行、可解释、可回归的单卡基线；
 3. 将纯教学组件替换为 PyTorch 或成熟训练生态的实现；
 4. 保留训练系统中必须自己掌握的编排、状态管理、可观测性和故障恢复；
-5. 在可靠的单卡基线上继续学习 DDP、FSDP、ZeRO、Profiler 和性能调优；
-6. 最终形成可复现、可恢复、可扩展、可测量的工业级训练基线。
+5. 以此为基础进入 Prefill/Decode、KV Cache、真实模型、TP 和调度等推理系统内容；
+6. DDP、FSDP、ZeRO 仅作为扩展知识面的训练支线，不阻塞推理交付。
 
 这里的“工业级”不等于简单地把几个函数换成官方 API。至少同时要求：
 
@@ -489,11 +494,11 @@ SwiGLU 不是与 GELU 完全等价的性能替换，它会改变参数形状和�
 
 FP32 baseline 还要明确 TF32 策略，保证性能比较时设置一致。
 
-### 5.10 推理用 KV Cache 不进入训练主线
+### 5.10 KV Cache 属于推理主线
 
-当前 `generate()` 每生成一个 token 都重新计算整个上下文。KV cache 能显著优化推理，
-但不会直接提升预训练 forward/backward。因此它属于推理 Infra 扩展，不应阻塞当前训练
-工业化和 DDP 路线。
+v0.3 reference generation 每生成一个 token 都重新计算整个上下文。KV Cache 不提升预训练
+forward/backward，但它直接决定 Decode 的计算量、TPOT 和吞吐，因此是 v0.4 推理主线的
+核心内容，不再排在 DDP/FSDP 等训练能力之后。
 
 ---
 
@@ -1097,7 +1102,7 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 
 ### 14.4 更大规模并行
 
-训练主线只有在数据并行和状态切分不足以容纳模型时，再引入 sequence/context、pipeline
+训练支线只有在数据并行和状态切分不足以容纳模型时，再引入 sequence/context、pipeline
 或 expert parallel。Tensor parallel 需要区分两种用途：
 
 - 对训练而言，它仍是有明确模型规模需求后再引入的高级并行；
@@ -1189,28 +1194,29 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 - 仓库内真实 `baseline-v0.1` 与 v0.2 checkpoint 均能迁移 optimizer/QKV 状态并继续训练；
 - CUDA/NPU 精度、event 计时、fused optimizer、SDPA backend 和显存仍待真实设备验收。
 
-### 阶段 C：公共运行时、实验基础设施和最小后端兼容
+### 阶段 C：v0.3 可测量的单设备推理基线
 
-- [ ] 建立窄边界的 `RuntimeContext`、`DistributedContext` 和 capability 查询；
-- [ ] 建立训练/推理共用的 `ExperimentRecorder`，保存 resolved config、环境、硬件和 Git 版本；
-- [ ] 训练与推理分别保留 benchmark runner，共用计时、统计和结果格式，不强行共用业务指标；
-- [ ] 拆分 data/forward/backward/optimizer/checkpoint 计时；
-- [ ] 统一吞吐、延迟、显存和波动的统计口径；
-- [ ] 建立 CPU、CUDA（可用时）和 Ascend 的最小 smoke test；
-- [ ] Ascend 阶段此时只验证设备、精度、核心算子和短训练/推理可运行，不做专项调优；
-- [ ] 接入当前 workload 必需的 tokenizer/data artifact，并冻结其指纹；
-- [ ] 建立正确性与性能回归测试。
+- [x] 建立窄边界的 `RuntimeContext` 和 capability 查询；
+- [x] 建立独立 `infer.py`、deterministic greedy baseline 和可选采样；
+- [x] 明确 MiniGPT `prefill()` 与重算式 `decode()` 两个阶段；
+- [x] 建立推理 benchmark runner，不与训练业务指标强行共用；
+- [x] 统一 TTFT、TPOT、E2E latency、吞吐、设备内存和波动统计口径；
+- [x] 保存环境、模型配置、Git 状态、启动命令、checkpoint 指纹、原始 runs 和 summary；
+- [x] 建立 CPU 正确性、checkpoint 加载和端到端 smoke test；
+- [ ] 在实际 CUDA 设备验证 FP16/BF16、Event、显存和性能；
+- [ ] Ascend 当前只保留接口方向，最小 smoke test 随后端适配实施；
+- [ ] `DistributedContext` 等真正进入 TP 前再实现，不为抽象完整性提前增加代码。
 
-### 阶段 D：单设备推理 Model Runner
+### 阶段 D：v0.4～v0.5 单设备推理 Model Runner
 
 #### D1：MiniGPT reference runner
 
-- [ ] 保留“每步重算全部上下文”的 reference generation；
-- [ ] 第一版使用 deterministic greedy decoding，建立稳定正确性参照；
-- [ ] 明确 `prefill()` 与 `decode()` 两条执行路径；
+- [x] 保留“每步重算全部上下文”的 reference generation；
+- [x] 第一版使用 deterministic greedy decoding，建立稳定正确性参照；
+- [x] 明确 `prefill()` 与 `decode()` 两条执行路径；
 - [ ] 实现逐层 KV Cache，并验证 cached 与 uncached logits/生成结果一致；
 - [ ] 实现静态 batching、attention mask、position、EOS 和采样状态；
-- [ ] 建立 TTFT、TPOT、E2E latency、input/output tokens/s、峰值显存指标；
+- [x] 建立 TTFT、TPOT、E2E latency、input/output tokens/s、峰值显存指标；
 - [ ] 扫描 batch、input length、output length，形成单设备 baseline；
 - [ ] 此阶段不实现 continuous batching，避免同时引入调度和模型并行。
 
@@ -1224,7 +1230,7 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 - [ ] MiniGPT 继续负责 CPU CI、状态检查和故障注入，真实模型负责正式性能与显存报告；
 - [ ] 不在第一版追求支持大量模型架构，避免模型兼容工作淹没推理 Infra 主线。
 
-### 阶段 E：分布式基础与 DDP 训练
+### 阶段 E：分布式基础短实验（DDP 仅作教学载体）
 
 - [ ] `torchrun` + 一颗可见芯片一个进程；
 - [ ] backend 由配置选择 Gloo/NCCL/HCCL，不在训练代码中硬编码；
@@ -1233,7 +1239,7 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 - [ ] gradient accumulation + `no_sync()`；
 - [ ] 2/4 设备正确性和 scaling benchmark；
 - [ ] 分布式故障与恢复测试；
-- [ ] DDP 作为分布式语义训练场，完成正确实现后不继续挤占推理主线。
+- [ ] DDP 只作为分布式语义训练场，放入 `labs/`；完成基础理解后立即进入 TP，不独占主版本。
 
 ### 阶段 F：多设备推理与 Tensor Parallel
 
@@ -1266,7 +1272,7 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 - [ ] 根据 profiler 证据实施 Ascend 专项算子、通信或内存优化；
 - [ ] 16 张物理卡/双机实验仅作为资源允许时的加分项。
 
-### 阶段 I：训练 Infra 支线——显存与状态切分
+### 阶段 I：可选训练 Infra 支线——显存与状态切分
 
 - [ ] `torch.compile` 或对应后端图编译能力（有稳定收益时）；
 - [ ] activation checkpointing；
@@ -1277,26 +1283,25 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 - [ ] 在相同模型和数据上对比 DDP/FSDP/ZeRO 的显存、吞吐、通信与恢复；
 - [ ] 保持训练支线完整，但不让它阻塞 KV Cache、TP、调度等推理主线。
 
-### 版本里程碑与两条主线的施工顺序
+### 版本里程碑与推理主线施工顺序
 
-“训练 Infra”和“推理 Infra”是最终交付的两个主体，但不是先完成全部训练再开始推理。按照
-学习依赖和推理优先的职业方向，暂定版本顺序为：
+训练不再与推理并列为最终交付主体。`v0.1～v0.2.2` 已完成训练基础阶段；后续主版本和
+专项研究全部服务于推理 Infra：
 
 ```text
 v0.2.x  优化单设备训练收尾
-v0.3    公共 Runtime、指标和实验记录
-v0.4    MiniGPT 单设备推理、Prefill/Decode、KV Cache
-v0.5    DDP 分布式训练
-v0.6    真实开源模型单设备推理
-v0.7    Tensor Parallel 多设备推理
-v0.8    Continuous Batching 与 KV 生命周期
-v0.9    Ascend 适配、Profiler 和单机 Scaling
-v1.0    FSDP/ZeRO 训练支线与完整训推交付
-v1.x    训推结合的专项研究（方向到该阶段再确定）
+v0.3    可测量的 MiniGPT 单设备推理基线
+v0.4    KV Cache、Prefill/Decode 独立路径与静态 Batching
+v0.5    真实开源模型单设备推理
+v0.6    分布式基础短实验与 Tensor Parallel 推理
+v0.7    Continuous Batching、调度与 KV 生命周期
+v0.8    推理专项研究（依据真实瓶颈选题）
+v0.9    Ascend 适配、Profiler 和真实单机 Scaling
+v1.0    完整推理 Infra 交付
 ```
 
-该顺序允许根据真实 profiler、硬件可用性和学习反馈调整；调整时必须同步记录理由、依赖变化
-和新的验收条件。专项研究当前只保留阶段位置，不提前锁定实现主题。
+DDP/FSDP/ZeRO 保留在 `labs/` 或独立训练支线中，不作为上述推理主版本的完成门槛。路线允许
+根据真实 profiler、硬件可用性和学习反馈调整；专项研究当前只保留阶段位置，不提前锁题。
 
 ---
 
@@ -1358,7 +1363,7 @@ peak memory：
 模型计算
   └─ fused QKV / SDPA or Flash / fused MLP / mixed precision
 
-训练循环
+训练基础与可选支线
   └─ accumulation / DDP or FSDP / fused optimizer / scheduler
 
 推理 Model Runner
@@ -1380,7 +1385,7 @@ peak memory：
   └─ numerical parity / cached-vs-reference / resume / distributed smoke / performance regression
 ```
 
-训练/推理 Infra 的核心不是“全部手写”，也不是“全部交给框架”，而是明确知道：
+推理 Infra 主线和训练知识基础的核心不是“全部手写”，也不是“全部交给框架”，而是明确知道：
 
 - 哪些数学和状态必须理解；
 - 哪些成熟内核应该复用；
@@ -1389,6 +1394,6 @@ peak memory：
 - 单设备语义如何在分布式环境中保持正确；
 - 通用系统逻辑如何与 CUDA、Ascend 等厂商后端隔离。
 
-这份清单作为后续改造 backlog。当前阶段完成阶段 B 的优化单设备收尾，随后进入阶段 C 的
-公共运行时和实验基础设施，再按单设备推理、分布式基础、TP、调度、Ascend 专项验证和训练
-状态切分支线逐步推进。每阶段只增加一个主要复杂度来源。
+这份清单作为后续改造 backlog。阶段 B 的单设备训练已经收尾，阶段 C 的 v0.3 建立可测量
+单设备推理基线；后续依次进入 KV Cache、真实模型、TP、调度、推理专项研究和 Ascend
+验证。训练状态切分只保留为不阻塞主线的可选支线。每阶段只增加一个主要复杂度来源。
