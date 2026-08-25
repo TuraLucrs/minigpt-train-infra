@@ -1,4 +1,4 @@
-"""Checkpoint save/load helpers.
+"""Checkpoint 保存与加载辅助函数。
 
 训练 infra 里，checkpoint 不是“可选装饰”，而是核心能力。
 
@@ -53,7 +53,7 @@ def build_checkpoint_payload(
 
 
 def save_checkpoint(path: str | Path, payload: Dict[str, Any]) -> None:
-    """Atomically save a single-file checkpoint.
+    """原子保存单文件 checkpoint。
 
     torch.save 底层使用 pickle + tensor storage。真实大模型会用分片 checkpoint，
     但单卡学习项目先用一个 .pt 文件最清楚。数据先写入同目录临时文件，成功 flush/fsync
@@ -75,9 +75,8 @@ def save_checkpoint(path: str | Path, payload: Dict[str, Any]) -> None:
             os.fsync(file.fileno())
         os.replace(temporary_path, path)
     except BaseException:
-        # fdopen owns the descriptor after it succeeds.  If it failed before
-        # taking ownership, close the descriptor here; an already-closed fd is
-        # harmlessly ignored.
+        # fdopen 成功后会接管文件描述符；若它在接管前失败，则在这里关闭。
+        # 对已经关闭的描述符再次 close 会抛 OSError，下面统一忽略。
         try:
             os.close(file_descriptor)
         except OSError:
@@ -87,14 +86,12 @@ def save_checkpoint(path: str | Path, payload: Dict[str, Any]) -> None:
 
 
 def update_latest_checkpoint(latest_path: str | Path, checkpoint_path: str | Path) -> str:
-    """Atomically point ``latest.pt`` at an already-saved numbered checkpoint.
+    """让 ``latest.pt`` 原子指向已保存的编号 checkpoint。
 
-    A hard link avoids serializing and writing the same payload twice.  Some
-    filesystems do not support hard links; those environments fall back to an
-    atomic file copy while still avoiding a second ``torch.save`` call.
+    hard link 可以避免对同一 payload 重复序列化和写盘；不支持 hard link 的
+    文件系统会回退到原子文件复制，但仍不会再次调用 ``torch.save``。
 
-    Returns ``"hardlink"`` or ``"copy"`` so tests and logs can record the path
-    actually used.
+    返回 ``"hardlink"`` 或 ``"copy"``，供测试和日志记录实际采用的路径。
     """
 
     latest_path = Path(latest_path)
@@ -142,6 +139,6 @@ def restore_rng_state(payload: Dict[str, Any]) -> None:
     """
 
     if "rng_state" in payload:
-        torch.set_rng_state(payload["rng_state"])
+        torch.set_rng_state(payload["rng_state"].cpu())
     if torch.cuda.is_available() and "cuda_rng_state_all" in payload:
         torch.cuda.set_rng_state_all(payload["cuda_rng_state_all"])

@@ -1,4 +1,4 @@
-"""Logging helpers for training.
+"""训练日志辅助函数。
 
 本项目不引入 TensorBoard / WandB，是为了保持依赖最少。
 训练日志会同时：
@@ -65,12 +65,11 @@ def memory_stats_mb(device: torch.device) -> tuple[float, float]:
 
 
 class DeviceIntervalTimer:
-    """Measure a window without synchronizing the accelerator every step.
+    """在不逐step同步加速器的情况下测量一个统计窗口。
 
-    ``tokens_per_sec`` remains an end-to-end wall-time metric for the pure
-    training window.  On CUDA, events delimit the queued device work and wait
-    only when a logging/evaluation/checkpoint boundary closes the window.  The
-    device-only elapsed time is retained for later profiler/metrics expansion.
+    ``tokens_per_sec``使用纯训练窗口的端到端wall time。CUDA路径用Event界定
+    已排队的设备工作，只在日志、验证或checkpoint边界关闭窗口时等待；纯设备
+    时间保存在``last_device_seconds``，供后续profiler/metrics扩展。
     """
 
     def __init__(self, device: torch.device) -> None:

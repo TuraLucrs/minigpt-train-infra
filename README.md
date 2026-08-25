@@ -50,7 +50,8 @@ Git 标签 `baseline-v0.1` 保存了完整教学实现，其中 LayerNorm、GELU
 cross entropy、AdamW、梯度裁剪和 loss scaling 都是手写版本。
 
 Git 标签 `v0.2-native-single-device` 保存第一批原生算子升级；`v0.2.1-single-device-closeout`
-在此基础上完成单设备训练的可靠性、热路径和回归测试收尾。
+完成单设备训练的可靠性、热路径和回归测试收尾；`v0.2.2-single-device-correctness`
+修复 CUDA resume 设备映射并澄清窗口指标口径。
 
 当前工程化分支已经把学完且官方实现更成熟的部分逐步替换为 PyTorch 原生算子。
 
@@ -283,16 +284,18 @@ python train.py --config configs/tiny_cpu.json --max_steps 50 --out_dir runs/exp
 
 `runs/.../train_log.csv` 里有这些字段：
 
-- `step`: optimizer step 编号
+- `step`: 训练循环执行次数（包含因 fp16 溢出而未更新参数的尝试）
+- `optimizer_step`: AdamW 实际成功完成的参数更新次数
 - `split`: `train` 或 `val`
 - `loss`: next-token prediction loss
 - `lr`: 当前学习率
 - `tokens_per_sec`: 当前纯训练计时窗口内的 wall-time tokens/s，不包含随后执行的 eval/checkpoint
 - `gpu_mem_mb`: 当前 GPU 显存占用
 - `gpu_peak_mb`: 当前计时窗口的峰值 GPU 显存
-- `grad_norm`: gradient clipping 前的梯度总 norm
+- `grad_norm_last`: 窗口最后一步在 gradient clipping 前的梯度总 norm
+- `grad_norm_max`: 整个窗口在 gradient clipping 前的最大梯度总 norm
 - `loss_scale`: fp16 时的 loss scale
-- `skipped_step`: fp16 梯度出现 inf/nan 时是否跳过更新
+- `skipped_steps`: 当前窗口因 fp16 梯度出现 inf/nan 而跳过的更新次数
 
 ## 为什么 tiny_corpus 这么小？
 
@@ -314,7 +317,7 @@ python train.py --config configs/tiny_cpu.json --max_steps 50 --out_dir runs/exp
 
 ```text
 baseline-v0.1     教学单设备训练闭环
-v0.2 / v0.2.1    优化单设备训练
+v0.2.x            优化并修正单设备训练
 v0.3              公共 Runtime、指标和实验记录
 v0.4              MiniGPT Prefill/Decode 与 KV Cache
 v0.5              DDP 分布式训练

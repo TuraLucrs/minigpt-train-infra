@@ -1,8 +1,7 @@
-"""Optimizer helpers that remain specific to this training loop.
+"""当前训练循环仍需要的 optimizer 辅助函数。
 
-AdamW, gradient clipping, and fp16 scaling now use PyTorch's maintained
-implementations. The original teaching implementations remain available at
-Git tag ``baseline-v0.1``.
+AdamW、gradient clipping 和 fp16 scaling 已改用 PyTorch 维护的实现；
+原始教学实现保存在 Git 标签 ``baseline-v0.1``。
 """
 
 from __future__ import annotations
@@ -14,13 +13,11 @@ import torch
 
 
 def build_adamw_param_groups(model: torch.nn.Module, weight_decay: float) -> list[dict[str, Any]]:
-    """Split trainable parameters into decay and no-decay AdamW groups.
+    """把可训练参数分成应用和不应用 weight decay 的 AdamW 参数组。
 
-    Matrix-shaped parameters (Linear/Embedding weights) receive weight decay.
-    One-dimensional parameters (biases and LayerNorm scale/bias) do not.  The
-    parameter names are stored in the groups as checkpoint metadata so future
-    layout migrations do not have to guess which optimizer state belongs to
-    which model parameter.
+    矩阵参数（Linear/Embedding weight）应用 weight decay；一维参数（bias 和
+    LayerNorm scale/bias）不应用。参数名会作为 checkpoint 元数据写入参数组，
+    后续布局迁移无需猜测 optimizer 状态属于哪个模型参数。
     """
 
     if weight_decay < 0:
@@ -68,7 +65,7 @@ def build_adamw_param_groups(model: torch.nn.Module, weight_decay: float) -> lis
 
 
 def set_optimizer_lr(optimizer: torch.optim.Optimizer, lr: float) -> None:
-    """Set the scheduled learning rate on every optimizer parameter group."""
+    """把调度器算出的学习率写入所有 optimizer 参数组。"""
 
     for group in optimizer.param_groups:
         group["lr"] = lr
@@ -90,7 +87,7 @@ def _optimizer_named_parameters(
 
 
 def _separate_qkv_parameter_names(current_names: list[str]) -> list[str]:
-    """Expand current fused-QKV names into the parameter order used before fusion."""
+    """把当前融合QKV参数名展开成融合前的参数顺序。"""
 
     legacy_names = []
     for name in current_names:
@@ -141,7 +138,7 @@ def load_optimizer_state(
     payload: dict[str, Any],
     model: torch.nn.Module,
 ) -> None:
-    """Load native state and migrate teaching or separate-QKV checkpoints."""
+    """加载原生状态，并迁移教学版或分离QKV checkpoint。"""
 
     named_parameters = _optimizer_named_parameters(optimizer, model)
     current_names = [name for name, _ in named_parameters]
@@ -159,15 +156,13 @@ def load_optimizer_state(
         current_group_names = [name for group in current_groups for name in group.get("param_names", [])]
         names_match = bool(saved_names) and saved_names == current_group_names
 
-        # Native checkpoints from this version carry param_names.  Older
-        # single-group checkpoints are also safe to load directly when the
-        # optimizer still has one group and the parameter count is unchanged.
+        # 当前版本的原生checkpoint带有param_names；若optimizer仍为单参数组且
+        # 参数数量未变，旧单组checkpoint也可以直接加载。
         if len(saved_ids) == current_count and same_group_sizes and (
             names_match or (len(saved_groups) == 1 and len(current_groups) == 1)
         ):
-            # Keep execution-path options chosen for the current device.  For
-            # example, a CPU checkpoint must not disable fused AdamW when it is
-            # resumed on CUDA merely because the saved group had fused=False.
+            # 保留当前设备选择的执行路径选项。例如，CPU checkpoint中的
+            # fused=False不应在恢复到CUDA时关闭当前可用的fused AdamW。
             runtime_options = [
                 {
                     key: group[key]
@@ -186,9 +181,8 @@ def load_optimizer_state(
                 raise ValueError("Optimizer checkpoint param_names do not match saved parameter IDs")
             source_names = saved_names
         else:
-            # v0.2 used model.parameters() in model registration order.  The
-            # new optimizer groups matrices before one-dimensional parameters,
-            # so use model order—not current optimizer order—to interpret it.
+            # v0.2使用model.parameters()注册顺序；新版会把矩阵参数放在一维参数前，
+            # 因此这里必须按模型顺序而不是当前optimizer顺序解释旧状态。
             model_order_names = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
             separate_qkv_names = _separate_qkv_parameter_names(model_order_names)
             if len(saved_ids) == len(model_order_names):
@@ -258,7 +252,7 @@ def load_optimizer_state(
 
 
 def load_grad_scaler_state(scaler: torch.amp.GradScaler, payload: dict[str, Any]) -> None:
-    """Load native GradScaler state or migrate the teaching scaler format."""
+    """加载原生GradScaler状态，或迁移教学版scaler格式。"""
 
     if not scaler.is_enabled() or not payload:
         return
@@ -280,7 +274,7 @@ def load_grad_scaler_state(scaler: torch.amp.GradScaler, payload: dict[str, Any]
 
 
 def cosine_lr(step: int, base_lr: float, min_lr: float, warmup_steps: int, max_steps: int) -> float:
-    """Warm up linearly, then decay from ``base_lr`` to ``min_lr`` with cosine."""
+    """先线性warmup，再用cosine从``base_lr``衰减到``min_lr``。"""
 
     if warmup_steps > 0 and step < warmup_steps:
         return base_lr * float(step + 1) / float(warmup_steps)

@@ -1,4 +1,4 @@
-"""Single-device MiniGPT pretraining entry point.
+"""MiniGPT 单设备预训练入口。
 
 推荐先读这个文件，因为它把整个训练系统串起来了：
 
@@ -193,6 +193,7 @@ def build_training_checkpoint_payload(
     optimizer: torch.optim.Optimizer,
     scaler: torch.amp.GradScaler,
     step: int,
+    optimizer_step: int,
     config_dict: dict,
     best_val_loss: float | None,
     train_batcher: RandomTokenBatcher,
@@ -202,7 +203,7 @@ def build_training_checkpoint_payload(
     vocab_size: int,
     tokenizer_path: Path,
 ) -> dict:
-    """Build the complete training state once before writing checkpoint files."""
+    """在写文件前一次性组装完整训练状态。"""
 
     payload = build_checkpoint_payload(
         model=model,
@@ -212,6 +213,8 @@ def build_training_checkpoint_payload(
         config=config_dict,
         best_val_loss=best_val_loss,
     )
+    payload["iteration_step"] = step
+    payload["optimizer_step"] = optimizer_step
     payload["train_batcher_state"] = train_batcher.generator.get_state()
     payload["val_batcher_state"] = val_batcher.generator.get_state()
     payload["tokenizer_hash"] = tokenizer_hash
@@ -219,6 +222,23 @@ def build_training_checkpoint_payload(
     payload["vocab_size"] = vocab_size
     payload["tokenizer_path"] = str(tokenizer_path)
     return payload
+
+
+def optimizer_completed_steps(optimizer: torch.optim.Optimizer) -> int:
+    """读取 AdamW 已成功完成的参数更新次数。
+
+    当前 GPT 的所有可训练参数都会参与每轮 backward，因此读取第一个已有状态的
+    参数即可。这个读取只发生在统计窗口边界，避免每个 step 都把设备标量同步回 CPU。
+    """
+
+    for group in optimizer.param_groups:
+        for parameter in group["params"]:
+            state = optimizer.state.get(parameter)
+            if not state or "step" not in state:
+                continue
+            completed = state["step"]
+            return int(completed.item()) if isinstance(completed, torch.Tensor) else int(completed)
+    return 0
 
 
 def sha256_text(text: str) -> str:
@@ -344,7 +364,9 @@ def main() -> None:
     if resume_path:
         checkpoint_path = resolve_project_path(PROJECT_ROOT, resume_path)
         print(f"[resume] loading checkpoint: {checkpoint_path}")
-        checkpoint = load_checkpoint(checkpoint_path, map_location=device)
+        # checkpoint 统一先落到 CPU：模型和 optimizer 状态随后按各自目标设备恢复，
+        # CPU RNG 与 batcher Generator 状态则不会被误映射到 CUDA。
+        checkpoint = load_checkpoint(checkpoint_path, map_location="cpu")
         source_run_dir = checkpoint_run_dir(checkpoint_path).resolve()
         if out_dir.resolve() != source_run_dir:
             artifacts = existing_run_artifacts(out_dir) if out_dir.exists() else []
@@ -420,11 +442,13 @@ def main() -> None:
         load_grad_scaler_state(scaler, checkpoint["scaler_state"])
         restore_rng_state(checkpoint)
         if "train_batcher_state" in checkpoint:
-            train_batcher.generator.set_state(checkpoint["train_batcher_state"])
+            train_batcher.generator.set_state(checkpoint["train_batcher_state"].cpu())
         if "val_batcher_state" in checkpoint:
-            val_batcher.generator.set_state(checkpoint["val_batcher_state"])
-        start_step = int(checkpoint["step"])
+            val_batcher.generator.set_state(checkpoint["val_batcher_state"].cpu())
+        start_step = int(checkpoint.get("iteration_step", checkpoint["step"]))
         best_val_loss = checkpoint.get("best_val_loss")
+
+    start_optimizer_step = optimizer_completed_steps(optimizer)
 
     print("=" * 80)
     print("MiniGPT-Train single-device run")
@@ -440,21 +464,24 @@ def main() -> None:
     print(f"val tokens       : {val_tokens.numel()}")
     print(f"parameters       : {count_parameters(model):,}")
     print(f"start_step       : {start_step}")
+    print(f"optimizer_step   : {start_optimizer_step}")
     print(f"max_steps        : {cfg.train.max_steps}")
     print("=" * 80)
 
     log_path = out_dir / "train_log.csv"
     fields = [
         "step",
+        "optimizer_step",
         "split",
         "loss",
         "lr",
         "tokens_per_sec",
         "gpu_mem_mb",
         "gpu_peak_mb",
-        "grad_norm",
+        "grad_norm_last",
+        "grad_norm_max",
         "loss_scale",
-        "skipped_step",
+        "skipped_steps",
     ]
 
     model.train()
@@ -474,6 +501,9 @@ def main() -> None:
     window_micro_batches = 0
     window_tokens = 0
     window_steps = 0
+    window_optimizer_step_start = start_optimizer_step
+    window_grad_norm_last = torch.zeros((), dtype=torch.float32, device=device)
+    window_grad_norm_max = torch.zeros((), dtype=torch.float32, device=device)
     reset_peak_memory(device)
     interval_timer.start()
 
@@ -485,12 +515,9 @@ def main() -> None:
             should_checkpoint = (
                 next_step % cfg.train.checkpoint_interval == 0 or next_step == cfg.train.max_steps
             )
-            # Any slow side path closes the current pure-training timing window
-            # first, so evaluation/checkpoint I/O never inflates train step time.
+            # 任一慢速旁路都先关闭纯训练计时窗口，避免 eval/checkpoint I/O
+            # 被错误计入训练 step 时间。
             should_close_window = should_log or should_eval or should_checkpoint
-            scale_before_step = (
-                scaler.get_scale() if should_close_window and scaler.is_enabled() else None
-            )
 
             lr = cosine_lr(
                 step=step,
@@ -502,8 +529,7 @@ def main() -> None:
             set_optimizer_lr(optimizer, lr)
             optimizer.zero_grad(set_to_none=True)
 
-            # gradient accumulation:
-            # 多次 forward/backward 累积梯度，只在最后 optimizer.step()。
+            # 梯度累积：多次 forward/backward 累积梯度，只在最后 optimizer.step()。
             # 等效 global tokens = batch_size * block_size * accumulation_steps。
             for _micro_step in range(cfg.train.gradient_accumulation_steps):
                 x, y = train_batcher.get_batch()
@@ -523,6 +549,9 @@ def main() -> None:
             # inf/nan 时自动跳过 optimizer.step()。
             scaler.unscale_(optimizer)
             grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
+            grad_norm_detached = grad_norm_tensor.detach().float()
+            window_grad_norm_last = grad_norm_detached
+            window_grad_norm_max = torch.maximum(window_grad_norm_max, grad_norm_detached)
             scaler.step(optimizer)
             scaler.update()
 
@@ -535,31 +564,35 @@ def main() -> None:
                 elapsed = interval_timer.elapsed_seconds()
                 tokens_per_sec = window_tokens / max(elapsed, 1e-9)
                 train_loss = (window_loss_sum / window_micro_batches).item()
-                grad_norm = grad_norm_tensor.detach().float().item()
+                grad_norm_last = window_grad_norm_last.item()
+                grad_norm_max = window_grad_norm_max.item()
                 scale_after_step = scaler.get_scale() if scaler.is_enabled() else 1.0
-                skipped_step = (
-                    scale_before_step is not None and scale_after_step < scale_before_step
-                )
+                optimizer_step = optimizer_completed_steps(optimizer)
+                successful_steps = optimizer_step - window_optimizer_step_start
+                skipped_steps = max(0, window_steps - successful_steps)
                 gpu_mem_mb, gpu_peak_mb = memory_stats_mb(device)
                 logger.log(
                     {
                         "step": step,
+                        "optimizer_step": optimizer_step,
                         "split": "train",
                         "loss": f"{train_loss:.6f}",
                         "lr": f"{lr:.8f}",
                         "tokens_per_sec": f"{tokens_per_sec:.2f}",
                         "gpu_mem_mb": f"{gpu_mem_mb:.2f}",
                         "gpu_peak_mb": f"{gpu_peak_mb:.2f}",
-                        "grad_norm": f"{grad_norm:.6f}",
+                        "grad_norm_last": f"{grad_norm_last:.6f}",
+                        "grad_norm_max": f"{grad_norm_max:.6f}",
                         "loss_scale": f"{scale_after_step:.1f}" if scaler.is_enabled() else "",
-                        "skipped_step": str(skipped_step),
+                        "skipped_steps": skipped_steps,
                     }
                 )
                 print(
                     f"step {step:5d} | train loss {train_loss:.4f} | "
                     f"lr {lr:.2e} | {tokens_per_sec:.0f} tok/s | "
                     f"gpu {gpu_mem_mb:.1f}/{gpu_peak_mb:.1f} MB | "
-                    f"grad {grad_norm:.3f} | window {window_steps}"
+                    f"grad {grad_norm_last:.3f}/{grad_norm_max:.3f} | "
+                    f"updates {successful_steps}/{window_steps}"
                 )
 
             if should_eval:
@@ -575,15 +608,18 @@ def main() -> None:
                 logger.log(
                     {
                         "step": step,
+                        "optimizer_step": optimizer_step,
                         "split": "val",
                         "loss": f"{val_loss:.6f}",
                         "lr": f"{lr:.8f}",
                         "tokens_per_sec": "",
-                        "gpu_mem_mb": f"{gpu_mem_mb:.2f}",
-                        "gpu_peak_mb": f"{gpu_peak_mb:.2f}",
-                        "grad_norm": "",
+                        # 当前没有单独测量 validation 显存，留空比复用训练窗口数据更准确。
+                        "gpu_mem_mb": "",
+                        "gpu_peak_mb": "",
+                        "grad_norm_last": "",
+                        "grad_norm_max": "",
                         "loss_scale": f"{scale_after_step:.1f}" if scaler.is_enabled() else "",
-                        "skipped_step": "",
+                        "skipped_steps": "",
                     }
                 )
                 print(f"          | val loss   {val_loss:.4f} | best {best_val_loss:.4f}")
@@ -596,6 +632,7 @@ def main() -> None:
                     optimizer=optimizer,
                     scaler=scaler,
                     step=step,
+                    optimizer_step=optimizer_step,
                     config_dict=config_dict,
                     best_val_loss=best_val_loss,
                     train_batcher=train_batcher,
@@ -615,6 +652,9 @@ def main() -> None:
                 window_micro_batches = 0
                 window_tokens = 0
                 window_steps = 0
+                window_optimizer_step_start = optimizer_step
+                window_grad_norm_last = torch.zeros((), dtype=torch.float32, device=device)
+                window_grad_norm_max = torch.zeros((), dtype=torch.float32, device=device)
                 reset_peak_memory(device)
                 interval_timer.start()
 
