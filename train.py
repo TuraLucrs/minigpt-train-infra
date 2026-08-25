@@ -15,8 +15,8 @@
 11. 保存 checkpoint
 12. 支持 resume
 
-它是“训练 infra 的第一张地图”。后续改 DDP、FSDP、DeepSpeed 时，
-本质上就是替换或扩展这张地图里的某些环节。
+它是“训练 infra 的第一张地图”。从 v0.3 开始，这条训练路径作为知识基础和回归 workload
+保留；项目主线转入独立推理引擎。
 """
 
 from __future__ import annotations
@@ -27,9 +27,7 @@ import json
 import random
 import shutil
 import sys
-from contextlib import nullcontext
 from pathlib import Path
-from typing import Callable, ContextManager
 
 import torch
 
@@ -47,7 +45,8 @@ from minigpt.checkpoint import (  # noqa: E402
 )
 from minigpt.config import load_experiment_config, resolve_project_path  # noqa: E402
 from minigpt.data import RandomTokenBatcher, split_train_val  # noqa: E402
-from minigpt.logging_utils import CSVLogger, DeviceIntervalTimer, memory_stats_mb, reset_peak_memory  # noqa: E402
+from minigpt.inference import GenerationConfig, InferenceEngine, MiniGPTModelRunner  # noqa: E402
+from minigpt.logging_utils import CSVLogger  # noqa: E402
 from minigpt.model import (  # noqa: E402
     MiniGPT,
     MiniGPTConfig,
@@ -62,6 +61,7 @@ from minigpt.optim import (  # noqa: E402
     load_optimizer_state,
     set_optimizer_lr,
 )
+from minigpt.runtime import DeviceIntervalTimer, RuntimeContext  # noqa: E402
 from minigpt.tokenizer import CharTokenizer  # noqa: E402
 
 
@@ -96,77 +96,12 @@ def apply_cli_overrides(cfg, args: argparse.Namespace) -> None:  # type: ignore[
         cfg.train.out_dir = args.out_dir
 
 
-def set_seed(seed: int) -> None:
-    """设置随机种子，让实验更容易复现。"""
-
-    random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-
-def choose_device(requested: str) -> torch.device:
-    """根据配置选择训练设备。"""
-
-    requested = requested.lower()
-    if requested == "auto":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if requested == "cuda" and not torch.cuda.is_available():
-        print("[warning] config requested cuda, but CUDA is not available; falling back to CPU.")
-        return torch.device("cpu")
-    if requested not in {"cpu", "cuda"}:
-        raise ValueError("device must be one of: auto, cpu, cuda")
-    return torch.device(requested)
-
-
-def choose_precision(requested: str, device: torch.device) -> tuple[str, torch.dtype | None]:
-    """选择训练精度。
-
-    fp16/bf16 只有在 CUDA 上才启用。CPU 上强行混合精度对本项目学习意义不大，
-    还容易遇到算子支持差异，所以直接回退 fp32。
-    """
-
-    requested = requested.lower()
-    if requested not in {"fp32", "fp16", "bf16"}:
-        raise ValueError("precision must be one of: fp32, fp16, bf16")
-
-    if requested == "fp32":
-        return "fp32", None
-
-    if device.type != "cuda":
-        print(f"[warning] precision={requested} needs CUDA in this project; falling back to fp32.")
-        return "fp32", None
-
-    if requested == "bf16" and not torch.cuda.is_bf16_supported():
-        print("[warning] bf16 is not supported by this CUDA device; falling back to fp32.")
-        return "fp32", None
-
-    dtype = torch.float16 if requested == "fp16" else torch.bfloat16
-    return requested, dtype
-
-
-def make_autocast_context(device: torch.device, amp_dtype: torch.dtype | None) -> Callable[[], ContextManager[None]]:
-    """返回一个创建 autocast context 的函数。
-
-    注意这里返回的是“函数”，不是单个 context 对象。因为每个 forward 都应该
-    创建一个新的 with context。
-    """
-
-    if amp_dtype is None:
-        return nullcontext
-
-    def _ctx() -> ContextManager[None]:
-        return torch.amp.autocast(device_type=device.type, dtype=amp_dtype)
-
-    return _ctx
-
-
 @torch.no_grad()
 def estimate_loss(
     model: MiniGPT,
     batcher: RandomTokenBatcher,
     num_batches: int,
-    autocast_context: Callable[[], ContextManager[None]],
+    runtime: RuntimeContext,
     debug_checks: bool = False,
 ) -> float:
     """在验证集上估计 loss。
@@ -179,7 +114,7 @@ def estimate_loss(
     loss_sum = torch.zeros((), dtype=torch.float32, device=next(model.parameters()).device)
     for _ in range(num_batches):
         x, y = batcher.get_batch()
-        with autocast_context():
+        with runtime.autocast():
             logits = model(x)
             loss = next_token_cross_entropy(logits, y, debug_checks=debug_checks)
         loss_sum += loss.detach().float()
@@ -337,11 +272,11 @@ def main() -> None:
     cfg = load_experiment_config(config_path)
     apply_cli_overrides(cfg, args)
 
-    set_seed(cfg.train.seed)
-
-    device = choose_device(cfg.train.device)
-    precision_name, amp_dtype = choose_precision(cfg.train.precision, device)
-    autocast_context = make_autocast_context(device, amp_dtype)
+    runtime = RuntimeContext.create(cfg.train.device, cfg.train.precision)
+    device = runtime.device
+    precision_name = runtime.precision
+    random.seed(cfg.train.seed)
+    runtime.manual_seed(cfg.train.seed)
 
     data_path = resolve_project_path(PROJECT_ROOT, cfg.train.data_path)
     out_dir = resolve_project_path(PROJECT_ROOT, cfg.train.out_dir)
@@ -426,7 +361,7 @@ def main() -> None:
         lr=cfg.train.learning_rate,
         betas=(cfg.train.beta1, cfg.train.beta2),
         eps=cfg.train.adam_eps,
-        fused=(device.type == "cuda"),
+        fused=runtime.capabilities.supports_fused_adamw,
     )
     scaler = torch.amp.GradScaler(
         device.type,
@@ -496,7 +431,7 @@ def main() -> None:
         "device_used": str(device),
     }
 
-    interval_timer = DeviceIntervalTimer(device)
+    interval_timer = DeviceIntervalTimer(runtime)
     window_loss_sum = torch.zeros((), dtype=torch.float32, device=device)
     window_micro_batches = 0
     window_tokens = 0
@@ -504,7 +439,7 @@ def main() -> None:
     window_optimizer_step_start = start_optimizer_step
     window_grad_norm_last = torch.zeros((), dtype=torch.float32, device=device)
     window_grad_norm_max = torch.zeros((), dtype=torch.float32, device=device)
-    reset_peak_memory(device)
+    runtime.reset_peak_memory()
     interval_timer.start()
 
     with CSVLogger(log_path, fields, append=bool(resume_path)) as logger:
@@ -533,7 +468,7 @@ def main() -> None:
             # 等效 global tokens = batch_size * block_size * accumulation_steps。
             for _micro_step in range(cfg.train.gradient_accumulation_steps):
                 x, y = train_batcher.get_batch()
-                with autocast_context():
+                with runtime.autocast():
                     logits = model(x)
                     loss = next_token_cross_entropy(logits, y, debug_checks=args.debug_checks)
 
@@ -570,7 +505,7 @@ def main() -> None:
                 optimizer_step = optimizer_completed_steps(optimizer)
                 successful_steps = optimizer_step - window_optimizer_step_start
                 skipped_steps = max(0, window_steps - successful_steps)
-                gpu_mem_mb, gpu_peak_mb = memory_stats_mb(device)
+                gpu_mem_mb, gpu_peak_mb = runtime.memory_stats_mb()
                 logger.log(
                     {
                         "step": step,
@@ -600,7 +535,7 @@ def main() -> None:
                     model,
                     val_batcher,
                     cfg.train.eval_batches,
-                    autocast_context,
+                    runtime,
                     debug_checks=args.debug_checks,
                 )
                 if best_val_loss is None or val_loss < best_val_loss:
@@ -655,17 +590,18 @@ def main() -> None:
                 window_optimizer_step_start = optimizer_step
                 window_grad_norm_last = torch.zeros((), dtype=torch.float32, device=device)
                 window_grad_norm_max = torch.zeros((), dtype=torch.float32, device=device)
-                reset_peak_memory(device)
+                runtime.reset_peak_memory()
                 interval_timer.start()
 
     if args.sample:
-        model.eval()
-        prompt = "MiniGPT"
-        prompt_ids = torch.tensor([tokenizer.encode(prompt)], dtype=torch.long, device=device)
-        generated = model.generate(prompt_ids, max_new_tokens=80, temperature=0.9)
+        engine = InferenceEngine(MiniGPTModelRunner(model, runtime), tokenizer)
+        result = engine.generate(
+            "MiniGPT",
+            GenerationConfig(max_new_tokens=80, strategy="sample", temperature=0.9, seed=cfg.train.seed),
+        )
         print("=" * 80)
         print("Sample:")
-        print(tokenizer.decode(generated[0].tolist()))
+        print(result.full_text)
 
 
 if __name__ == "__main__":

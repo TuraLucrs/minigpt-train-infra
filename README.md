@@ -1,8 +1,13 @@
-# MiniGPT-Train
+# MiniGPT 推理 Infra
 
-一个为学习 AI 训练 infra 准备的、**从零实现核心训练链路**的小型 GPT 预训练项目。
+一个从透明的 MiniGPT 训练闭环起步、逐步建设真实大模型推理 Infra 的学习与工程项目。
 
-这个项目不是为了训练出有用的大模型，而是为了让你把下面这些东西真正跑通、看懂、改得动：
+项目最高原则：
+
+> 训练是前置学习阶段，用来建立模型、优化器、精度、显存、通信等基础认知；推理 Infra
+> 才是项目主线、专项研究方向和最终交付成果。
+
+项目先用 tiny model 把系统链路真正跑通、看懂、改得动，再把正式性能工作迁移到真实模型：
 
 - 数据加载与 tokenizer
 - GPT / Transformer block
@@ -13,13 +18,17 @@
 - checkpoint 保存与断点续训
 - 日志记录：loss、tokens/s、GPU memory
 - 单卡训练 baseline
-- 后续 DDP / FSDP / DeepSpeed 扩展路线
+- 独立生成入口和 deterministic greedy baseline
+- Prefill/Decode 阶段边界
+- TTFT、TPOT、E2E latency、吞吐和设备内存 Benchmark
+- 为 KV Cache、真实模型和分布式推理准备的正确性基线
 
-## 这个项目适合你现在做吗？
+## 当前阶段
 
-适合，但要稍微改一下原计划的重心。
+`v0.1～v0.2.2` 已经完成单设备训练基础。它们保留为知识基础和项目演进证据，但后续不再
+持续扩建完整训练平台。`v0.3` 已经进入可测量的 MiniGPT 单设备推理基线。
 
-你现在是大二下，拿到的是训练 infra 实习 offer。第一阶段最重要的不是一口气写 DDP、FSDP、DeepSpeed，而是把**单卡训练系统的完整闭环**吃透：
+项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 
 ```text
 文本
@@ -36,9 +45,10 @@
 -> resume
 ```
 
-DDP / FSDP / DeepSpeed 很重要，但它们应该是第二、第三阶段。否则你会在“多进程、通信、显存切分、配置框架”里迷路，还没来得及理解训练循环本身。
+DDP 可以作为学习多进程、rank、process group 和 collective 的短实验；FSDP/ZeRO 是按需
+训练支线。它们都不再阻塞 KV Cache、真实模型、Tensor Parallel 和推理调度。
 
-所以本项目的 v0.1 目标是：
+已完成的 v0.1 目标是：
 
 ```text
 把单卡 GPT 预训练系统写完整、注释写明白、能跑、能断点续训、能记录指标。
@@ -52,6 +62,10 @@ cross entropy、AdamW、梯度裁剪和 loss scaling 都是手写版本。
 Git 标签 `v0.2-native-single-device` 保存第一批原生算子升级；`v0.2.1-single-device-closeout`
 完成单设备训练的可靠性、热路径和回归测试收尾；`v0.2.2-single-device-correctness`
 修复 CUDA resume 设备映射并澄清窗口指标口径。
+
+`v0.3-measurable-single-device-inference` 将生成编排移出模型本体，增加独立 `infer.py`、
+Prefill/Decode reference runner、最小 Runtime 边界和同步单请求 Benchmark。v0.3 的 Decode
+仍重算完整有效上下文，不使用 KV Cache；这正是 v0.4 的对照基线。
 
 当前工程化分支已经把学完且官方实现更成熟的部分逐步替换为 PyTorch 原生算子。
 
@@ -90,6 +104,9 @@ minigpt-train/
   requirements.txt
   pyproject.toml
   train.py
+  infer.py
+  benchmarks/
+    infer_single_device.py
   configs/
     tiny_cpu.json
     tiny_gpu.json
@@ -97,6 +114,8 @@ minigpt-train/
     tiny_corpus.txt
   docs/
     INDUSTRIALIZATION_OPTIMIZATION_PLAN.md
+    INFERENCE_FIRST_ROADMAP.md
+    V0_3_MEASURABLE_INFERENCE.md
     V0_2_1_SINGLE_DEVICE_CLOSEOUT.md
     PLAN_REVIEW.md
     LEARNING_GUIDE.md
@@ -114,10 +133,15 @@ minigpt-train/
       checkpoint.py
       logging_utils.py
       config.py
+      runtime.py
+      inference.py
+      benchmark.py
+      experiment.py
   tests/
     test_core.py
     test_reference_parity.py
     test_resume_consistency.py
+    test_inference.py
 ```
 
 ## 环境准备
@@ -140,6 +164,7 @@ cd F:\ai-infra-projects\minigpt-train
 python tests/test_core.py
 python tests/test_reference_parity.py
 python tests/test_resume_consistency.py
+python tests/test_inference.py
 ```
 
 看到：
@@ -148,11 +173,63 @@ python tests/test_resume_consistency.py
 All core smoke tests passed.
 Reference-vs-optimized parity tests passed.
 Exact resume consistency test passed.
+v0.3 inference and benchmark tests passed.
 ```
 
 第一项检查 tokenizer、model、optimizer 参数组、checkpoint 原子保存和旧版本迁移；
 第二项对照教学公式与原生 LayerNorm、GELU、cross entropy、SDPA 的输出和梯度；
 第三项检查连续训练和从中间 checkpoint 恢复能否得到完全一致的最终训练状态。
+第四项检查 Prefill/Decode、greedy/sample、独立 checkpoint 加载和推理指标口径。
+
+## 独立运行一次推理
+
+先使用已有训练产物：
+
+```powershell
+python infer.py `
+  --checkpoint runs/tiny_cpu/latest.pt `
+  --prompt "MiniGPT" `
+  --max-new-tokens 32 `
+  --strategy greedy `
+  --device cpu
+```
+
+`greedy` 每次选择 logits 最大的 token，适合建立稳定正确性基线。需要观察随机采样时再使用：
+
+```powershell
+python infer.py `
+  --checkpoint runs/tiny_cpu/latest.pt `
+  --prompt "MiniGPT" `
+  --max-new-tokens 32 `
+  --strategy sample `
+  --temperature 0.9 `
+  --top-k 20 `
+  --seed 1337
+```
+
+## 运行单设备推理 Benchmark
+
+```powershell
+python benchmarks/infer_single_device.py `
+  --checkpoint runs/tiny_cpu/latest.pt `
+  --prompt "MiniGPT" `
+  --max-new-tokens 32 `
+  --device cpu `
+  --warmup 2 `
+  --repeats 5 `
+  --output runs/inference_benchmark.json
+```
+
+报告保留每次原始结果，并汇总 median、p50、p90、p99。v0.3 的指标定义为：
+
+- `prefill_ms`：Prefill 开始到首 token 在 device 上计算完成；
+- `TTFT`：请求开始到首 token 已经取回并 decode 为文本；
+- `TPOT`：除首 token 外，后续 token 计算、取回并 decode 为文本的平均间隔；
+- `E2E latency`：请求开始到完整结果 decode 完成；
+- `output tokens/s`：生成 token 数除以端到端时间；
+- `peak device memory`：模型已经加载后的请求测量窗口内，模型与推理共同占用的峰值设备内存。
+
+CPU 上的 tiny 结果只用于正确性和本机回归，不代表真实模型或工业硬件性能。
 
 ## 跑一个 CPU 小训练
 
@@ -244,20 +321,20 @@ python train.py --config configs/tiny_cpu.json --resume runs/tiny_cpu/latest.pt 
 
 ## 你应该怎么读代码？
 
-推荐顺序：
+训练基础已经讲完。学习 v0.3 新增内容时推荐顺序：
 
-1. `src/minigpt/tokenizer.py`
-2. `src/minigpt/data.py`
-3. `baseline-v0.1` 里的 `MiniLayerNorm`，再对照当前 `nn.LayerNorm`
-4. `src/minigpt/model.py` 里的 `CausalSelfAttention`
-5. `src/minigpt/model.py` 里的 `TransformerBlock`
-6. `baseline-v0.1` 里的 `manual_cross_entropy`，再对照当前 `next_token_cross_entropy`
-7. `src/minigpt/optim.py`
-8. `train.py`
-9. `src/minigpt/checkpoint.py`
-10. `docs/ROADMAP_DDP_FSDP_DEEPSPEED.md`
+1. `src/minigpt/runtime.py`
+2. `src/minigpt/inference.py` 的配置和结果对象
+3. `MiniGPTModelRunner.prefill()` / `decode()`
+4. `InferenceEngine.generate()`
+5. `infer.py`
+6. `src/minigpt/benchmark.py`
+7. `benchmarks/infer_single_device.py`
+8. `train.py` 中复用 Runtime/InferenceEngine 的变化
+9. `tests/test_inference.py`
 
-不要第一天就从 `train.py` 的所有细节开始硬啃。先搞懂 token 怎么来、模型怎么 forward、loss 怎么算，再看训练循环。
+核心顺序是先看一次请求如何生成正确 token，再看如何测量这次请求；不要先从 CLI 参数或
+checkpoint 路径寻找等工程胶水开始。
 
 ## 你可以做的实验
 
@@ -313,36 +390,39 @@ python train.py --config configs/tiny_cpu.json --max_steps 50 --out_dir runs/exp
 
 ## 后续怎么扩展？
 
-暂定路线（每个版本验收、冻结并讲完变化后，才进入下一版本）：
+当前权威路线（每个版本验收、冻结并讲完变化后，才进入下一版本）：
 
 ```text
 baseline-v0.1     教学单设备训练闭环
 v0.2.x            优化并修正单设备训练
-v0.3              公共 Runtime、指标和实验记录
-v0.4              MiniGPT Prefill/Decode 与 KV Cache
-v0.5              DDP 分布式训练
-v0.6              真实开源模型单设备推理
-v0.7              Tensor Parallel
-v0.8              Continuous Batching 与 KV 生命周期
-v0.9              Ascend 适配、Profiler 与单机 Scaling
-v1.0              FSDP/ZeRO 训练支线与完整训推交付
-v1.x              训推结合专项研究
+v0.3              可测量的 MiniGPT 单设备推理基线
+v0.4              KV Cache、Prefill/Decode 独立路径与静态 Batching
+v0.5              真实开源模型单设备推理
+v0.6              分布式基础短实验与 Tensor Parallel 推理
+v0.7              Continuous Batching、调度与 KV 生命周期
+v0.8              推理专项研究
+v0.9              Ascend 适配、Profiler 与真实单机 Scaling
+v1.0              完整推理 Infra 交付
 ```
 
-这条路线比一开始直接冲 Megatron / DeepSpeed 源码健康很多。
+MiniGPT 长期作为白盒 reference、正确性 oracle 和 CPU CI；接入真实模型后，正式性能、显存、
+Scaling 和最终报告全部以真实模型为准。完整分工与验收边界见
+`docs/INFERENCE_FIRST_ROADMAP.md`。
 
 ## 当前版本边界
 
-当前版本故意不做：
+v0.3 当前故意不做：
 
 - BPE tokenizer
 - 大规模数据 streaming
-- DDP 多卡训练
-- FSDP 参数切分
-- DeepSpeed ZeRO
+- KV Cache（v0.3 Decode 明确重算上下文）
+- 静态或 Continuous Batching
+- 真实开源模型
+- DDP/FSDP/ZeRO 完整训练系统
 - TensorBoard / WandB
-- Continuous Batching / Paged KV Cache
+- Paged KV Cache
 - Tensor Parallel
 - 外部 FlashAttention 或自定义 fused kernel
 
-这些不是不重要，而是第一阶段先别混在一起。你先把单卡训练闭环拿下，后面加分布式才有根。
+这些功能按推理主线逐版本进入，不能和第一版推理指标、KV Cache、真实模型、TP、调度一次性
+叠加，否则结果出错或性能变化时无法归因。

@@ -1,5 +1,9 @@
 # 后续 DDP / FSDP / DeepSpeed 路线
 
+> 历史说明：这是项目早期以训练为主时制定的路线，只保留用于回顾学习过程。
+> 当前权威路线见 `docs/INFERENCE_FIRST_ROADMAP.md`。DDP/FSDP/ZeRO 已调整为训练学习支线，
+> 不再决定主版本顺序，也不得阻塞推理主线。
+
 当前项目是 v0.1：单卡 MiniGPT 训练闭环。
 
 后续可以按下面顺序演进。
