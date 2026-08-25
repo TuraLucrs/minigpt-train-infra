@@ -1,4 +1,4 @@
-"""MiniGPT model with explicit Transformer structure and native PyTorch primitives.
+"""显式保留Transformer结构并使用PyTorch原生基础算子的MiniGPT模型。
 
 最初的教学基线刻意不用：
 - torch.nn.Transformer
@@ -88,9 +88,8 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
 
-        # PyTorch SDPA dispatches to the best available attention kernel for the
-        # current device/dtype.  is_causal=True avoids materializing a [T, T]
-        # mask buffer while preserving GPT's no-look-ahead rule.
+        # PyTorch SDPA会为当前device/dtype选择可用的最佳Attention kernel。
+        # is_causal=True在保留GPT不可看未来规则的同时，避免物化[T,T] mask buffer。
         y = F.scaled_dot_product_attention(
             q,
             k,
@@ -247,7 +246,7 @@ class MiniGPT(nn.Module):
 
 
 def next_token_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, debug_checks: bool = False) -> torch.Tensor:
-    """Compute next-token loss with PyTorch's optimized cross-entropy kernel."""
+    """使用PyTorch优化后的cross-entropy kernel计算next-token loss。"""
 
     if logits.ndim != 3:
         raise ValueError("logits must have shape [B, T, V]")
@@ -266,7 +265,7 @@ def next_token_cross_entropy(logits: torch.Tensor, targets: torch.Tensor, debug_
 
 
 def migrate_model_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-    """Migrate teaching/separate-QKV checkpoints to the current model layout."""
+    """把教学版或分离QKV checkpoint迁移到当前模型布局。"""
 
     migrated = dict(state_dict)
     for key in tuple(migrated):

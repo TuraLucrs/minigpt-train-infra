@@ -1,4 +1,4 @@
-"""MiniGPT-Train learning package.
+"""MiniGPT-Train学习包。
 
 这个包故意很小：你可以从 tokenizer -> data -> model -> optim -> train
 一路读下来，看到一个 GPT 预训练系统最核心的骨架。

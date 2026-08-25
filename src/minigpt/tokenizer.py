@@ -1,4 +1,4 @@
-"""A tiny character-level tokenizer implemented from scratch.
+"""从零实现的极简字符级tokenizer。
 
 真实大模型训练一般不会用字符级 tokenizer，而会用 BPE、SentencePiece、
 Unigram 等子词算法。这里故意选择 char-level，有三个原因：

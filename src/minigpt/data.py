@@ -1,4 +1,4 @@
-"""Data loading utilities.
+"""数据加载辅助函数。
 
 这个项目没有使用 torch.utils.data.DataLoader。不是因为 DataLoader 不好，而是因为
 第一个训练 infra 项目最好亲眼看到 batch 是怎么切出来的。
@@ -38,7 +38,7 @@ def split_train_val(tokens: torch.Tensor, val_fraction: float, block_size: int) 
     if block_size <= 0:
         raise ValueError("block_size must be positive")
 
-    # One GPT sample needs block_size + 1 tokens:
+    # 一个GPT样本需要block_size+1个token：
     # x = tokens[start : start + block_size]
     # y = tokens[start + 1 : start + block_size + 1]
     min_required = block_size + 1
@@ -98,8 +98,8 @@ class RandomTokenBatcher:
         y 比 x 向右移动一格，所以 y[b, i] 是 x[b, i] 的下一个 token。
         """
 
-        # Valid starts are 0 ... len(tokens) - block_size - 1, inclusive.
-        # torch.randint's high bound is exclusive, so high must be len(tokens) - block_size.
+        # 合法起点为闭区间[0, len(tokens)-block_size-1]。
+        # torch.randint的high不包含在取值范围内，因此high应为len(tokens)-block_size。
         num_possible_starts = self.tokens.numel() - self.block_size
         starts = torch.randint(
             low=0,

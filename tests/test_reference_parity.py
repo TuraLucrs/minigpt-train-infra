@@ -1,4 +1,4 @@
-"""Numerical parity checks for teaching/reference and optimized primitives.
+"""检查教学/reference实现与优化基础算子的数值一致性。
 
 Run:
     python tests/test_reference_parity.py

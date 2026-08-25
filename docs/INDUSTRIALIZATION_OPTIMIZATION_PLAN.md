@@ -1140,6 +1140,9 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 - [x] 去掉重复 `zero_grad`；
 - [x] 原子 checkpoint，避免 numbered/latest 重复序列化完整文件；
 - [x] 增加 reference-vs-optimized 输出与梯度测试；
+- [x] v0.2.2统一从CPU恢复checkpoint，避免CPU RNG/batcher状态被映射到CUDA；
+- [x] v0.2.2拆分循环step与成功optimizer step，并修正窗口grad norm/跳步统计口径；
+- [x] v0.2.2不再把训练窗口显存写入validation日志；
 - [ ] 重新记录正确性、吞吐和显存基线：CPU 已完成，GPU 待补测。
 
 #### 2026-08-20 CPU 升级验收记录
