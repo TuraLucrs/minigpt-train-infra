@@ -13,6 +13,60 @@ from typing import Any
 import torch
 
 
+def build_adamw_param_groups(model: torch.nn.Module, weight_decay: float) -> list[dict[str, Any]]:
+    """Split trainable parameters into decay and no-decay AdamW groups.
+
+    Matrix-shaped parameters (Linear/Embedding weights) receive weight decay.
+    One-dimensional parameters (biases and LayerNorm scale/bias) do not.  The
+    parameter names are stored in the groups as checkpoint metadata so future
+    layout migrations do not have to guess which optimizer state belongs to
+    which model parameter.
+    """
+
+    if weight_decay < 0:
+        raise ValueError("weight_decay must be non-negative")
+
+    decay: list[torch.nn.Parameter] = []
+    no_decay: list[torch.nn.Parameter] = []
+    decay_names: list[str] = []
+    no_decay_names: list[str] = []
+    seen: set[int] = set()
+
+    for name, parameter in model.named_parameters():
+        if not parameter.requires_grad:
+            continue
+        parameter_id = id(parameter)
+        if parameter_id in seen:
+            raise ValueError(f"Model parameter appears more than once: {name}")
+        seen.add(parameter_id)
+
+        if parameter.ndim >= 2:
+            decay.append(parameter)
+            decay_names.append(name)
+        else:
+            no_decay.append(parameter)
+            no_decay_names.append(name)
+
+    expected = {id(parameter) for parameter in model.parameters() if parameter.requires_grad}
+    if seen != expected:
+        raise ValueError("Optimizer parameter grouping did not cover every trainable model parameter exactly once")
+
+    return [
+        {
+            "params": decay,
+            "param_names": decay_names,
+            "group_name": "decay",
+            "weight_decay": weight_decay,
+        },
+        {
+            "params": no_decay,
+            "param_names": no_decay_names,
+            "group_name": "no_decay",
+            "weight_decay": 0.0,
+        },
+    ]
+
+
 def set_optimizer_lr(optimizer: torch.optim.Optimizer, lr: float) -> None:
     """Set the scheduled learning rate on every optimizer parameter group."""
 
@@ -94,28 +148,75 @@ def load_optimizer_state(
     current_count = len(current_names)
 
     if "param_groups" in payload:
-        saved_ids = [parameter_id for group in payload["param_groups"] for parameter_id in group["params"]]
-        if len(saved_ids) == current_count:
+        saved_groups = payload["param_groups"]
+        current_groups = optimizer.state_dict()["param_groups"]
+        saved_ids = [parameter_id for group in saved_groups for parameter_id in group["params"]]
+        same_group_sizes = len(saved_groups) == len(current_groups) and all(
+            len(saved_group["params"]) == len(current_group["params"])
+            for saved_group, current_group in zip(saved_groups, current_groups)
+        )
+        saved_names = [name for group in saved_groups for name in group.get("param_names", [])]
+        current_group_names = [name for group in current_groups for name in group.get("param_names", [])]
+        names_match = bool(saved_names) and saved_names == current_group_names
+
+        # Native checkpoints from this version carry param_names.  Older
+        # single-group checkpoints are also safe to load directly when the
+        # optimizer still has one group and the parameter count is unchanged.
+        if len(saved_ids) == current_count and same_group_sizes and (
+            names_match or (len(saved_groups) == 1 and len(current_groups) == 1)
+        ):
+            # Keep execution-path options chosen for the current device.  For
+            # example, a CPU checkpoint must not disable fused AdamW when it is
+            # resumed on CUDA merely because the saved group had fused=False.
+            runtime_options = [
+                {
+                    key: group[key]
+                    for key in ("fused", "foreach", "capturable", "differentiable")
+                    if key in group
+                }
+                for group in optimizer.param_groups
+            ]
             optimizer.load_state_dict(payload)
+            for group, options in zip(optimizer.param_groups, runtime_options):
+                group.update(options)
             return
-        if len(payload["param_groups"]) != 1:
-            raise ValueError("QKV optimizer migration currently requires one saved parameter group")
-        source_names = _separate_qkv_parameter_names(current_names)
-        if len(saved_ids) != len(source_names):
-            raise ValueError("Optimizer state does not match current or separate-QKV model parameters")
+
+        if saved_names:
+            if len(saved_names) != len(saved_ids):
+                raise ValueError("Optimizer checkpoint param_names do not match saved parameter IDs")
+            source_names = saved_names
+        else:
+            # v0.2 used model.parameters() in model registration order.  The
+            # new optimizer groups matrices before one-dimensional parameters,
+            # so use model order—not current optimizer order—to interpret it.
+            model_order_names = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
+            separate_qkv_names = _separate_qkv_parameter_names(model_order_names)
+            if len(saved_ids) == len(model_order_names):
+                source_names = model_order_names
+            elif len(saved_ids) == len(separate_qkv_names):
+                source_names = separate_qkv_names
+            else:
+                raise ValueError("Optimizer state does not match current or separate-QKV model parameters")
+
         states_by_name = {
             name: payload["state"].get(parameter_id, {})
             for name, parameter_id in zip(source_names, saved_ids)
         }
-        hyperparameters = payload["param_groups"][0]
+        hyperparameters = saved_groups[0]
+        saved_group_by_name = {
+            group["group_name"]: group
+            for group in saved_groups
+            if isinstance(group.get("group_name"), str)
+        }
     else:
         old_states = payload.get("state")
         if not isinstance(old_states, list):
             raise ValueError("Unsupported optimizer checkpoint format")
+        model_order_names = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
         source_names = (
-            current_names
-            if len(old_states) == current_count
-            else _separate_qkv_parameter_names(current_names)
+            model_order_names
+            if len(old_states) == len(model_order_names)
+            else _separate_qkv_parameter_names(model_order_names)
         )
         if len(old_states) != len(source_names):
             raise ValueError("Optimizer state does not match current or separate-QKV model parameters")
@@ -130,11 +231,19 @@ def load_optimizer_state(
             "eps": float(payload["eps"]),
             "weight_decay": float(payload["weight_decay"]),
         }
+        saved_group_by_name = {}
 
     for group in optimizer.param_groups:
-        for key in ("lr", "betas", "eps", "weight_decay", "amsgrad", "maximize"):
+        for key in ("lr", "betas", "eps", "amsgrad", "maximize"):
             if key in hyperparameters:
                 group[key] = hyperparameters[key]
+        group_name = group.get("group_name")
+        if group_name in saved_group_by_name:
+            group["weight_decay"] = saved_group_by_name[group_name]["weight_decay"]
+        elif group_name == "no_decay":
+            group["weight_decay"] = 0.0
+        elif "weight_decay" in hyperparameters:
+            group["weight_decay"] = hyperparameters["weight_decay"]
 
     optimizer.state.clear()
     for name, parameter in named_parameters:

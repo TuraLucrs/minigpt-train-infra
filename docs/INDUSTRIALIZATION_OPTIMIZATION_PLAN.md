@@ -160,6 +160,102 @@ tokens/s
 时会直接升为 A 级；activation checkpointing 在模型能轻松放入显存时不是优先项，在 OOM
 阻塞训练时则会升为 A 级。
 
+### 2.5 硬件无关核心，厂商能力通过窄适配层接入
+
+项目的主要可用算力来自 Ascend，但职业能力和核心代码不能被单一硬件生态绑定。总体边界为：
+
+```text
+通用模型与系统逻辑
+├─ device/runtime abstraction
+├─ distributed abstraction
+├─ profiler abstraction
+└─ benchmark / metrics / experiment recorder
+        ↓
+后端适配
+├─ CUDA / NCCL
+├─ Ascend / HCCL
+└─ CPU / Gloo（正确性测试）
+```
+
+核心代码不应散落以下硬编码：
+
+```python
+tensor.cuda()
+torch.cuda.synchronize()
+backend = "nccl"
+```
+
+设备、混合精度、同步、内存统计、分布式 backend 和 profiler 应由配置与运行时能力决定。
+Ascend 兼容性应在公共抽象建立后尽早做 smoke test，避免最后才发现算子或运行时不兼容；
+但 `torch_npu`、CANN、HCCL 的专项调优、算子替换和拓扑优化保留到独立的 Ascend 阶段，
+不侵入通用模型、训练循环、推理调度和指标定义。
+
+抽象层必须保持窄边界，避免为了“跨平台”重新包装全部 PyTorch API。第一版只覆盖真正存在
+后端差异的系统边界：
+
+- `RuntimeContext`：device、autocast、显式同步、内存统计和 capability 查询；
+- `DistributedContext`：backend、rank、local rank、world size、process group 和基础 collective；
+- `ProfilerAdapter`：统一 start/stop/trace 导出，内部选择 PyTorch、CUDA 或 Ascend profiler；
+- `ExperimentRecorder`：记录 resolved config、命令、环境、硬件、原始指标和代码版本；
+- 模型数学仍使用普通 PyTorch Tensor/Module，不建立一套自定义 Tensor 或算子体系。
+
+跨后端判断优先查询能力，例如 `supports_bf16`、`supports_sdpa`、`supports_memory_stats`，
+而不是在业务代码中不断编写 `if backend == ...`。同一项优化必须使用相同的 workload、指标定义
+和统计方法，厂商后端只改变执行方式，不改变实验口径。
+
+### 2.6 当前可用硬件边界与计数口径
+
+截至 2026-08-20，已确认的主要资源为：
+
+| 资源 | 物理卡 | 可见芯片/逻辑设备 | 单芯 HBM | 单机聚合 HBM | 主要用途 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| A3 | 8 张双芯卡 | 16 | 64 GB | 1024 GB | 16 芯单机 Scaling、拓扑和通信实验 |
+| A5 / Ascend 950DT | 8 张卡 | 8 | 96 GB | 768 GB | 高带宽推理、KV Cache、TPOT 和最终性能验证 |
+
+16 张物理卡资源获取较困难，不作为项目完成条件。A3 主实验轴为 2/4/8/16 个 logical
+devices，同时记录对应物理卡数；A5 主实验轴为 1/2/4/8 个 devices。所有实验必须分别记录：
+
+```text
+physical_card_count
+visible_device_count
+chips_per_card
+world_size
+hbm_per_visible_device
+device_name
+interconnect_topology
+```
+
+聚合 HBM 只有在 TP、FSDP、ZeRO 等切分方案中才能共同容纳模型或训练状态；DDP 仍要求每个
+rank 保存完整模型，不能把单机总 HBM 当成单个进程可用内存。
+
+### 2.7 版本完成后的讲解门禁
+
+本项目同时承担学习和工程交付两个目标，因此不能连续堆叠版本、最后再统一补课。每个版本都
+必须经过以下闭环，才能开始下一版本的优化：
+
+```text
+完成本版本实现
+→ 运行正确性、恢复和性能验收
+→ 冻结 commit/tag 与变更清单
+→ 按文件和数据流逐段讲解本版本新增/修改的代码
+→ 解决学习者提出的问题
+→ 学习者确认已经理解
+→ 才进入下一版本
+```
+
+讲解方式沿用 `baseline-v0.1` 的学习方法，但减少已经掌握内容的机械重复：
+
+- 先说明本版本解决了什么问题、为什么现在需要解决；
+- 给出受影响的文件地图，以及旧执行路径到新执行路径的变化；
+- 主要讲新增和改变的部分，未改变的基础概念只在依赖它时简要回顾；
+- 按实际执行顺序逐小段阅读代码，必要时细化到单行、单个变量、类型、shape、状态和生命周期；
+- 对核心训练/推理路径使用“现在需要什么 → 为什么需要 → 怎样实现 → 输入变成了什么”的方式；
+- 讲清接口背后的实际对象和语义，不能只给变量重新起名字或只复述 API 文档；
+- 版本讲解未完成、关键疑问未解决时，不开始下一版本施工。
+
+开发过程中仍可给出简短进度和局部解释，但完整代码讲解安排在该版本通过验收并冻结之后，
+避免一边频繁改代码、一边讲解已经过期的实现。
+
 ---
 
 ## 3. 完成教学版单卡任务前必须保留的内容
@@ -1001,14 +1097,22 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 
 ### 14.4 更大规模并行
 
-只有当数据并行和状态切分不足以容纳模型时，再学习：
+训练主线只有在数据并行和状态切分不足以容纳模型时，再引入 sequence/context、pipeline
+或 expert parallel。Tensor parallel 需要区分两种用途：
+
+- 对训练而言，它仍是有明确模型规模需求后再引入的高级并行；
+- 对推理而言，它直接决定大模型权重如何跨设备放置、每层如何通信以及 TPOT/吞吐如何扩展，
+  因此在阶段 F 作为推理主线学习，不等待 FSDP/ZeRO 完成。
+
+候选并行方式包括：
 
 - tensor parallel；
 - sequence/context parallel；
 - pipeline parallel；
 - expert parallel。
 
-它们不属于当前 MiniGPT 单卡任务的直接优化项。
+它们不属于 MiniGPT 单卡版本的直接优化项，必须在单设备推理与分布式基础稳定后单独引入，
+不能和 continuous batching、paged KV cache 等复杂机制一次性叠加。
 
 ---
 
@@ -1028,14 +1132,14 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 
 - [x] 替换 LayerNorm、GELU、cross entropy；
 - [x] 替换 AdamW、gradient clipping、GradScaler；
-- [ ] 建立 optimizer 参数组；
+- [x] 建立 optimizer 参数组，并在 state dict 中记录参数名以支持布局迁移；
 - [x] 合并 QKV，并支持旧模型权重与 optimizer 动量迁移；
 - [x] 替换为 SDPA；
-- [ ] 删除 micro-batch 热路径 `.item()`；
-- [ ] 用窗口/CUDA event 测量，不再每 step 全局同步；
-- [ ] 去掉重复 `zero_grad`；
-- [ ] 原子 checkpoint，避免 numbered/latest 重复写完整文件；
-- [ ] 增加 reference-vs-optimized 测试；
+- [x] 删除 micro-batch 热路径 `.item()`；
+- [x] 用窗口/CUDA event 测量，不再每 step 全局同步；CUDA 运行效果待真实设备补测；
+- [x] 去掉重复 `zero_grad`；
+- [x] 原子 checkpoint，避免 numbered/latest 重复序列化完整文件；
+- [x] 增加 reference-vs-optimized 输出与梯度测试；
 - [ ] 重新记录正确性、吞吐和显存基线：CPU 已完成，GPU 待补测。
 
 #### 2026-08-20 CPU 升级验收记录
@@ -1064,34 +1168,132 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 - CPU 上官方 AdamW 单项没有加速，采用它是为了标准状态格式、维护性、GPU fused 路径和分布式兼容；
 - GPU/BF16/FP16、Flash Attention 实际 dispatch、显存峰值仍待 GPU 环境验收。
 
-### 阶段 C：数据和可观测性
+#### 2026-08-21 v0.2.1 单设备收尾验收记录
 
-- [ ] 接入成熟 tokenizer，并冻结 tokenizer artifact；
-- [ ] 离线 tokenization 与 token shards；
-- [ ] DataLoader/prefetch/pinned memory；
+固定 PyTorch `2.8.0`、CPU FP32、`tiny_cpu.json` 和 30 step，将
+`v0.2-native-single-device` 与收尾版各独立运行三次。排除 step 1 后，三次逐 step
+`tokens/s` 中位数再取中位数，旧版为 `36,461 tok/s`，收尾版为 `37,993 tok/s`。
+共享 CPU 抖动较大，约 `+4.2%` 只说明未观察到明显回退，不外推为 GPU 收益。
+
+收尾版 step 30 loss 为 `2.985147`，best val loss 为 `3.104991`；旧 v0.2 分别为
+`2.985228` 和 `3.105060`。微小差异来自新参数组有意取消 bias/LayerNorm 的 weight decay。
+
+额外验收：
+
+- `tests/test_core.py`、`tests/test_reference_parity.py`、`tests/test_resume_consistency.py` 全部通过；
+- 模拟 `torch.save` 中途失败后，上一份有效 checkpoint 保持可读，临时残片被清理；
+- `latest.pt` 在当前文件系统使用 hard link，payload 只序列化一次；
+- 仓库内真实 `baseline-v0.1` 与 v0.2 checkpoint 均能迁移 optimizer/QKV 状态并继续训练；
+- CUDA/NPU 精度、event 计时、fused optimizer、SDPA backend 和显存仍待真实设备验收。
+
+### 阶段 C：公共运行时、实验基础设施和最小后端兼容
+
+- [ ] 建立窄边界的 `RuntimeContext`、`DistributedContext` 和 capability 查询；
+- [ ] 建立训练/推理共用的 `ExperimentRecorder`，保存 resolved config、环境、硬件和 Git 版本；
+- [ ] 训练与推理分别保留 benchmark runner，共用计时、统计和结果格式，不强行共用业务指标；
 - [ ] 拆分 data/forward/backward/optimizer/checkpoint 计时；
-- [ ] PyTorch Profiler；
-- [ ] 结构化、rank-aware、低同步开销日志；
-- [ ] 性能回归测试。
+- [ ] 统一吞吐、延迟、显存和波动的统计口径；
+- [ ] 建立 CPU、CUDA（可用时）和 Ascend 的最小 smoke test；
+- [ ] Ascend 阶段此时只验证设备、精度、核心算子和短训练/推理可运行，不做专项调优；
+- [ ] 接入当前 workload 必需的 tokenizer/data artifact，并冻结其指纹；
+- [ ] 建立正确性与性能回归测试。
 
-### 阶段 D：DDP
+### 阶段 D：单设备推理 Model Runner
 
-- [ ] `torchrun` + 一卡一进程；
+#### D1：MiniGPT reference runner
+
+- [ ] 保留“每步重算全部上下文”的 reference generation；
+- [ ] 第一版使用 deterministic greedy decoding，建立稳定正确性参照；
+- [ ] 明确 `prefill()` 与 `decode()` 两条执行路径；
+- [ ] 实现逐层 KV Cache，并验证 cached 与 uncached logits/生成结果一致；
+- [ ] 实现静态 batching、attention mask、position、EOS 和采样状态；
+- [ ] 建立 TTFT、TPOT、E2E latency、input/output tokens/s、峰值显存指标；
+- [ ] 扫描 batch、input length、output length，形成单设备 baseline；
+- [ ] 此阶段不实现 continuous batching，避免同时引入调度和模型并行。
+
+#### D2：一种真实开源 decoder-only 模型
+
+- [ ] 在 MiniGPT 路径稳定后，只选择一种主流架构作为第一种工业 workload；
+- [ ] 接入真实 tokenizer、config 和 safetensors 权重；
+- [ ] 处理该架构实际使用的 RoPE、RMSNorm、SwiGLU、GQA/MQA 等组件；
+- [ ] 建立窄 `ModelRunner` 接口，分别保留 MiniGPT reference adapter 和真实模型 adapter；
+- [ ] 与可信参考实现对齐 logits、greedy generation 和 KV Cache 结果；
+- [ ] MiniGPT 继续负责 CPU CI、状态检查和故障注入，真实模型负责正式性能与显存报告；
+- [ ] 不在第一版追求支持大量模型架构，避免模型兼容工作淹没推理 Infra 主线。
+
+### 阶段 E：分布式基础与 DDP 训练
+
+- [ ] `torchrun` + 一颗可见芯片一个进程；
+- [ ] backend 由配置选择 Gloo/NCCL/HCCL，不在训练代码中硬编码；
+- [ ] 理解并测试 rank、local rank、world size、process group 和基础 collective；
 - [ ] rank-aware data、seed、log、eval、checkpoint；
 - [ ] gradient accumulation + `no_sync()`；
-- [ ] 2 卡正确性和 scaling benchmark；
-- [ ] 分布式故障与恢复测试。
+- [ ] 2/4 设备正确性和 scaling benchmark；
+- [ ] 分布式故障与恢复测试；
+- [ ] DDP 作为分布式语义训练场，完成正确实现后不继续挤占推理主线。
 
-### 阶段 E：显存与进一步性能优化
+### 阶段 F：多设备推理与 Tensor Parallel
 
-- [ ] `torch.compile`；
-- [ ] 确认 SDPA/Flash backend；
+- [ ] 在简单同步 workload 上实现 TP，不同时引入 continuous batching；
+- [ ] 拆分 attention 与 MLP 的 column/row parallel 线性层；
+- [ ] 建立 TP process group、AllReduce/AllGather 等 collective；
+- [ ] 明确 KV Cache 在各 TP rank 上的形状、归属和显存占用；
+- [ ] 验证 TP=1 与 TP>1 的 logits/生成结果一致性；
+- [ ] 记录通信时间、计算时间、TPOT、吞吐、显存和 Scaling Efficiency；
+- [ ] 加入 topology-aware rank placement，区分同卡双芯与跨物理卡通信。
+
+### 阶段 G：推理调度与 Continuous Batching
+
+- [ ] 在稳定的 local/TP Model Runner 接口上建立请求生命周期；
+- [ ] 实现 waiting/running/finished 队列与逐轮调度；
+- [ ] 实现 continuous batching，并处理不同 prompt/output 长度；
+- [ ] 建立 KV block 生命周期、请求结束释放和 OOM 边界；
+- [ ] 根据 profiler 和碎片证据决定是否实现 paged KV cache；
+- [ ] 测量不同并发和请求分布下的 TTFT、TPOT、吞吐及 p50/p95/p99；
+- [ ] 记录调度策略改善吞吐时对单请求延迟造成的 trade-off。
+
+### 阶段 H：Ascend 专项适配、Profiler 与单机 Scaling
+
+- [ ] 将 `torch_npu`、CANN、HCCL 和 Ascend profiler 限制在后端适配目录；
+- [ ] 采集实际物理卡、可见芯片、HBM、软件版本和互联拓扑；
+- [ ] A3 跑 `2/4/8/16 logical devices`，同时记录 `1/2/4/8 physical cards`；
+- [ ] A5 跑 `1/2/4/8 devices`；
+- [ ] 用 HCCL collective microbenchmark 建立通信基线；
+- [ ] 对 TP、KV Cache、Prefill/Decode、Batching 做严格 A/B benchmark；
+- [ ] 根据 profiler 证据实施 Ascend 专项算子、通信或内存优化；
+- [ ] 16 张物理卡/双机实验仅作为资源允许时的加分项。
+
+### 阶段 I：训练 Infra 支线——显存与状态切分
+
+- [ ] `torch.compile` 或对应后端图编译能力（有稳定收益时）；
 - [ ] activation checkpointing；
 - [ ] fused optimizer/MLP；
 - [ ] FSDP；
 - [ ] DeepSpeed ZeRO；
 - [ ] 分片/异步 checkpoint；
-- [ ] Nsight 或硬件 profiler。
+- [ ] 在相同模型和数据上对比 DDP/FSDP/ZeRO 的显存、吞吐、通信与恢复；
+- [ ] 保持训练支线完整，但不让它阻塞 KV Cache、TP、调度等推理主线。
+
+### 版本里程碑与两条主线的施工顺序
+
+“训练 Infra”和“推理 Infra”是最终交付的两个主体，但不是先完成全部训练再开始推理。按照
+学习依赖和推理优先的职业方向，暂定版本顺序为：
+
+```text
+v0.2.x  优化单设备训练收尾
+v0.3    公共 Runtime、指标和实验记录
+v0.4    MiniGPT 单设备推理、Prefill/Decode、KV Cache
+v0.5    DDP 分布式训练
+v0.6    真实开源模型单设备推理
+v0.7    Tensor Parallel 多设备推理
+v0.8    Continuous Batching 与 KV 生命周期
+v0.9    Ascend 适配、Profiler 和单机 Scaling
+v1.0    FSDP/ZeRO 训练支线与完整训推交付
+v1.x    训推结合的专项研究（方向到该阶段再确定）
+```
+
+该顺序允许根据真实 profiler、硬件可用性和学习反馈调整；调整时必须同步记录理由、依赖变化
+和新的验收条件。专项研究当前只保留阶段位置，不提前锁定实现主题。
 
 ---
 
@@ -1135,6 +1337,12 @@ peak memory：
 ## 17. 最终目标架构
 
 ```text
+公共运行时与后端边界
+  └─ RuntimeContext / DistributedContext / ProfilerAdapter
+     ├─ CPU / Gloo
+     ├─ CUDA / NCCL
+     └─ Ascend / HCCL
+
 离线数据处理
   └─ 清洗 / 去重 / tokenizer / shards / manifest
 
@@ -1150,23 +1358,34 @@ peak memory：
 训练循环
   └─ accumulation / DDP or FSDP / fused optimizer / scheduler
 
+推理 Model Runner
+  └─ prefill / decode / KV cache / static batching / TP
+
+推理调度
+  └─ request lifecycle / continuous batching / KV block lifecycle
+
 状态管理
-  └─ atomic or distributed checkpoint / exact resume / retention
+  └─ checkpoint / exact resume / KV state / retention
 
 可观测性
-  └─ loss / throughput / memory / profiler / communication / alerts
+  └─ loss / TTFT / TPOT / throughput / memory / profiler / communication
+
+实验记录
+  └─ resolved config / command / environment / hardware / raw data / Git revision
 
 测试与回归
-  └─ numerical parity / resume / distributed smoke / performance regression
+  └─ numerical parity / cached-vs-reference / resume / distributed smoke / performance regression
 ```
 
-训练 Infra 的核心不是“全部手写”，也不是“全部交给框架”，而是明确知道：
+训练/推理 Infra 的核心不是“全部手写”，也不是“全部交给框架”，而是明确知道：
 
 - 哪些数学和状态必须理解；
 - 哪些成熟内核应该复用；
 - 哪些系统边界必须由训练代码正确编排；
 - 每项性能收益如何被测量和验证；
-- 单卡语义如何在分布式环境中保持正确。
+- 单设备语义如何在分布式环境中保持正确；
+- 通用系统逻辑如何与 CUDA、Ascend 等厂商后端隔离。
 
-这份清单作为后续改造 backlog。当前阶段先完成并冻结教学单卡版本，随后从阶段 B 的 P0
-等价替换开始，不在进入 DDP 前携带不必要的手写 Python 热路径。
+这份清单作为后续改造 backlog。当前阶段完成阶段 B 的优化单设备收尾，随后进入阶段 C 的
+公共运行时和实验基础设施，再按单设备推理、分布式基础、TP、调度、Ascend 专项验证和训练
+状态切分支线逐步推进。每阶段只增加一个主要复杂度来源。
