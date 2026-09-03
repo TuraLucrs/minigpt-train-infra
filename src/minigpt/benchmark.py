@@ -94,39 +94,48 @@ def timed_generate(engine: InferenceEngine, prompt: str, config: GenerationConfi
     """
 
     config.validate()
+    if config.eos_token_id is not None and config.eos_token_id >= engine.tokenizer.vocab_size:
+        raise ValueError("eos_token_id 超出 tokenizer 词表")
     runtime = engine.runner.runtime
     runtime.synchronize()
     runtime.reset_peak_memory()
 
     request_start = time.perf_counter()
     tokenization_start = request_start
-    input_ids = engine.encode_prompt(prompt)
+    input_ids, attention_mask, prompt_rows = engine.encode_prompts([prompt])
     tokenization_end = time.perf_counter()
-    prompt_length = input_ids.shape[1]
+    prompt_ids = prompt_rows[0]
+    prompt_length = len(prompt_ids)
+    engine.validate_generation_capacity(prompt_rows, config.max_new_tokens)
     generator = engine.make_generator(config)
 
     prefill_start = time.perf_counter()
-    next_logits = engine.runner.prefill(input_ids)
+    next_logits = engine.runner.prefill(input_ids, attention_mask)
     next_id = engine.select_next_token(next_logits, config, generator)
-    input_ids = torch.cat((input_ids, next_id), dim=1)
     runtime.synchronize()
     prefill_end = time.perf_counter()
-    engine.tokenizer.decode([int(next_id[0, 0].item())])
+    generated_ids = [int(next_id[0, 0].item())]
+    engine.tokenizer.decode(generated_ids)
     first_token_ready = time.perf_counter()
 
     decode_step_seconds: list[float] = []
+    stop_reason = "length"
+    finished = config.eos_token_id is not None and generated_ids[-1] == config.eos_token_id
+    if finished: stop_reason = "eos"
     for _ in range(1, config.max_new_tokens):
+        if finished: break
         decode_start = time.perf_counter()
-        next_logits = engine.runner.decode(input_ids)
+        next_logits = engine.runner.decode(next_id, torch.ones(1, dtype=torch.bool, device=next_id.device))
         next_id = engine.select_next_token(next_logits, config, generator)
-        input_ids = torch.cat((input_ids, next_id), dim=1)
         runtime.synchronize()
-        engine.tokenizer.decode([int(next_id[0, 0].item())])
+        token_id = int(next_id[0, 0].item())
+        generated_ids.append(token_id)
+        engine.tokenizer.decode([token_id])
         decode_step_seconds.append(time.perf_counter() - decode_start)
+        if config.eos_token_id is not None and token_id == config.eos_token_id:
+            finished = True; stop_reason = "eos"
 
-    all_ids = input_ids[0].tolist()
-    prompt_ids = all_ids[:prompt_length]
-    generated_ids = all_ids[prompt_length:]
+    all_ids = prompt_ids + generated_ids
     completion_text = engine.tokenizer.decode(generated_ids)
     full_text = engine.tokenizer.decode(all_ids)
     request_end = time.perf_counter()
@@ -149,7 +158,7 @@ def timed_generate(engine: InferenceEngine, prompt: str, config: GenerationConfi
         generated_ids=generated_ids,
         all_ids=all_ids,
         prefill_tokens=prefill_tokens,
-        stop_reason="length",
+        stop_reason=stop_reason,
     )
     metrics = InferenceRunMetrics(
         input_tokens=prompt_length,
@@ -189,6 +198,9 @@ def benchmark_generation(
         engine.runner.runtime.synchronize()
 
     timed_runs = [timed_generate(engine, prompt, config) for _ in range(repeats)]
+    expected_ids = timed_runs[0].result.generated_ids
+    if any(run.result.generated_ids != expected_ids for run in timed_runs[1:]):
+        raise AssertionError("重复 benchmark 生成结果不稳定")
     run_dicts = [asdict(run.metrics) for run in timed_runs]
 
     summary_fields = (
@@ -215,15 +227,15 @@ def benchmark_generation(
 
     runtime = engine.runner.runtime
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "benchmark": "single_request_recompute_decode",
+        "benchmark": f"single_request_{runtime.device.type}_{engine.runner.implementation_name}",
         "measurement_scope": {
             "prefill": "Prefill 开始到首 token 在 device 上计算完成，包含 token 选择",
             "ttft": "请求开始到第一个 token 取回并 decode 为文本",
             "tpot": "除第一个 token 外，后续 token 计算、取回并 decode 为文本的平均同步间隔",
             "e2e_latency": "请求开始到完整 token 序列 decode 为文本",
-            "decode_implementation": "v0.3 每步重算当前完整有效上下文，不使用 KV Cache",
+            "decode_implementation": engine.runner.implementation_name,
         },
         "environment": {
             "python": platform.python_version(),
@@ -249,4 +261,143 @@ def benchmark_generation(
         },
         "runs": run_dicts,
         "summary": summary,
+    }
+
+
+def compare_decode_modes(
+    recompute_engine: InferenceEngine,
+    cached_engine: InferenceEngine,
+    prompt: str,
+    config: GenerationConfig,
+    *,
+    warmup: int = 2,
+    repeats: int = 5,
+) -> dict[str, Any]:
+    """先验证生成结果一致，再比较 recompute 与 KV Cache 的指标。"""
+
+    release = getattr(cached_engine.runner, "release_cache", None)
+    if callable(release):
+        cached_engine.runner.runtime.synchronize()
+        release()
+    recompute = benchmark_generation(recompute_engine, prompt, config, warmup, repeats)
+    cached = benchmark_generation(cached_engine, prompt, config, warmup, repeats)
+    recompute_ids = recompute["result"]["generated_ids"]
+    cached_ids = cached["result"]["generated_ids"]
+    if recompute_ids != cached_ids:
+        raise AssertionError("KV Cache 与 recompute 生成结果不一致")
+
+    recompute_tpot = recompute["summary"].get("tpot_ms", {}).get("median")
+    cached_tpot = cached["summary"].get("tpot_ms", {}).get("median")
+    return {
+        "schema_version": 2,
+        "benchmark": "recompute_vs_kv_cache",
+        "correctness_gate": {
+            "generated_ids_equal": True,
+            "generated_ids": cached_ids,
+        },
+        "recompute": recompute,
+        "kv_cache": cached,
+        "comparison": {
+            "median_tpot_speedup": (
+                None
+                if recompute_tpot is None or cached_tpot is None
+                else float(recompute_tpot) / max(float(cached_tpot), 1e-12)
+            ),
+            "median_peak_memory_delta_mb": (
+                float(cached["summary"]["peak_device_memory_mb"]["median"])
+                - float(recompute["summary"]["peak_device_memory_mb"]["median"])
+            ),
+        },
+    }
+
+
+@torch.inference_mode()
+def benchmark_static_batch(
+    engine: InferenceEngine,
+    prompts: Sequence[str],
+    config: GenerationConfig,
+    *,
+    warmup: int = 2,
+    repeats: int = 5,
+) -> dict[str, Any]:
+    """测量固定请求集合在静态 batch 下的 E2E 吞吐和设备内存。"""
+
+    if not prompts:
+        raise ValueError("prompts 不能为空")
+    if warmup < 0:
+        raise ValueError("warmup 不能小于 0")
+    if repeats <= 0:
+        raise ValueError("repeats 必须大于 0")
+    config.validate()
+
+    for _ in range(warmup):
+        engine.generate_batch(prompts, config)
+        engine.runner.runtime.synchronize()
+
+    runs: list[dict[str, float | int]] = []
+    expected_ids: list[list[int]] | None = None
+    for _ in range(repeats):
+        runtime = engine.runner.runtime
+        runtime.synchronize()
+        runtime.reset_peak_memory()
+        started = time.perf_counter()
+        results = engine.generate_batch(prompts, config)
+        runtime.synchronize()
+        elapsed = time.perf_counter() - started
+        _, peak_memory_mb = runtime.memory_stats_mb()
+
+        generated_ids = [result.generated_ids for result in results]
+        if expected_ids is None:
+            expected_ids = generated_ids
+        elif generated_ids != expected_ids:
+            raise AssertionError("重复静态 batch 生成结果不稳定")
+        input_tokens = sum(len(result.prompt_ids) for result in results)
+        output_tokens = sum(len(result.generated_ids) for result in results)
+        runs.append(
+            {
+                "e2e_latency_ms": elapsed * 1000.0,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "output_tokens_per_second": output_tokens / max(elapsed, 1e-12),
+                "peak_device_memory_mb": peak_memory_mb,
+            }
+        )
+
+    runtime = engine.runner.runtime
+    return {
+        "schema_version": 2,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "benchmark": f"static_batch_{engine.runner.implementation_name}",
+        "environment": {
+            "python": platform.python_version(),
+            "pytorch": torch.__version__,
+            "device": str(runtime.device),
+            "device_name": runtime.device_name(),
+            "precision": runtime.precision,
+        },
+        "request": {
+            "batch_size": len(prompts),
+            "prompt_lengths": [len(engine.tokenizer.encode(prompt)) for prompt in prompts],
+            "max_new_tokens": config.max_new_tokens,
+            "strategy": config.strategy,
+            "temperature": config.temperature,
+            "top_k": config.top_k,
+            "seed": config.seed,
+            "eos_token_id": config.eos_token_id,
+            "warmup": warmup,
+            "repeats": repeats,
+        },
+        "result": {"generated_ids": expected_ids},
+        "runs": runs,
+        "summary": {
+            "e2e_latency_ms": summarize(
+                [float(run["e2e_latency_ms"]) for run in runs]
+            ),
+            "output_tokens_per_second": summarize(
+                [float(run["output_tokens_per_second"]) for run in runs]
+            ),
+            "peak_device_memory_mb": summarize(
+                [float(run["peak_device_memory_mb"]) for run in runs]
+            ),
+        },
     }

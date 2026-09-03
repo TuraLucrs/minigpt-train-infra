@@ -21,12 +21,15 @@
 - 独立生成入口和 deterministic greedy baseline
 - Prefill/Decode 阶段边界
 - TTFT、TPOT、E2E latency、吞吐和设备内存 Benchmark
-- 为 KV Cache、真实模型和分布式推理准备的正确性基线
+- 逐层预分配 KV Cache 与只处理新增 token 的 Decode
+- 不同 prompt 长度、attention mask、EOS 和静态 batch
+- KV Cache 与 recompute 的正确性门和性能对照
 
 ## 当前阶段
 
 `v0.1～v0.2.2` 已经完成单设备训练基础。它们保留为知识基础和项目演进证据，但后续不再
-持续扩建完整训练平台。`v0.3` 已经进入可测量的 MiniGPT 单设备推理基线。
+持续扩建完整训练平台。当前 `v0.4` 已在 MiniGPT 白盒模型上完成 KV Cache 和静态
+batch，为接入真实 Qwen3 模型建立可检查的正确性参考。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 
@@ -66,6 +69,10 @@ Git 标签 `v0.2-native-single-device` 保存第一批原生算子升级；`v0.2
 `v0.3-measurable-single-device-inference` 将生成编排移出模型本体，增加独立 `infer.py`、
 Prefill/Decode reference runner、最小 Runtime 边界和同步单请求 Benchmark。v0.3 的 Decode
 仍重算完整有效上下文，不使用 KV Cache；这正是 v0.4 的对照基线。
+
+`v0.4-kv-cache-static-batching` 增加逐层预分配 K/V、Prefill 写缓存、单 token Decode、
+不同有效长度的静态 batch、EOS 停止和每请求独立采样 RNG。`recompute` 路径继续作为 oracle，
+任何性能报告都必须先通过生成 token 一致性门禁。
 
 当前工程化分支已经把学完且官方实现更成熟的部分逐步替换为 PyTorch 原生算子。
 
@@ -107,6 +114,7 @@ minigpt-train/
   infer.py
   benchmarks/
     infer_single_device.py
+    infer_static_batch.py
   configs/
     tiny_cpu.json
     tiny_gpu.json
@@ -116,6 +124,7 @@ minigpt-train/
     INDUSTRIALIZATION_OPTIMIZATION_PLAN.md
     INFERENCE_FIRST_ROADMAP.md
     V0_3_MEASURABLE_INFERENCE.md
+    V0_4_KV_CACHE_STATIC_BATCHING.md
     V0_2_1_SINGLE_DEVICE_CLOSEOUT.md
     PLAN_REVIEW.md
     LEARNING_GUIDE.md
@@ -142,6 +151,7 @@ minigpt-train/
     test_reference_parity.py
     test_resume_consistency.py
     test_inference.py
+    test_kv_cache.py
 ```
 
 ## 环境准备
@@ -165,6 +175,7 @@ python tests/test_core.py
 python tests/test_reference_parity.py
 python tests/test_resume_consistency.py
 python tests/test_inference.py
+python tests/test_kv_cache.py
 ```
 
 看到：
@@ -174,12 +185,15 @@ All core smoke tests passed.
 Reference-vs-optimized parity tests passed.
 Exact resume consistency test passed.
 v0.3 inference and benchmark tests passed.
+v0.4 KV Cache and static batching tests passed.
 ```
 
 第一项检查 tokenizer、model、optimizer 参数组、checkpoint 原子保存和旧版本迁移；
 第二项对照教学公式与原生 LayerNorm、GELU、cross entropy、SDPA 的输出和梯度；
 第三项检查连续训练和从中间 checkpoint 恢复能否得到完全一致的最终训练状态。
 第四项检查 Prefill/Decode、greedy/sample、独立 checkpoint 加载和推理指标口径。
+第五项检查 cached/recompute logits 与生成一致性、缓存原地复用、不同长度 mask、窗口滚动、
+EOS 和静态 batch Benchmark。
 
 ## 独立运行一次推理
 
@@ -193,6 +207,9 @@ python infer.py `
   --strategy greedy `
   --device cpu
 ```
+
+默认使用 `--decode-mode kv_cache`。需要运行 v0.3 对照路径时传入
+`--decode-mode recompute`。
 
 `greedy` 每次选择 logits 最大的 token，适合建立稳定正确性基线。需要观察随机采样时再使用：
 
@@ -215,12 +232,14 @@ python benchmarks/infer_single_device.py `
   --prompt "MiniGPT" `
   --max-new-tokens 32 `
   --device cpu `
+  --decode-mode compare `
   --warmup 2 `
   --repeats 5 `
   --output runs/inference_benchmark.json
 ```
 
-报告保留每次原始结果，并汇总 median、p50、p90、p99。v0.3 的指标定义为：
+`compare` 会分别运行 recompute 和 KV Cache，先验证生成 token 完全一致，再计算 TPOT 加速比
+与峰值内存差。报告保留每次原始结果，并汇总 median、p50、p90、p99。指标定义为：
 
 - `prefill_ms`：Prefill 开始到首 token 在 device 上计算完成；
 - `TTFT`：请求开始到首 token 已经取回并 decode 为文本；
@@ -230,6 +249,17 @@ python benchmarks/infer_single_device.py `
 - `peak device memory`：模型已经加载后的请求测量窗口内，模型与推理共同占用的峰值设备内存。
 
 CPU 上的 tiny 结果只用于正确性和本机回归，不代表真实模型或工业硬件性能。
+
+静态 batch 使用多次 `--prompt` 指定同一批请求：
+
+```powershell
+python benchmarks/infer_static_batch.py `
+  --checkpoint runs/tiny_cpu/latest.pt `
+  --prompt "MiniGPT" `
+  --prompt "GPT" `
+  --max-new-tokens 32 `
+  --device cpu
+```
 
 ## 跑一个 CPU 小训练
 

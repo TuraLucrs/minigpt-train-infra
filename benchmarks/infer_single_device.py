@@ -12,9 +12,15 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from minigpt.benchmark import benchmark_generation  # noqa: E402
+from minigpt.benchmark import benchmark_generation, compare_decode_modes  # noqa: E402
 from minigpt.experiment import build_provenance  # noqa: E402
-from minigpt.inference import GenerationConfig, load_minigpt_engine  # noqa: E402
+from minigpt.inference import (  # noqa: E402
+    CachedMiniGPTModelRunner,
+    GenerationConfig,
+    InferenceEngine,
+    RecomputeMiniGPTModelRunner,
+    load_minigpt_engine,
+)
 from minigpt.model import count_parameters  # noqa: E402
 from minigpt.runtime import RuntimeContext  # noqa: E402
 
@@ -29,8 +35,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top-k", type=int, default=None)
     parser.add_argument("--seed", type=int, default=1337)
+    parser.add_argument("--eos-token-id", type=int, default=None)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--precision", choices=("fp32", "fp16", "bf16"), default="fp32")
+    parser.add_argument("--decode-mode", choices=("compare", "kv_cache", "recompute"), default="compare")
     parser.add_argument("--warmup", type=int, default=2)
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--output", default="runs/inference_benchmark.json")
@@ -57,14 +65,25 @@ def main() -> None:
         temperature=args.temperature,
         top_k=args.top_k,
         seed=args.seed,
+        eos_token_id=args.eos_token_id,
     )
-    report = benchmark_generation(
-        engine=engine,
-        prompt=args.prompt,
-        config=config,
-        warmup=args.warmup,
-        repeats=args.repeats,
-    )
+    model, tokenizer = engine.runner.model, engine.tokenizer
+    cached = InferenceEngine(CachedMiniGPTModelRunner(model, runtime), tokenizer)
+    recompute = InferenceEngine(RecomputeMiniGPTModelRunner(model, runtime), tokenizer)
+    if args.decode_mode == "compare":
+        report = compare_decode_modes(
+            recompute,
+            cached,
+            args.prompt,
+            config,
+            warmup=args.warmup,
+            repeats=args.repeats,
+        )
+        summary = report["kv_cache"]["summary"]
+    else:
+        chosen = cached if args.decode_mode == "kv_cache" else recompute
+        report = benchmark_generation(chosen, args.prompt, config, args.warmup, args.repeats)
+        summary = report["summary"]
     report["model"] = {
         "type": "MiniGPT",
         "config": asdict(engine.runner.model.config),
@@ -76,11 +95,15 @@ def main() -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    summary = report["summary"]
     print("=" * 80)
     print("MiniGPT 单设备推理 Benchmark（中位数）")
-    print(f"device          : {report['environment']['device_name']}")
-    print(f"precision       : {report['environment']['precision']}")
+    environment = (
+        report["kv_cache"]["environment"]
+        if args.decode_mode == "compare"
+        else report["environment"]
+    )
+    print(f"device          : {environment['device_name']}")
+    print(f"precision       : {environment['precision']}")
     print(f"TTFT            : {summary['ttft_ms']['median']:.3f} ms")
     if "tpot_ms" in summary:
         print(f"TPOT            : {summary['tpot_ms']['median']:.3f} ms")

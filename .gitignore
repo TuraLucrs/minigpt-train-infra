@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 venv/
 runtime_venv/
+*.egg-info/
 
 # Training outputs. Keep the source project small and reproducible.
 runs/

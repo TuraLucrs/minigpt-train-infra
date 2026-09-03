@@ -1,35 +1,39 @@
-"""MiniGPT 单设备推理基线。
-
-v0.3 先把训练后附带的 ``model.generate()`` 拆成独立推理链路：
-
-``文本 → tokenizer → Prefill → 第一个 token → Decode 循环 → 文本``
-
-本版本还没有 KV Cache。Prefill 和 Decode 已经具有不同的系统语义，但 Decode 每一步仍会
-把当前有效上下文重新送入完整模型。这条低效但简单的路径是 v0.4 验证 KV Cache 的 reference。
-"""
+"""MiniGPT 的 Prefill/Decode、KV Cache 与静态 batch 推理编排。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol, Sequence
 
 import torch
 
 from .checkpoint import load_checkpoint
-from .model import MiniGPT, MiniGPTConfig, migrate_model_state_dict
+from .model import MiniGPT, MiniGPTConfig, MiniGPTKVCache, migrate_model_state_dict
 from .runtime import RuntimeContext
 from .tokenizer import CharTokenizer
 
 
+class TextTokenizer(Protocol):
+    """推理引擎实际依赖的最小 tokenizer 接口。"""
+
+    vocab_size: int
+
+    def encode(self, text: str) -> list[int]: ...
+
+    def decode(self, token_ids: Sequence[int]) -> str: ...
+
+
 @dataclass(frozen=True)
 class GenerationConfig:
-    """一次生成请求真正影响 token 选择的配置。"""
+    """一次生成请求真正影响 token 选择和停止条件的配置。"""
 
     max_new_tokens: int = 32
     strategy: str = "greedy"
     temperature: float = 1.0
     top_k: int | None = None
     seed: int = 1337
+    eos_token_id: int | None = None
 
     def validate(self) -> None:
         if self.max_new_tokens <= 0:
@@ -40,11 +44,13 @@ class GenerationConfig:
             raise ValueError("temperature 必须大于 0")
         if self.top_k is not None and self.top_k <= 0:
             raise ValueError("top_k 必须大于 0，或者设为 None")
+        if self.eos_token_id is not None and self.eos_token_id < 0:
+            raise ValueError("eos_token_id 不能小于 0")
 
 
 @dataclass(frozen=True)
 class GenerationResult:
-    """一次生成的 token 结果；性能指标由 benchmark 模块单独记录。"""
+    """一次生成的 token 与文本结果；性能指标由 benchmark 模块记录。"""
 
     prompt_text: str
     completion_text: str
@@ -56,63 +62,305 @@ class GenerationResult:
     stop_reason: str
 
 
-class MiniGPTModelRunner:
-    """把 MiniGPT 的模型 forward 暴露为 Prefill/Decode 两个推理阶段。
+class ModelRunner(Protocol):
+    """不同模型和 Decode 实现交给通用引擎的最小接口。"""
 
-    v0.3 的两个方法暂时调用同一个“完整上下文 forward”。保留两个清晰入口不是为了假装
-    已经优化，而是固定系统边界：v0.4 只需要改变 Decode 的内部数据流，调用者和指标定义
-    不必跟着重写。
-    """
+    runtime: RuntimeContext
+    implementation_name: str
+
+    @property
+    def block_size(self) -> int: ...
+
+    def prefill(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor: ...
+
+    def decode(
+        self,
+        input_ids: torch.Tensor,
+        active_mask: torch.Tensor,
+    ) -> torch.Tensor: ...
+
+
+def _validate_prefill_inputs(
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+) -> None:
+    if input_ids.ndim != 2 or attention_mask.shape != input_ids.shape:
+        raise ValueError("input_ids/attention_mask 必须同为 [B,T]")
+    if input_ids.shape[0] == 0 or input_ids.shape[1] == 0:
+        raise ValueError("Prefill 至少需要一个 batch 和一个 token")
+    if torch.any(attention_mask.long().sum(dim=1) <= 0):
+        raise ValueError("每个 prompt 至少需要一个有效 token")
+
+
+def _right_padded_rows(
+    rows: Sequence[torch.Tensor],
+    *,
+    device: torch.device,
+    max_length: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """截取每行最后一个窗口，再组成右侧 padding 的 `[B,T]`。"""
+
+    windows = [row[-max_length:] for row in rows]
+    width = max(int(row.numel()) for row in windows)
+    input_ids = torch.zeros((len(windows), width), dtype=torch.long, device=device)
+    attention_mask = torch.zeros_like(input_ids, dtype=torch.bool)
+    for row_index, row in enumerate(windows):
+        row_length = int(row.numel())
+        input_ids[row_index, :row_length] = row
+        attention_mask[row_index, :row_length] = True
+    return input_ids, attention_mask
+
+
+class RecomputeMiniGPTModelRunner:
+    """每个 Decode step 重算有效上下文的正确性参考实现。"""
+
+    implementation_name = "recompute"
 
     def __init__(self, model: MiniGPT, runtime: RuntimeContext) -> None:
-        self.model = model
+        self.model = model.eval()
         self.runtime = runtime
-        self.model.eval()
+        self._histories: list[torch.Tensor] = []
 
     @property
     def block_size(self) -> int:
         return self.model.config.block_size
 
-    def _effective_context(self, input_ids: torch.Tensor) -> torch.Tensor:
-        if input_ids.ndim != 2:
-            raise ValueError("input_ids 必须是 [B,T]")
-        if input_ids.shape[1] == 0:
-            raise ValueError("输入至少需要一个 token")
-        return input_ids[:, -self.block_size :]
-
-    def _next_token_logits(self, input_ids: torch.Tensor) -> torch.Tensor:
-        context = self._effective_context(input_ids)
+    def _forward_histories(self) -> torch.Tensor:
+        input_ids, attention_mask = _right_padded_rows(
+            self._histories,
+            device=self.runtime.device,
+            max_length=self.block_size,
+        )
         with self.runtime.autocast():
-            logits = self.model(context)
-        # [B,T,V] 只保留最后位置，因为它负责预测下一个 token。
-        return logits[:, -1, :]
+            logits = self.model(input_ids, attention_mask)
+        last_positions = attention_mask.long().sum(dim=1) - 1
+        batch_indices = torch.arange(input_ids.shape[0], device=input_ids.device)
+        return logits[batch_indices, last_positions]
 
-    def prefill(self, input_ids: torch.Tensor) -> torch.Tensor:
-        """处理已有 prompt，返回第一个待生成 token 的 logits：[B,V]。"""
+    def prefill(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        _validate_prefill_inputs(input_ids, attention_mask)
+        self._histories = [
+            input_ids[row][attention_mask[row].bool()].clone()
+            for row in range(input_ids.shape[0])
+        ]
+        return self._forward_histories()
 
-        return self._next_token_logits(input_ids)
+    def decode(
+        self,
+        input_ids: torch.Tensor,
+        active_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        batch_size = len(self._histories)
+        if input_ids.shape != (batch_size, 1) or active_mask.shape != (batch_size,):
+            raise ValueError("Decode 需要 [B,1] input_ids 和 [B] active_mask")
+        for row in range(batch_size):
+            if bool(active_mask[row].item()):
+                self._histories[row] = torch.cat((self._histories[row], input_ids[row]))
+        return self._forward_histories()
 
-    def decode(self, input_ids: torch.Tensor) -> torch.Tensor:
-        """处理已经追加过 token 的上下文，返回下一个 token 的 logits：[B,V]。
 
-        注意：v0.3 尚未缓存历史 K/V，因此这里仍重算最多 ``block_size`` 个 token。
-        """
+class CachedMiniGPTModelRunner:
+    """使用逐层预分配 KV Cache 的 MiniGPT Decode 实现。"""
 
-        return self._next_token_logits(input_ids)
+    implementation_name = "kv_cache"
+
+    def __init__(self, model: MiniGPT, runtime: RuntimeContext) -> None:
+        self.model = model.eval()
+        self.runtime = runtime
+        self._cache: MiniGPTKVCache | None = None
+        self._window_ids: torch.Tensor | None = None
+        self._window_lengths: list[int] | None = None
+
+    @property
+    def block_size(self) -> int:
+        return self.model.config.block_size
+
+    @property
+    def cache(self) -> MiniGPTKVCache | None:
+        return self._cache
+
+    def release_cache(self) -> None:
+        """释放缓存引用；设备 allocator 是否归还内存由后端决定。"""
+
+        self._cache = None
+        self._window_ids = None
+        self._window_lengths = None
+
+    def _ensure_cache(self, batch_size: int) -> MiniGPTKVCache:
+        dtype = self.runtime.amp_dtype or next(self.model.parameters()).dtype
+        needs_allocation = (
+            self._cache is None
+            or self._cache.max_batch_size < batch_size
+            or self._cache.layers[0].key.dtype != dtype
+        )
+        if needs_allocation:
+            self._cache = self.model.allocate_kv_cache(
+                batch_size,
+                device=self.runtime.device,
+                dtype=dtype,
+            )
+        return self._cache
+
+    def _prefill_window(self) -> torch.Tensor:
+        if self._window_ids is None or self._window_lengths is None:
+            raise RuntimeError("缓存窗口尚未初始化")
+        rows = [
+            self._window_ids[row, : self._window_lengths[row]]
+            for row in range(self._window_ids.shape[0])
+        ]
+        input_ids, attention_mask = _right_padded_rows(
+            rows,
+            device=self.runtime.device,
+            max_length=self.block_size,
+        )
+        with self.runtime.autocast():
+            logits = self.model.prefill_with_cache(
+                input_ids,
+                attention_mask,
+                self._ensure_cache(input_ids.shape[0]),
+            )
+        last_positions = attention_mask.long().sum(dim=1) - 1
+        batch_indices = torch.arange(input_ids.shape[0], device=input_ids.device)
+        return logits[batch_indices, last_positions]
+
+    def prefill(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        _validate_prefill_inputs(input_ids, attention_mask)
+        rows = [
+            input_ids[row][attention_mask[row].bool()][-self.block_size :].clone()
+            for row in range(input_ids.shape[0])
+        ]
+        self._window_ids = torch.zeros(
+            (len(rows), self.block_size),
+            dtype=torch.long,
+            device=self.runtime.device,
+        )
+        self._window_lengths = [int(row.numel()) for row in rows]
+        for row_index, row in enumerate(rows):
+            self._window_ids[row_index, : row.numel()] = row
+        return self._prefill_window()
+
+    def decode(
+        self,
+        input_ids: torch.Tensor,
+        active_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        if self._cache is None or self._window_ids is None or self._window_lengths is None:
+            raise RuntimeError("Decode 前必须先执行 Prefill")
+        batch_size = self._window_ids.shape[0]
+        if input_ids.shape != (batch_size, 1) or active_mask.shape != (batch_size,):
+            raise ValueError("Decode 需要 [B,1] input_ids 和 [B] active_mask")
+
+        active_rows = [bool(value) for value in active_mask.tolist()]
+        requires_window_rebuild = any(
+            active_rows[row] and self._window_lengths[row] >= self.block_size
+            for row in range(batch_size)
+        )
+        if requires_window_rebuild:
+            # MiniGPT 使用 learned absolute position。窗口左移后所有保留 token 的位置都会改变，
+            # 因而必须重建 K/V；Qwen3 的 RoPE 路径不会沿用这个限制。
+            for row in range(batch_size):
+                if not active_rows[row]:
+                    continue
+                length = self._window_lengths[row]
+                if length >= self.block_size:
+                    self._window_ids[row, :-1] = self._window_ids[row, 1:].clone()
+                    self._window_ids[row, -1] = input_ids[row, 0]
+                else:
+                    self._window_ids[row, length] = input_ids[row, 0]
+                    self._window_lengths[row] += 1
+            return self._prefill_window()
+
+        for row in range(batch_size):
+            if active_rows[row]:
+                position = self._window_lengths[row]
+                self._window_ids[row, position] = input_ids[row, 0]
+                self._window_lengths[row] += 1
+        with self.runtime.autocast():
+            logits = self.model.decode_with_cache(
+                input_ids,
+                active_mask.bool(),
+                self._cache,
+            )
+        return logits[:, 0]
+
+
+# 保留 v0.3 公共名称，旧调用方默认得到 recompute reference runner。
+MiniGPTModelRunner = RecomputeMiniGPTModelRunner
 
 
 class InferenceEngine:
-    """负责 tokenizer、token 选择和 Prefill/Decode 编排的单请求推理引擎。"""
+    """负责 tokenizer、token 选择和 Prefill/Decode 编排。"""
 
-    def __init__(self, runner: MiniGPTModelRunner, tokenizer: CharTokenizer) -> None:
+    def __init__(
+        self,
+        runner: ModelRunner,
+        tokenizer: TextTokenizer,
+        *,
+        pad_token_id: int | None = None,
+    ) -> None:
         self.runner = runner
         self.tokenizer = tokenizer
+        if pad_token_id is None:
+            try:
+                pad_token_id = tokenizer.stoi[tokenizer.unk_token]  # type: ignore[attr-defined]
+            except AttributeError as exc:
+                raise ValueError("非 CharTokenizer 必须显式提供 pad_token_id") from exc
+        self.pad_token_id = int(pad_token_id)
 
     def encode_prompt(self, prompt: str) -> torch.Tensor:
         prompt_ids = self.tokenizer.encode(prompt)
         if not prompt_ids:
             raise ValueError("prompt 不能为空")
-        return torch.tensor([prompt_ids], dtype=torch.long, device=self.runner.runtime.device)
+        return torch.tensor(
+            [prompt_ids],
+            dtype=torch.long,
+            device=self.runner.runtime.device,
+        )
+
+    def encode_prompts(
+        self,
+        prompts: Sequence[str],
+    ) -> tuple[torch.Tensor, torch.Tensor, list[list[int]]]:
+        if not prompts:
+            raise ValueError("prompts 不能为空")
+        prompt_rows = [self.tokenizer.encode(prompt) for prompt in prompts]
+        if any(not row for row in prompt_rows):
+            raise ValueError("每个 prompt 都必须至少包含一个 token")
+
+        width = max(len(row) for row in prompt_rows)
+        input_ids = torch.full(
+            (len(prompt_rows), width),
+            self.pad_token_id,
+            dtype=torch.long,
+            device=self.runner.runtime.device,
+        )
+        attention_mask = torch.zeros_like(input_ids, dtype=torch.bool)
+        for row_index, row in enumerate(prompt_rows):
+            row_length = len(row)
+            input_ids[row_index, :row_length] = torch.tensor(row, device=input_ids.device)
+            attention_mask[row_index, :row_length] = True
+        return input_ids, attention_mask, prompt_rows
+
+    def validate_generation_capacity(
+        self,
+        prompt_rows: Sequence[Sequence[int]],
+        max_new_tokens: int,
+    ) -> None:
+        validate = getattr(self.runner, "validate_generation", None)
+        if callable(validate):
+            validate([len(row) for row in prompt_rows], max_new_tokens)
 
     def make_generator(self, config: GenerationConfig) -> torch.Generator | None:
         if config.strategy == "greedy":
@@ -121,14 +369,26 @@ class InferenceEngine:
         generator.manual_seed(config.seed)
         return generator
 
+    def make_generators(
+        self,
+        config: GenerationConfig,
+        batch_size: int,
+    ) -> list[torch.Generator | None]:
+        if config.strategy == "greedy":
+            return [None] * batch_size
+        generators: list[torch.Generator | None] = []
+        for row in range(batch_size):
+            generator = torch.Generator(device=self.runner.runtime.device)
+            generator.manual_seed(config.seed + row)
+            generators.append(generator)
+        return generators
+
     @staticmethod
     def select_next_token(
         next_logits: torch.Tensor,
         config: GenerationConfig,
         generator: torch.Generator | None,
     ) -> torch.Tensor:
-        """把每个词表 token 的分数变成被选中的下一个 token id：[B,1]。"""
-
         if next_logits.ndim != 2:
             raise ValueError("next_logits 必须是 [B,V]")
         if config.strategy == "greedy":
@@ -138,51 +398,92 @@ class InferenceEngine:
         if config.top_k is not None:
             k = min(config.top_k, scaled_logits.shape[-1])
             top_values, top_indices = torch.topk(scaled_logits, k=k, dim=-1)
-            probabilities = torch.softmax(top_values, dim=-1)
-            sampled_in_top_k = torch.multinomial(probabilities, num_samples=1, generator=generator)
-            return torch.gather(top_indices, dim=-1, index=sampled_in_top_k)
-
-        probabilities = torch.softmax(scaled_logits, dim=-1)
-        return torch.multinomial(probabilities, num_samples=1, generator=generator)
+            sampled_index = torch.multinomial(
+                torch.softmax(top_values, dim=-1),
+                num_samples=1,
+                generator=generator,
+            )
+            return torch.gather(top_indices, dim=-1, index=sampled_index)
+        return torch.multinomial(
+            torch.softmax(scaled_logits, dim=-1),
+            num_samples=1,
+            generator=generator,
+        )
 
     @torch.inference_mode()
     def generate(self, prompt: str, config: GenerationConfig) -> GenerationResult:
-        """执行一次不采集性能指标的正常生成。"""
+        return self.generate_batch([prompt], config)[0]
 
+    @torch.inference_mode()
+    def generate_batch(
+        self,
+        prompts: Sequence[str],
+        config: GenerationConfig,
+    ) -> list[GenerationResult]:
         config.validate()
-        input_ids = self.encode_prompt(prompt)
-        prompt_length = input_ids.shape[1]
-        generator = self.make_generator(config)
+        if config.eos_token_id is not None and config.eos_token_id >= self.tokenizer.vocab_size:
+            raise ValueError("eos_token_id 超出 tokenizer 词表")
 
-        next_logits = self.runner.prefill(input_ids)
-        next_id = self.select_next_token(next_logits, config, generator)
-        input_ids = torch.cat((input_ids, next_id), dim=1)
+        input_ids, attention_mask, prompt_rows = self.encode_prompts(prompts)
+        self.validate_generation_capacity(prompt_rows, config.max_new_tokens)
+        batch_size = len(prompts)
+        generators = self.make_generators(config, batch_size)
+        generated_ids: list[list[int]] = [[] for _ in prompts]
+        stop_reasons = ["length"] * batch_size
+        finished = torch.zeros(batch_size, dtype=torch.bool, device=input_ids.device)
 
-        for _ in range(1, config.max_new_tokens):
-            next_logits = self.runner.decode(input_ids)
-            next_id = self.select_next_token(next_logits, config, generator)
-            input_ids = torch.cat((input_ids, next_id), dim=1)
+        next_logits = self.runner.prefill(input_ids, attention_mask)
+        for step in range(config.max_new_tokens):
+            next_ids = torch.cat(
+                [
+                    self.select_next_token(
+                        next_logits[row : row + 1],
+                        config,
+                        generators[row],
+                    )
+                    for row in range(batch_size)
+                ]
+            )
+            for row in range(batch_size):
+                if bool(finished[row].item()):
+                    next_ids[row, 0] = self.pad_token_id
+                    continue
+                token_id = int(next_ids[row, 0].item())
+                generated_ids[row].append(token_id)
+                if config.eos_token_id is not None and token_id == config.eos_token_id:
+                    finished[row] = True
+                    stop_reasons[row] = "eos"
 
-        all_ids = input_ids[0].tolist()
-        prompt_ids = all_ids[:prompt_length]
-        generated_ids = all_ids[prompt_length:]
-        completion_text = self.tokenizer.decode(generated_ids)
-        return GenerationResult(
-            prompt_text=prompt,
-            completion_text=completion_text,
-            full_text=self.tokenizer.decode(all_ids),
-            prompt_ids=prompt_ids,
-            generated_ids=generated_ids,
-            all_ids=all_ids,
-            prefill_tokens=min(prompt_length, self.runner.block_size),
-            stop_reason="length",
-        )
+            if step + 1 == config.max_new_tokens or bool(torch.all(finished).item()):
+                break
+            next_logits = self.runner.decode(next_ids, ~finished)
+
+        results = []
+        for row, prompt in enumerate(prompts):
+            all_ids = prompt_rows[row] + generated_ids[row]
+            results.append(
+                GenerationResult(
+                    prompt_text=prompt,
+                    completion_text=self.tokenizer.decode(generated_ids[row]),
+                    full_text=self.tokenizer.decode(all_ids),
+                    prompt_ids=prompt_rows[row],
+                    generated_ids=generated_ids[row],
+                    all_ids=all_ids,
+                    prefill_tokens=min(len(prompt_rows[row]), self.runner.block_size),
+                    stop_reason=stop_reasons[row],
+                )
+            )
+        return results
 
 
 def checkpoint_run_dir(checkpoint_path: Path) -> Path:
     """返回 checkpoint 所属 run 目录。"""
 
-    return checkpoint_path.parent.parent if checkpoint_path.parent.name == "checkpoints" else checkpoint_path.parent
+    return (
+        checkpoint_path.parent.parent
+        if checkpoint_path.parent.name == "checkpoints"
+        else checkpoint_path.parent
+    )
 
 
 def _find_tokenizer_path(
@@ -200,10 +501,10 @@ def _find_tokenizer_path(
         stored_path = checkpoint.get("config", {}).get("runtime", {}).get("tokenizer_path")
     if stored_path:
         candidates.append(Path(stored_path))
-
     for candidate in candidates:
         if candidate.is_file():
             return candidate
+
     checked = "\n".join(f"  - {candidate}" for candidate in candidates)
     raise FileNotFoundError(f"找不到与 checkpoint 对应的 tokenizer.json，已检查：\n{checked}")
 
@@ -212,13 +513,15 @@ def load_minigpt_engine(
     checkpoint_path: str | Path,
     runtime: RuntimeContext,
     tokenizer_path: str | Path | None = None,
+    decode_mode: str = "kv_cache",
 ) -> InferenceEngine:
-    """从 v0.2.x 训练产物恢复只用于推理的模型和 tokenizer。"""
+    """从 v0.2.x 训练产物恢复模型和 tokenizer，并选择 Decode 实现。"""
 
     checkpoint_path = Path(checkpoint_path)
     checkpoint = load_checkpoint(checkpoint_path, map_location="cpu")
-    tokenizer = CharTokenizer.load(_find_tokenizer_path(checkpoint_path, checkpoint, tokenizer_path))
-
+    tokenizer = CharTokenizer.load(
+        _find_tokenizer_path(checkpoint_path, checkpoint, tokenizer_path)
+    )
     raw_model_config = checkpoint.get("config", {}).get("model")
     if not isinstance(raw_model_config, dict):
         raise ValueError("checkpoint 缺少 config.model，无法重建 MiniGPT 结构")
@@ -232,7 +535,16 @@ def load_minigpt_engine(
         dropout=float(raw_model_config.get("dropout", 0.0)),
     )
     model = MiniGPT(model_config)
-    model.load_state_dict(migrate_model_state_dict(checkpoint["model_state"]), strict=True)
-    model.to(runtime.device)
-    model.eval()
-    return InferenceEngine(MiniGPTModelRunner(model, runtime), tokenizer)
+    model.load_state_dict(
+        migrate_model_state_dict(checkpoint["model_state"]),
+        strict=True,
+    )
+    model.to(runtime.device).eval()
+
+    if decode_mode == "kv_cache":
+        runner: ModelRunner = CachedMiniGPTModelRunner(model, runtime)
+    elif decode_mode == "recompute":
+        runner = RecomputeMiniGPTModelRunner(model, runtime)
+    else:
+        raise ValueError("decode_mode 必须是 kv_cache 或 recompute")
+    return InferenceEngine(runner, tokenizer)

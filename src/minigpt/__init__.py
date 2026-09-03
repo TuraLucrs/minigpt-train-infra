@@ -5,21 +5,31 @@
 """
 
 from .config import ExperimentConfig, ModelConfig, TrainConfig
-from .inference import GenerationConfig, GenerationResult, InferenceEngine, MiniGPTModelRunner
-from .model import MiniGPT, MiniGPTConfig
+from .inference import (
+    CachedMiniGPTModelRunner,
+    GenerationConfig,
+    GenerationResult,
+    InferenceEngine,
+    MiniGPTModelRunner,
+    RecomputeMiniGPTModelRunner,
+)
+from .model import MiniGPT, MiniGPTConfig, MiniGPTKVCache
 from .runtime import RuntimeContext
 from .tokenizer import CharTokenizer
 
 __all__ = [
     "CharTokenizer",
+    "CachedMiniGPTModelRunner",
     "ExperimentConfig",
     "GenerationConfig",
     "GenerationResult",
     "InferenceEngine",
     "MiniGPT",
     "MiniGPTConfig",
+    "MiniGPTKVCache",
     "MiniGPTModelRunner",
     "ModelConfig",
     "RuntimeContext",
+    "RecomputeMiniGPTModelRunner",
     "TrainConfig",
 ]

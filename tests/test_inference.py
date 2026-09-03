@@ -51,16 +51,17 @@ def main() -> None:
 
     prompt = "hello"
     input_ids = engine.encode_prompt(prompt)
+    attention_mask = torch.ones_like(input_ids, dtype=torch.bool)
     with torch.inference_mode():
         full_logits = model(input_ids)
-        prefill_logits = engine.runner.prefill(input_ids)
+        prefill_logits = engine.runner.prefill(input_ids, attention_mask)
     assert torch.equal(prefill_logits, full_logits[:, -1, :])
     assert prefill_logits.shape == (1, tokenizer.vocab_size)
 
     # v0.3 的 Decode 明确仍重算完整上下文；它必须与直接 model forward 的最后位置一致。
     extended_ids = torch.cat((input_ids, torch.tensor([[1]], dtype=torch.long)), dim=1)
     with torch.inference_mode():
-        decode_logits = engine.runner.decode(extended_ids)
+        decode_logits = engine.runner.decode(torch.tensor([[1]], dtype=torch.long), torch.ones(1, dtype=torch.bool))
         expected_decode = model(extended_ids)[:, -1, :]
     assert torch.equal(decode_logits, expected_decode)
 
@@ -76,8 +77,9 @@ def main() -> None:
 
     long_prompt = "hellohello"
     long_input_ids = engine.encode_prompt(long_prompt)
+    long_mask = torch.ones_like(long_input_ids, dtype=torch.bool)
     with torch.inference_mode():
-        long_prefill = engine.runner.prefill(long_input_ids)
+        long_prefill = engine.runner.prefill(long_input_ids, long_mask)
         cropped_expected = model(long_input_ids[:, -model.config.block_size :])[:, -1, :]
     assert torch.equal(long_prefill, cropped_expected)
     assert engine.generate(long_prompt, GenerationConfig(max_new_tokens=1)).prefill_tokens == model.config.block_size
@@ -104,7 +106,7 @@ def main() -> None:
     assert metrics.output_tokens_per_second > 0
 
     report = benchmark_generation(engine, prompt, greedy_config, warmup=1, repeats=3)
-    assert report["benchmark"] == "single_request_recompute_decode"
+    assert report["benchmark"] == "single_request_cpu_recompute"
     assert len(report["runs"]) == 3
     assert report["summary"]["ttft_ms"]["count"] == 3
     assert report["summary"]["tpot_ms"]["median"] > 0
