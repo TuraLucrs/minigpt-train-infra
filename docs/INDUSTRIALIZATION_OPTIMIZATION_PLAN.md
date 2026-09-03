@@ -1215,28 +1215,29 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 - [ ] Ascend 当前只保留接口方向，最小 smoke test 随后端适配实施；
 - [ ] `DistributedContext` 等真正进入 TP 前再实现，不为抽象完整性提前增加代码。
 
-### 阶段 D：v0.4～v0.5 单设备推理 Model Runner
+### 阶段 D：v0.4～v0.5 推理 Model Runner 与真实模型接入
 
 #### D1：MiniGPT reference runner
 
 - [x] 保留“每步重算全部上下文”的 reference generation；
 - [x] 第一版使用 deterministic greedy decoding，建立稳定正确性参照；
 - [x] 明确 `prefill()` 与 `decode()` 两条执行路径；
-- [ ] 实现逐层 KV Cache，并验证 cached 与 uncached logits/生成结果一致；
-- [ ] 实现静态 batching、attention mask、position、EOS 和采样状态；
+- [x] 实现逐层 KV Cache，并验证 cached 与 uncached logits/生成结果一致；
+- [x] 实现静态 batching、attention mask、position、EOS 和采样状态；
 - [x] 建立 TTFT、TPOT、E2E latency、input/output tokens/s、峰值显存指标；
 - [ ] 扫描 batch、input length、output length，形成单设备 baseline；
 - [ ] 此阶段不实现 continuous batching，避免同时引入调度和模型并行。
 
 #### D2：一种真实开源 decoder-only 模型
 
-- [ ] 在 MiniGPT 路径稳定后，只选择一种主流架构作为第一种工业 workload；
-- [ ] 接入真实 tokenizer、config 和 safetensors 权重；
-- [ ] 处理该架构实际使用的 RoPE、RMSNorm、SwiGLU、GQA/MQA 等组件；
-- [ ] 建立窄 `ModelRunner` 接口，分别保留 MiniGPT reference adapter 和真实模型 adapter；
-- [ ] 与可信参考实现对齐 logits、greedy generation 和 KV Cache 结果；
-- [ ] MiniGPT 继续负责 CPU CI、状态检查和故障注入，真实模型负责正式性能与显存报告；
-- [ ] 不在第一版追求支持大量模型架构，避免模型兼容工作淹没推理 Infra 主线。
+- [x] 固定 `Qwen/Qwen3-32B` dense 作为第一种工业 workload；
+- [x] 接入真实 tokenizer、config 和 safetensors 权重；
+- [x] 处理 RoPE、RMSNorm、SwiGLU 和 GQA；
+- [x] 建立窄 `ModelRunner` 接口，分别保留 MiniGPT reference adapter 和 Qwen3 adapter；
+- [x] 与 Transformers reference 对齐 full logits、cached Prefill 和 cached Decode；
+- [x] MiniGPT/tiny Qwen3 只负责 CPU CI，正式性能模型固定为 32B；
+- [x] 第一版只支持 Qwen3 dense，明确拒绝未实现的 sliding window/rope scaling；
+- [ ] v0.6 完成 TP 分片加载后，在真实 32B 权重上记录正式性能与 HBM。
 
 ### 阶段 E：分布式基础短实验（DDP 仅作教学载体）
 
@@ -1300,7 +1301,7 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 v0.2.x  优化单设备训练收尾
 v0.3    可测量的 MiniGPT 单设备推理基线
 v0.4    KV Cache、Prefill/Decode 独立路径与静态 Batching
-v0.5    真实开源模型单设备推理
+v0.5    Qwen3 真实模型接入、KV Cache 与数值门禁
 v0.6    分布式基础短实验与 Tensor Parallel 推理
 v0.7    Continuous Batching、调度与 KV 生命周期
 v0.8    推理专项研究（依据真实瓶颈选题）

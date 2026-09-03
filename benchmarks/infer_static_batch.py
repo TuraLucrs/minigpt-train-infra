@@ -25,8 +25,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--strategy", choices=("greedy", "sample"), default="greedy")
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top-k", type=int, default=None)
+    parser.add_argument("--top-p", type=float, default=None)
     parser.add_argument("--seed", type=int, default=1337)
-    parser.add_argument("--eos-token-id", type=int, default=None)
+    parser.add_argument("--eos-token-id", type=int, action="append", default=None)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--precision", choices=("fp32", "fp16", "bf16"), default="fp32")
     parser.add_argument("--warmup", type=int, default=2)
@@ -54,8 +55,9 @@ def main() -> None:
         strategy=args.strategy,
         temperature=args.temperature,
         top_k=args.top_k,
+        top_p=args.top_p,
         seed=args.seed,
-        eos_token_id=args.eos_token_id,
+        eos_token_ids=None if args.eos_token_id is None else tuple(args.eos_token_id),
     )
     report = benchmark_static_batch(
         engine,

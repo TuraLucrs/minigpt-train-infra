@@ -123,6 +123,16 @@ def main() -> None:
     assert eos_result.generated_ids == [first_token]
     assert eos_result.stop_reason == "eos"
 
+    multi_eos_result = cached.generate(
+        "ab",
+        GenerationConfig(
+            max_new_tokens=8,
+            eos_token_ids=((first_token + 1) % tokenizer.vocab_size, first_token),
+        ),
+    )
+    assert multi_eos_result.generated_ids == [first_token]
+    assert multi_eos_result.stop_reason == "eos"
+
     comparison = compare_decode_modes(
         recompute,
         cached,

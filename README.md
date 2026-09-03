@@ -24,12 +24,16 @@
 - 逐层预分配 KV Cache 与只处理新增 token 的 Decode
 - 不同 prompt 长度、attention mask、EOS 和静态 batch
 - KV Cache 与 recompute 的正确性门和性能对照
+- Qwen3 tokenizer/config/safetensors 与真实模型数学
+- RoPE、RMSNorm、SwiGLU、GQA 和 Qwen3 KV Cache
+- Transformers logits 对齐与 Qwen3-32B HBM/TP 规划
 
 ## 当前阶段
 
 `v0.1～v0.2.2` 已经完成单设备训练基础。它们保留为知识基础和项目演进证据，但后续不再
-持续扩建完整训练平台。当前 `v0.4` 已在 MiniGPT 白盒模型上完成 KV Cache 和静态
-batch，为接入真实 Qwen3 模型建立可检查的正确性参考。
+持续扩建完整训练平台。当前 `v0.5` 已将同一套生成引擎接入 Qwen3，并完成 tokenizer、
+config、safetensors、full forward、KV Cache 和 Transformers 数值对齐。正式模型固定为
+`Qwen/Qwen3-32B`；tiny 模型仍只承担正确性与 CI。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 
@@ -74,6 +78,10 @@ Prefill/Decode reference runner、最小 Runtime 边界和同步单请求 Benchm
 不同有效长度的静态 batch、EOS 停止和每请求独立采样 RNG。`recompute` 路径继续作为 oracle，
 任何性能报告都必须先通过生成 token 一致性门禁。
 
+`v0.5-qwen3-real-model` 接入本地 Hugging Face Qwen3 权重和 tokenizer，实现 RoPE、RMSNorm、
+SwiGLU、GQA、full/cached forward，并建立 Transformers logits 对齐、32B 精确参数量和静态
+显存门禁。32B BF16 单卡 64 GiB 没有可靠运行余量，所以正式性能从 v0.6 TP≥2 开始记录。
+
 当前工程化分支已经把学完且官方实现更成熟的部分逐步替换为 PyTorch 原生算子。
 
 当前仍显式实现：
@@ -112,12 +120,19 @@ minigpt-train/
   pyproject.toml
   train.py
   infer.py
+  infer_qwen3.py
   benchmarks/
     infer_single_device.py
     infer_static_batch.py
+    infer_qwen3_single_device.py
+    infer_qwen3_static_batch.py
+    check_qwen3_parity.py
+    plan_qwen3_memory.py
+    runtime_smoke.py
   configs/
     tiny_cpu.json
     tiny_gpu.json
+    qwen3_32b_official.json
   data/
     tiny_corpus.txt
   docs/
@@ -125,6 +140,8 @@ minigpt-train/
     INFERENCE_FIRST_ROADMAP.md
     V0_3_MEASURABLE_INFERENCE.md
     V0_4_KV_CACHE_STATIC_BATCHING.md
+    V0_5_QWEN3_REAL_MODEL.md
+    PROJECT_WORKING_AGREEMENT.md
     V0_2_1_SINGLE_DEVICE_CLOSEOUT.md
     PLAN_REVIEW.md
     LEARNING_GUIDE.md
@@ -133,6 +150,7 @@ minigpt-train/
     run_tiny_cpu.ps1
     run_tiny_gpu.ps1
     resume_latest_cpu.ps1
+    create_tiny_qwen3_fixture.py
   src/
     minigpt/
       tokenizer.py
@@ -146,12 +164,16 @@ minigpt-train/
       inference.py
       benchmark.py
       experiment.py
+      qwen3.py
+      qwen3_inference.py
+      memory_planner.py
   tests/
     test_core.py
     test_reference_parity.py
     test_resume_consistency.py
     test_inference.py
     test_kv_cache.py
+    test_qwen3.py
 ```
 
 ## 环境准备
@@ -176,6 +198,7 @@ python tests/test_reference_parity.py
 python tests/test_resume_consistency.py
 python tests/test_inference.py
 python tests/test_kv_cache.py
+python tests/test_qwen3.py
 ```
 
 看到：
@@ -186,6 +209,7 @@ Reference-vs-optimized parity tests passed.
 Exact resume consistency test passed.
 v0.3 inference and benchmark tests passed.
 v0.4 KV Cache and static batching tests passed.
+Qwen3 parity, cache, loading and memory planning tests passed.
 ```
 
 第一项检查 tokenizer、model、optimizer 参数组、checkpoint 原子保存和旧版本迁移；
@@ -194,6 +218,37 @@ v0.4 KV Cache and static batching tests passed.
 第四项检查 Prefill/Decode、greedy/sample、独立 checkpoint 加载和推理指标口径。
 第五项检查 cached/recompute logits 与生成一致性、缓存原地复用、不同长度 mask、窗口滚动、
 EOS 和静态 batch Benchmark。
+第六项检查 Qwen3/Transformers logits、cached Prefill/Decode、单/分片 safetensors、32B
+参数量与 HBM 规划。
+
+## Qwen3 v0.5 快速验收
+
+先创建离线 tiny fixture；它只用于正确性，不能作为性能数据：
+
+```powershell
+python scripts/create_tiny_qwen3_fixture.py
+python benchmarks/check_qwen3_parity.py --model-dir runs/tiny_qwen3_fixture
+python infer_qwen3.py `
+  --model-dir runs/tiny_qwen3_fixture `
+  --device cpu --precision fp32 --max-new-tokens 4 `
+  --prompt "Hello world"
+python benchmarks/infer_qwen3_static_batch.py `
+  --model-dir runs/tiny_qwen3_fixture `
+  --device cpu --precision fp32 --max-new-tokens 4 `
+  --prompt "Hello world" --prompt "Qwen inference"
+```
+
+正式 32B 运行前先做容量和后端门禁：
+
+```powershell
+python benchmarks/plan_qwen3_memory.py --tp 1 2 4 8 16
+python benchmarks/runtime_smoke.py --device npu --precision bf16
+```
+
+静态估算显示：32B BF16 权重约 62,488.8 MiB；加最小 KV Cache、workspace 和 runtime
+reserve 后约 65,592.8 MiB，超过 64 GiB。因此 v0.5 不拿单卡 32B 冒险做正式性能结论；
+v0.6 完成 TP 分片加载后，从 TP=2/4/8 开始在机器上留正式记录。详细边界见
+`docs/V0_5_QWEN3_REAL_MODEL.md`。
 
 ## 独立运行一次推理
 
@@ -351,20 +406,22 @@ python train.py --config configs/tiny_cpu.json --resume runs/tiny_cpu/latest.pt 
 
 ## 你应该怎么读代码？
 
-训练基础已经讲完。学习 v0.3 新增内容时推荐顺序：
+机器实验窗口结束后，学习 v0.5 新增内容时推荐顺序：
 
 1. `src/minigpt/runtime.py`
-2. `src/minigpt/inference.py` 的配置和结果对象
-3. `MiniGPTModelRunner.prefill()` / `decode()`
-4. `InferenceEngine.generate()`
-5. `infer.py`
-6. `src/minigpt/benchmark.py`
-7. `benchmarks/infer_single_device.py`
-8. `train.py` 中复用 Runtime/InferenceEngine 的变化
-9. `tests/test_inference.py`
+2. `src/minigpt/qwen3.py` 的 config 与完整 forward
+3. Qwen3 attention、RoPE、GQA、Prefill/Decode cache
+4. `src/minigpt/qwen3_inference.py`
+5. `src/minigpt/inference.py` 的通用 `InferenceEngine`
+6. `infer_qwen3.py`
+7. `src/minigpt/benchmark.py`
+8. `benchmarks/check_qwen3_parity.py`
+9. `benchmarks/infer_qwen3_single_device.py`
+10. `tests/test_qwen3.py`
 
-核心顺序是先看一次请求如何生成正确 token，再看如何测量这次请求；不要先从 CLI 参数或
-checkpoint 路径寻找等工程胶水开始。
+核心顺序是先看真实模型怎样得到正确 logits 和 cache，再看通用生成与测量；不要先从 CLI
+参数或模型目录路径等工程胶水开始。当前机器窗口优先实现与实测，完整逐段讲解暂时后移，
+但每次 commit/tag 后的冻结版本自查不会省略。
 
 ## 你可以做的实验
 
@@ -427,7 +484,7 @@ baseline-v0.1     教学单设备训练闭环
 v0.2.x            优化并修正单设备训练
 v0.3              可测量的 MiniGPT 单设备推理基线
 v0.4              KV Cache、Prefill/Decode 独立路径与静态 Batching
-v0.5              真实开源模型单设备推理
+v0.5              Qwen3 真实模型接入、KV Cache 与数值门禁
 v0.6              分布式基础短实验与 Tensor Parallel 推理
 v0.7              Continuous Batching、调度与 KV 生命周期
 v0.8              推理专项研究
@@ -441,18 +498,16 @@ Scaling 和最终报告全部以真实模型为准。完整分工与验收边界
 
 ## 当前版本边界
 
-v0.3 当前故意不做：
+v0.5 当前故意不做：
 
-- BPE tokenizer
-- 大规模数据 streaming
-- KV Cache（v0.3 Decode 明确重算上下文）
-- 静态或 Continuous Batching
-- 真实开源模型
+- Qwen3 sliding-window attention 或 rope scaling
+- 32B 单卡 64 GiB 的无余量强行加载
+- Continuous Batching
 - DDP/FSDP/ZeRO 完整训练系统
 - TensorBoard / WandB
 - Paged KV Cache
 - Tensor Parallel
 - 外部 FlashAttention 或自定义 fused kernel
 
-这些功能按推理主线逐版本进入，不能和第一版推理指标、KV Cache、真实模型、TP、调度一次性
-叠加，否则结果出错或性能变化时无法归因。
+这些功能按推理主线逐版本进入，不能与真实模型、TP、调度同时改写，否则结果出错或性能变化
+时无法归因。版本施工与备份硬约束见 `docs/PROJECT_WORKING_AGREEMENT.md`。

@@ -136,14 +136,17 @@ MiniGPT 的 tiny shape 不足以代表真实 kernel、显存、通信和吞吐�
 - 支持静态 Batching、不同有效长度、mask、position 和 EOS；
 - 对比 KV Cache 前后的计算量、TTFT、TPOT、吞吐和显存。
 
-### v0.5——真实开源 decoder-only 模型
+### v0.5——Qwen3 真实开源 decoder-only 模型
 
-- 第一版只支持一种主流模型架构；
+- 第一版固定支持 `Qwen/Qwen3-32B` dense 架构；
 - 接入真实 tokenizer、config 和 safetensors；
 - 处理 RoPE、RMSNorm、SwiGLU、GQA/MQA 等真实组件；
 - 建立 MiniGPT reference adapter 和真实模型 adapter；
 - 与可信参考实现对齐 logits、generation 和 KV Cache；
 - 从这里开始，所有正式性能结论都以真实模型为准。
+
+32B BF16 在 64 GiB 单设备上缺少可靠 runtime 余量；v0.5 完成结构、权重、tokenizer、cache
+和数值门禁，正式硬件性能从 v0.6 TP 分片加载后开始，不用 tiny 或静态估算冒充实测。
 
 ### v0.6——分布式推理与 Tensor Parallel
 
@@ -213,7 +216,8 @@ Prefix Cache、调度优化和长上下文显存优化。到该阶段根据真�
 ```text
 实现 → 测试与验收 → commit/tag → 立即push分支和tag并核验远端refs
 → 生成完整bundle与源码快照并保存到资料库 → 交付完整代码
-→ 冻结版本独立自查 → 按文件和实际数据流逐段讲解新增/改变部分
+→ 冻结版本独立自查 → 将高性价比不足纳入下一版本
+→ 按文件和实际数据流逐段讲解新增/改变部分（机器窗口期间可暂时推迟教学）
 → 关键疑问解决并确认理解 → 才进入下一版本
 ```
 

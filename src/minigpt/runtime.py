@@ -1,7 +1,7 @@
 """设备相关能力的最小运行时边界。
 
 模型、训练循环和推理引擎只需要知道“在哪个 device 上运行、使用什么精度、何时必须同步、
-怎样读取设备内存”。CUDA 细节集中在这里，后续接入 Ascend 时可以增加后端实现，而不是把
+怎样读取设备内存”。CPU/CUDA/Ascend 的差异集中在这里，而不是把 ``torch.cuda``、
 ``torch_npu`` 和 HCCL 判断散落到业务代码中。
 
 这个抽象故意很窄：Tensor、Module 和数学算子仍然直接使用 PyTorch。
@@ -15,6 +15,19 @@ import time
 from typing import Callable, ContextManager
 
 import torch
+
+try:
+    import torch_npu  # type: ignore[import-not-found]
+except ImportError:
+    torch_npu = None
+
+
+def _npu_available() -> bool:
+    return bool(
+        torch_npu is not None
+        and hasattr(torch, "npu")
+        and torch.npu.is_available()  # type: ignore[attr-defined]
+    )
 
 
 @dataclass(frozen=True)
@@ -46,13 +59,17 @@ class RuntimeContext:
     ) -> "RuntimeContext":
         """把用户请求解析成当前机器真正可以执行的运行时。
 
-        v0.3 先提供 CPU/CUDA。未来 Ascend 后端应在这一边界增加能力，而不是让推理引擎
-        根据厂商名称到处写分支。
+        CPU/CUDA/Ascend 的后端差异集中在这里，模型与推理引擎不按厂商散落分支。
         """
 
         device_name = requested_device.lower()
         if device_name == "auto":
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+            elif _npu_available():
+                device = torch.device("npu")
+            else:
+                device = torch.device("cpu")
         elif device_name == "cuda":
             if torch.cuda.is_available():
                 device = torch.device("cuda")
@@ -61,21 +78,44 @@ class RuntimeContext:
                 device = torch.device("cpu")
         elif device_name == "cpu":
             device = torch.device("cpu")
+        elif device_name == "npu":
+            if _npu_available():
+                device = torch.device("npu")
+            else:
+                warn("[warning] 请求了 NPU，但 torch_npu 或 NPU 当前不可用；回退到 CPU。")
+                device = torch.device("cpu")
         else:
-            raise ValueError("device 必须是 auto、cpu 或 cuda")
+            raise ValueError("device 必须是 auto、cpu、cuda 或 npu")
 
         precision_name = requested_precision.lower()
         if precision_name not in {"fp32", "fp16", "bf16"}:
             raise ValueError("precision 必须是 fp32、fp16 或 bf16")
 
-        supports_bf16 = bool(device.type == "cuda" and torch.cuda.is_bf16_supported())
+        supports_fp16 = device.type in {"cuda", "npu"}
+        if device.type == "cuda":
+            supports_bf16 = bool(torch.cuda.is_bf16_supported())
+        elif device.type == "npu":
+            dtype_getter = getattr(torch.npu, "get_amp_supported_dtype", None)  # type: ignore[attr-defined]
+            if callable(dtype_getter):
+                supported_amp_dtypes = set(dtype_getter())
+                supports_fp16 = torch.float16 in supported_amp_dtypes
+                supports_bf16 = torch.bfloat16 in supported_amp_dtypes
+            else:
+                checker = getattr(torch.npu, "is_bf16_supported", None)  # type: ignore[attr-defined]
+                supports_bf16 = False if checker is None else bool(checker())
+        else:
+            supports_fp16 = False
+            supports_bf16 = False
         amp_dtype: torch.dtype | None = None
         if precision_name != "fp32":
-            if device.type != "cuda":
+            if device.type not in {"cuda", "npu"}:
                 warn(f"[warning] 当前 {device.type} 路径不启用 {precision_name} autocast；回退到 fp32。")
                 precision_name = "fp32"
             elif precision_name == "bf16" and not supports_bf16:
-                warn("[warning] 当前 CUDA 设备不支持 bf16；回退到 fp32。")
+                warn(f"[warning] 当前 {device.type} 设备不支持 bf16；回退到 fp32。")
+                precision_name = "fp32"
+            elif precision_name == "fp16" and not supports_fp16:
+                warn(f"[warning] 当前 {device.type} 设备不支持 fp16；回退到 fp32。")
                 precision_name = "fp32"
             else:
                 amp_dtype = torch.float16 if precision_name == "fp16" else torch.bfloat16
@@ -83,8 +123,8 @@ class RuntimeContext:
         capabilities = RuntimeCapabilities(
             supports_autocast=amp_dtype is not None,
             supports_bf16=supports_bf16,
-            supports_device_events=device.type == "cuda",
-            supports_memory_stats=device.type == "cuda",
+            supports_device_events=device.type in {"cuda", "npu"},
+            supports_memory_stats=device.type in {"cuda", "npu"},
             supports_fused_adamw=device.type == "cuda",
         )
         return cls(
@@ -106,27 +146,40 @@ class RuntimeContext:
 
         if self.device.type == "cuda":
             torch.cuda.synchronize(self.device)
+        elif self.device.type == "npu":
+            torch.npu.synchronize(self.device)  # type: ignore[attr-defined]
 
     def manual_seed(self, seed: int) -> None:
-        """设置 PyTorch CPU RNG，并在 CUDA 路径设置所有可见设备 RNG。"""
+        """设置 PyTorch CPU RNG，并设置所选 accelerator 的 RNG。"""
 
         torch.manual_seed(seed)
         if self.device.type == "cuda":
             torch.cuda.manual_seed_all(seed)
+        elif self.device.type == "npu":
+            torch.npu.manual_seed_all(seed)  # type: ignore[attr-defined]
 
     def reset_peak_memory(self) -> None:
         """从当前时刻重新统计峰值设备内存。"""
 
         if self.capabilities.supports_memory_stats:
-            torch.cuda.reset_peak_memory_stats(self.device)
+            if self.device.type == "cuda":
+                torch.cuda.reset_peak_memory_stats(self.device)
+            elif self.device.type == "npu":
+                torch.npu.reset_peak_memory_stats(self.device)  # type: ignore[attr-defined]
 
     def memory_stats_mb(self) -> tuple[float, float]:
         """返回当前和峰值设备内存，单位 MB；不支持时返回 0。"""
 
         if not self.capabilities.supports_memory_stats:
             return 0.0, 0.0
-        allocated = torch.cuda.memory_allocated(self.device) / (1024 * 1024)
-        peak = torch.cuda.max_memory_allocated(self.device) / (1024 * 1024)
+        if self.device.type == "cuda":
+            allocated_bytes = torch.cuda.memory_allocated(self.device)
+            peak_bytes = torch.cuda.max_memory_allocated(self.device)
+        else:
+            allocated_bytes = torch.npu.memory_allocated(self.device)  # type: ignore[attr-defined]
+            peak_bytes = torch.npu.max_memory_allocated(self.device)  # type: ignore[attr-defined]
+        allocated = allocated_bytes / (1024 * 1024)
+        peak = peak_bytes / (1024 * 1024)
         return float(allocated), float(peak)
 
     def device_name(self) -> str:
@@ -134,20 +187,59 @@ class RuntimeContext:
 
         if self.device.type == "cuda":
             return torch.cuda.get_device_name(self.device)
+        if self.device.type == "npu":
+            return str(torch.npu.get_device_name(self.device))  # type: ignore[attr-defined]
         return "CPU"
+
+    def total_memory_mb(self) -> float:
+        """返回设备总显存/HBM；CPU 路径返回 0。"""
+
+        if self.device.type == "cuda":
+            total = torch.cuda.get_device_properties(self.device).total_memory
+        elif self.device.type == "npu":
+            total = torch.npu.get_device_properties(self.device).total_memory  # type: ignore[attr-defined]
+        else:
+            return 0.0
+        return float(total / (1024 * 1024))
+
+    def empty_cache(self) -> None:
+        """请求设备 allocator 释放未占用的缓存块。"""
+
+        if self.device.type == "cuda":
+            torch.cuda.empty_cache()
+        elif self.device.type == "npu":
+            torch.npu.empty_cache()  # type: ignore[attr-defined]
+
+    def backend_metadata(self) -> dict[str, str | bool | float | None]:
+        """返回写入实验记录的最小后端信息。"""
+
+        return {
+            "device": str(self.device),
+            "device_type": self.device.type,
+            "device_name": self.device_name(),
+            "precision": self.precision,
+            "supports_bf16": self.capabilities.supports_bf16,
+            "total_memory_mb": self.total_memory_mb(),
+            "torch": torch.__version__,
+            "torch_npu": (
+                None
+                if torch_npu is None
+                else str(getattr(torch_npu, "__version__", "unknown"))
+            ),
+        }
 
 
 class DeviceIntervalTimer:
     """在不逐 step 同步设备的情况下测量一个统计窗口。
 
-    wall time 表示调用方实际等待的端到端时间。CUDA 路径额外用 Event 记录设备工作时间，
+    wall time 表示调用方实际等待的端到端时间。accelerator 路径额外用 Event 记录设备工作时间，
     只在窗口结束时同步一次。
     """
 
     def __init__(self, runtime: RuntimeContext) -> None:
         self.runtime = runtime
         self._wall_start: float | None = None
-        self._device_start: torch.cuda.Event | None = None
+        self._device_start: object | None = None
         self.last_device_seconds: float | None = None
         self._running = False
 
@@ -156,8 +248,12 @@ class DeviceIntervalTimer:
             raise RuntimeError("计时窗口已经启动")
         self._wall_start = time.perf_counter()
         if self.runtime.capabilities.supports_device_events:
-            self._device_start = torch.cuda.Event(enable_timing=True)
-            self._device_start.record()
+            if self.runtime.device.type == "cuda":
+                event = torch.cuda.Event(enable_timing=True)
+            else:
+                event = torch.npu.Event(enable_timing=True)  # type: ignore[attr-defined]
+            event.record()
+            self._device_start = event
         self._running = True
 
     def elapsed_seconds(self) -> float:
@@ -167,10 +263,13 @@ class DeviceIntervalTimer:
         if self.runtime.capabilities.supports_device_events:
             if self._device_start is None:
                 raise RuntimeError("设备计时起始 Event 缺失")
-            end = torch.cuda.Event(enable_timing=True)
+            if self.runtime.device.type == "cuda":
+                end = torch.cuda.Event(enable_timing=True)
+            else:
+                end = torch.npu.Event(enable_timing=True)  # type: ignore[attr-defined]
             end.record()
             end.synchronize()
-            self.last_device_seconds = self._device_start.elapsed_time(end) / 1000.0
+            self.last_device_seconds = self._device_start.elapsed_time(end) / 1000.0  # type: ignore[attr-defined]
             self._device_start = None
         else:
             self.last_device_seconds = None

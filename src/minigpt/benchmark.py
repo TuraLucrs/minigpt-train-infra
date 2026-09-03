@@ -94,8 +94,9 @@ def timed_generate(engine: InferenceEngine, prompt: str, config: GenerationConfi
     """
 
     config.validate()
-    if config.eos_token_id is not None and config.eos_token_id >= engine.tokenizer.vocab_size:
-        raise ValueError("eos_token_id 超出 tokenizer 词表")
+    stop_token_ids = frozenset(config.stop_token_ids())
+    if any(token_id >= engine.tokenizer.vocab_size for token_id in stop_token_ids):
+        raise ValueError("停止 token 超出 tokenizer 词表")
     runtime = engine.runner.runtime
     runtime.synchronize()
     runtime.reset_peak_memory()
@@ -120,8 +121,9 @@ def timed_generate(engine: InferenceEngine, prompt: str, config: GenerationConfi
 
     decode_step_seconds: list[float] = []
     stop_reason = "length"
-    finished = config.eos_token_id is not None and generated_ids[-1] == config.eos_token_id
-    if finished: stop_reason = "eos"
+    finished = generated_ids[-1] in stop_token_ids
+    if finished:
+        stop_reason = "eos"
     for _ in range(1, config.max_new_tokens):
         if finished: break
         decode_start = time.perf_counter()
@@ -132,8 +134,9 @@ def timed_generate(engine: InferenceEngine, prompt: str, config: GenerationConfi
         generated_ids.append(token_id)
         engine.tokenizer.decode([token_id])
         decode_step_seconds.append(time.perf_counter() - decode_start)
-        if config.eos_token_id is not None and token_id == config.eos_token_id:
-            finished = True; stop_reason = "eos"
+        if token_id in stop_token_ids:
+            finished = True
+            stop_reason = "eos"
 
     all_ids = prompt_ids + generated_ids
     completion_text = engine.tokenizer.decode(generated_ids)
@@ -240,9 +243,7 @@ def benchmark_generation(
         "environment": {
             "python": platform.python_version(),
             "pytorch": torch.__version__,
-            "device": str(runtime.device),
-            "device_name": runtime.device_name(),
-            "precision": runtime.precision,
+            **runtime.backend_metadata(),
         },
         "request": {
             "prompt": prompt,
@@ -250,7 +251,9 @@ def benchmark_generation(
             "strategy": config.strategy,
             "temperature": config.temperature,
             "top_k": config.top_k,
+            "top_p": config.top_p,
             "seed": config.seed,
+            "eos_token_ids": list(config.stop_token_ids()),
             "warmup": warmup,
             "repeats": repeats,
         },
@@ -371,9 +374,7 @@ def benchmark_static_batch(
         "environment": {
             "python": platform.python_version(),
             "pytorch": torch.__version__,
-            "device": str(runtime.device),
-            "device_name": runtime.device_name(),
-            "precision": runtime.precision,
+            **runtime.backend_metadata(),
         },
         "request": {
             "batch_size": len(prompts),
@@ -382,8 +383,10 @@ def benchmark_static_batch(
             "strategy": config.strategy,
             "temperature": config.temperature,
             "top_k": config.top_k,
+            "top_p": config.top_p,
             "seed": config.seed,
             "eos_token_id": config.eos_token_id,
+            "eos_token_ids": list(config.stop_token_ids()),
             "warmup": warmup,
             "repeats": repeats,
         },

@@ -23,8 +23,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--strategy", choices=("greedy", "sample"), default="greedy", help="token 选择策略")
     parser.add_argument("--temperature", type=float, default=1.0, help="采样温度")
     parser.add_argument("--top-k", type=int, default=None, help="只从分数最高的 k 个 token 中采样")
+    parser.add_argument("--top-p", type=float, default=None, help="nucleus sampling 累计概率阈值")
     parser.add_argument("--seed", type=int, default=1337, help="sample 策略的随机种子")
-    parser.add_argument("--eos-token-id", type=int, default=None)
+    parser.add_argument("--eos-token-id", type=int, action="append", default=None)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--precision", choices=("fp32", "fp16", "bf16"), default="fp32")
     parser.add_argument("--decode-mode", choices=("kv_cache", "recompute"), default="kv_cache")
@@ -51,8 +52,9 @@ def main() -> None:
         strategy=args.strategy,
         temperature=args.temperature,
         top_k=args.top_k,
+        top_p=args.top_p,
         seed=args.seed,
-        eos_token_id=args.eos_token_id,
+        eos_token_ids=None if args.eos_token_id is None else tuple(args.eos_token_id),
     )
     result = engine.generate(args.prompt, config)
     runtime.synchronize()

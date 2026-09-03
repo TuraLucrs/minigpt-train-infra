@@ -32,8 +32,18 @@ class GenerationConfig:
     strategy: str = "greedy"
     temperature: float = 1.0
     top_k: int | None = None
+    top_p: float | None = None
     seed: int = 1337
     eos_token_id: int | None = None
+    eos_token_ids: tuple[int, ...] | None = None
+
+    def stop_token_ids(self) -> tuple[int, ...]:
+        """返回去重后的停止 token；保留 singular 字段以兼容旧调用方。"""
+
+        values = self.eos_token_ids
+        if values is None:
+            values = () if self.eos_token_id is None else (self.eos_token_id,)
+        return tuple(dict.fromkeys(values))
 
     def validate(self) -> None:
         if self.max_new_tokens <= 0:
@@ -44,8 +54,17 @@ class GenerationConfig:
             raise ValueError("temperature 必须大于 0")
         if self.top_k is not None and self.top_k <= 0:
             raise ValueError("top_k 必须大于 0，或者设为 None")
+        if self.top_p is not None and not 0.0 < self.top_p <= 1.0:
+            raise ValueError("top_p 必须位于 (0, 1]，或者设为 None")
+        if self.eos_token_id is not None and self.eos_token_ids is not None:
+            raise ValueError("eos_token_id 和 eos_token_ids 不能同时设置")
         if self.eos_token_id is not None and self.eos_token_id < 0:
             raise ValueError("eos_token_id 不能小于 0")
+        if self.eos_token_ids is not None:
+            if not self.eos_token_ids:
+                raise ValueError("eos_token_ids 不能为空；不停止时请设为 None")
+            if any(token_id < 0 for token_id in self.eos_token_ids):
+                raise ValueError("eos_token_ids 不能包含负数")
 
 
 @dataclass(frozen=True)
@@ -395,20 +414,31 @@ class InferenceEngine:
             return torch.argmax(next_logits, dim=-1, keepdim=True)
 
         scaled_logits = next_logits.float() / config.temperature
+        candidate_indices = torch.arange(
+            scaled_logits.shape[-1],
+            device=scaled_logits.device,
+        ).expand_as(scaled_logits)
         if config.top_k is not None:
             k = min(config.top_k, scaled_logits.shape[-1])
-            top_values, top_indices = torch.topk(scaled_logits, k=k, dim=-1)
-            sampled_index = torch.multinomial(
-                torch.softmax(top_values, dim=-1),
-                num_samples=1,
-                generator=generator,
+            scaled_logits, candidate_indices = torch.topk(
+                scaled_logits,
+                k=k,
+                dim=-1,
             )
-            return torch.gather(top_indices, dim=-1, index=sampled_index)
-        return torch.multinomial(
+        if config.top_p is not None and config.top_p < 1.0:
+            scaled_logits, order = torch.sort(scaled_logits, descending=True, dim=-1)
+            candidate_indices = torch.gather(candidate_indices, dim=-1, index=order)
+            cumulative = torch.softmax(scaled_logits, dim=-1).cumsum(dim=-1)
+            remove = cumulative > config.top_p
+            remove[..., 1:] = remove[..., :-1].clone()
+            remove[..., 0] = False
+            scaled_logits = scaled_logits.masked_fill(remove, float("-inf"))
+        sampled_index = torch.multinomial(
             torch.softmax(scaled_logits, dim=-1),
             num_samples=1,
             generator=generator,
         )
+        return torch.gather(candidate_indices, dim=-1, index=sampled_index)
 
     @torch.inference_mode()
     def generate(self, prompt: str, config: GenerationConfig) -> GenerationResult:
@@ -421,8 +451,9 @@ class InferenceEngine:
         config: GenerationConfig,
     ) -> list[GenerationResult]:
         config.validate()
-        if config.eos_token_id is not None and config.eos_token_id >= self.tokenizer.vocab_size:
-            raise ValueError("eos_token_id 超出 tokenizer 词表")
+        stop_token_ids = frozenset(config.stop_token_ids())
+        if any(token_id >= self.tokenizer.vocab_size for token_id in stop_token_ids):
+            raise ValueError("停止 token 超出 tokenizer 词表")
 
         input_ids, attention_mask, prompt_rows = self.encode_prompts(prompts)
         self.validate_generation_capacity(prompt_rows, config.max_new_tokens)
@@ -450,7 +481,7 @@ class InferenceEngine:
                     continue
                 token_id = int(next_ids[row, 0].item())
                 generated_ids[row].append(token_id)
-                if config.eos_token_id is not None and token_id == config.eos_token_id:
+                if token_id in stop_token_ids:
                     finished[row] = True
                     stop_reasons[row] = "eos"
 

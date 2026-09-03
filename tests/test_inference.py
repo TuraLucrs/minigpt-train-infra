@@ -87,6 +87,26 @@ def main() -> None:
     sample_config = GenerationConfig(max_new_tokens=5, strategy="sample", temperature=0.8, top_k=4, seed=7)
     assert engine.generate(prompt, sample_config).generated_ids == engine.generate(prompt, sample_config).generated_ids
 
+    nucleus_config = GenerationConfig(strategy="sample", top_p=0.5, seed=11)
+    nucleus_generator = engine.make_generator(nucleus_config)
+    selected = engine.select_next_token(
+        torch.tensor([[10.0, 0.0, 0.0]]),
+        nucleus_config,
+        nucleus_generator,
+    )
+    assert selected.item() == 0
+
+    for invalid_config in (
+        GenerationConfig(top_p=0.0),
+        GenerationConfig(eos_token_id=1, eos_token_ids=(2,)),
+    ):
+        try:
+            invalid_config.validate()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("非法采样/停止配置必须被拒绝")
+
     try:
         engine.generate("", greedy_config)
     except ValueError:

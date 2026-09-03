@@ -67,3 +67,53 @@ def build_provenance(
         "checkpoint_path": str(checkpoint),
         "checkpoint_sha256": sha256_file(checkpoint),
     }
+
+
+def build_model_directory_provenance(
+    project_root: str | Path,
+    model_dir: str | Path,
+    command: Sequence[str],
+    *,
+    hash_weights: bool = False,
+) -> dict[str, object]:
+    """记录 HF 模型目录；默认不强制扫描几十 GB 权重。"""
+
+    directory = Path(model_dir).resolve()
+    config_path = directory / "config.json"
+    if not config_path.is_file():
+        raise FileNotFoundError(f"模型目录缺少 config.json：{directory}")
+    weight_files = sorted(directory.glob("*.safetensors"))
+    if not weight_files:
+        raise FileNotFoundError(f"模型目录缺少 safetensors：{directory}")
+    weights = []
+    for path in weight_files:
+        entry: dict[str, object] = {
+            "name": path.name,
+            "size_bytes": path.stat().st_size,
+        }
+        if hash_weights:
+            entry["sha256"] = sha256_file(path)
+        weights.append(entry)
+    index_path = directory / "model.safetensors.index.json"
+    metadata_names = (
+        "generation_config.json",
+        "tokenizer_config.json",
+        "tokenizer.json",
+        "vocab.json",
+        "merges.txt",
+    )
+    metadata_hashes = {
+        name: sha256_file(directory / name)
+        for name in metadata_names
+        if (directory / name).is_file()
+    }
+    return {
+        "git": git_snapshot(project_root),
+        "command": list(command),
+        "model_dir": str(directory),
+        "config_sha256": sha256_file(config_path),
+        "metadata_sha256": metadata_hashes,
+        "weight_hashes_included": hash_weights,
+        "weights": weights,
+        "index_sha256": sha256_file(index_path) if index_path.is_file() else None,
+    }
