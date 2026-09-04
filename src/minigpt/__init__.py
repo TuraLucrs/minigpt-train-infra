@@ -5,6 +5,7 @@
 """
 
 from .config import ExperimentConfig, ModelConfig, TrainConfig
+from .distributed import DistributedContext
 from .inference import (
     CachedMiniGPTModelRunner,
     GenerationConfig,
@@ -16,12 +17,20 @@ from .inference import (
 from .model import MiniGPT, MiniGPTConfig, MiniGPTKVCache
 from .qwen3 import Qwen3Config, Qwen3ForCausalLM, Qwen3KVCache
 from .qwen3_inference import CachedQwen3ModelRunner, RecomputeQwen3ModelRunner
+from .qwen3_tp import (
+    CachedTensorParallelQwen3ModelRunner,
+    Qwen3TensorParallelPlan,
+    TensorParallelInferenceEngine,
+    TensorParallelQwen3ForCausalLM,
+)
 from .runtime import RuntimeContext
 from .tokenizer import CharTokenizer
 
 __all__ = [
     "CharTokenizer",
     "CachedMiniGPTModelRunner",
+    "CachedTensorParallelQwen3ModelRunner",
+    "DistributedContext",
     "ExperimentConfig",
     "GenerationConfig",
     "GenerationResult",
@@ -34,9 +43,12 @@ __all__ = [
     "Qwen3Config",
     "Qwen3ForCausalLM",
     "Qwen3KVCache",
+    "Qwen3TensorParallelPlan",
     "CachedQwen3ModelRunner",
     "RecomputeQwen3ModelRunner",
     "RuntimeContext",
+    "TensorParallelInferenceEngine",
+    "TensorParallelQwen3ForCausalLM",
     "RecomputeMiniGPTModelRunner",
     "TrainConfig",
 ]

@@ -440,6 +440,11 @@ class InferenceEngine:
         )
         return torch.gather(candidate_indices, dim=-1, index=sampled_index)
 
+    def synchronize_next_ids(self, next_ids: torch.Tensor) -> torch.Tensor:
+        """允许分布式引擎在进入下一次 Decode 前统一 token；单进程原样返回。"""
+
+        return next_ids
+
     @torch.inference_mode()
     def generate(self, prompt: str, config: GenerationConfig) -> GenerationResult:
         return self.generate_batch([prompt], config)[0]
@@ -475,6 +480,7 @@ class InferenceEngine:
                     for row in range(batch_size)
                 ]
             )
+            next_ids = self.synchronize_next_ids(next_ids)
             for row in range(batch_size):
                 if bool(finished[row].item()):
                     next_ids[row, 0] = self.pad_token_id

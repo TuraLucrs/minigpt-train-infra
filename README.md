@@ -27,13 +27,18 @@
 - Qwen3 tokenizer/config/safetensors 与真实模型数学
 - RoPE、RMSNorm、SwiGLU、GQA 和 Qwen3 KV Cache
 - Transformers logits 对齐与 Qwen3-32B HBM/TP 规划
+- torchrun process group 与 CPU/Gloo、CUDA/NCCL、Ascend/HCCL 后端边界
+- Qwen3 attention/MLP/vocabulary Tensor Parallel 与 rank-local safetensors 加载
+- TP rank 0 token 广播、逐 rank HBM、collective 和 Scaling 报告
 
 ## 当前阶段
 
 `v0.1～v0.2.2` 已经完成单设备训练基础。它们保留为知识基础和项目演进证据，但后续不再
-持续扩建完整训练平台。当前 `v0.5` 已将同一套生成引擎接入 Qwen3，并完成 tokenizer、
-config、safetensors、full forward、KV Cache 和 Transformers 数值对齐。正式模型固定为
-`Qwen/Qwen3-32B`；tiny 模型仍只承担正确性与 CI。
+持续扩建完整训练平台。`v0.5` 已将同一套生成引擎接入 Qwen3，并完成 tokenizer、config、
+safetensors、full forward、KV Cache 和 Transformers 数值对齐。当前 `v0.6` 分支已完成
+Tensor Parallel 软件实现和无 socket 的 TP=2/4 数学门禁，正在等待真实 Gloo/HCCL 与
+Qwen3-32B TP=2/4/8 硬件验收；验收前不创建最终 v0.6 tag。正式模型固定为
+`Qwen/Qwen3-32B`，tiny 模型仍只承担正确性与 CI。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 
@@ -82,6 +87,11 @@ Prefill/Decode reference runner、最小 Runtime 边界和同步单请求 Benchm
 SwiGLU、GQA、full/cached forward，并建立 Transformers logits 对齐、32B 精确参数量和静态
 显存门禁。32B BF16 单卡 64 GiB 没有可靠运行余量，所以正式性能从 v0.6 TP≥2 开始记录。
 
+`v0.6` 使用一进程一 logical device 的 Tensor Parallel，按列/行切分 attention 与 MLP、按词表
+切分 Embedding/LM head，并只从 safetensors 读取本 rank 参数。rank 0 统一选择并广播 token；
+Benchmark 记录模型加载、逐 rank HBM、TTFT/TPOT/吞吐、collective 与相对最小可运行 TP
+基线的 Scaling Efficiency。当前分支属于硬件验收候选，不把线程 collective 仿真冒充 HCCL。
+
 当前工程化分支已经把学完且官方实现更成熟的部分逐步替换为 PyTorch 原生算子。
 
 当前仍显式实现：
@@ -121,6 +131,7 @@ minigpt-train/
   train.py
   infer.py
   infer_qwen3.py
+  infer_qwen3_tp.py
   benchmarks/
     infer_single_device.py
     infer_static_batch.py
@@ -129,6 +140,9 @@ minigpt-train/
     check_qwen3_parity.py
     plan_qwen3_memory.py
     runtime_smoke.py
+    infer_qwen3_tp.py
+    benchmark_tp_collectives.py
+    summarize_tp_scaling.py
   configs/
     tiny_cpu.json
     tiny_gpu.json
@@ -141,6 +155,7 @@ minigpt-train/
     V0_3_MEASURABLE_INFERENCE.md
     V0_4_KV_CACHE_STATIC_BATCHING.md
     V0_5_QWEN3_REAL_MODEL.md
+    V0_6_QWEN3_TENSOR_PARALLEL.md
     PROJECT_WORKING_AGREEMENT.md
     V0_2_1_SINGLE_DEVICE_CLOSEOUT.md
     PLAN_REVIEW.md
@@ -166,6 +181,8 @@ minigpt-train/
       experiment.py
       qwen3.py
       qwen3_inference.py
+      distributed.py
+      qwen3_tp.py
       memory_planner.py
   tests/
     test_core.py
@@ -174,11 +191,13 @@ minigpt-train/
     test_inference.py
     test_kv_cache.py
     test_qwen3.py
+    test_qwen3_tp.py
+    test_tp_scaling.py
 ```
 
 ## 环境准备
 
-建议使用 Python 3.9+。
+使用 Python 3.10+（与 `pyproject.toml` 一致）。
 
 ```powershell
 cd F:\ai-infra-projects\minigpt-train
@@ -199,6 +218,8 @@ python tests/test_resume_consistency.py
 python tests/test_inference.py
 python tests/test_kv_cache.py
 python tests/test_qwen3.py
+python tests/test_qwen3_tp.py
+python tests/test_tp_scaling.py
 ```
 
 看到：
@@ -210,6 +231,8 @@ Exact resume consistency test passed.
 v0.3 inference and benchmark tests passed.
 v0.4 KV Cache and static batching tests passed.
 Qwen3 parity, cache, loading and memory planning tests passed.
+v0.6 Qwen3 Tensor Parallel simulation tests passed.
+v0.6 TP scaling summary tests passed.
 ```
 
 第一项检查 tokenizer、model、optimizer 参数组、checkpoint 原子保存和旧版本迁移；
@@ -220,6 +243,9 @@ Qwen3 parity, cache, loading and memory planning tests passed.
 EOS 和静态 batch Benchmark。
 第六项检查 Qwen3/Transformers logits、cached Prefill/Decode、单/分片 safetensors、32B
 参数量与 HBM 规划。
+第七项用多个 rank-local 模型和确定性线程 collective 检查 TP=2/4 的参数分片、full/cached
+logits、KV-head 复制和生成一致性；设置 `MINIGPT_RUN_GLOO_TESTS=1` 后额外执行真实 Gloo
+process group。第八项检查报告可比性、speedup 与 Scaling Efficiency 公式。
 
 ## Qwen3 v0.5 快速验收
 
@@ -249,6 +275,28 @@ python benchmarks/runtime_smoke.py --device npu --precision bf16
 reserve 后约 65,592.8 MiB，超过 64 GiB。因此 v0.5 不拿单卡 32B 冒险做正式性能结论；
 v0.6 完成 TP 分片加载后，从 TP=2/4/8 开始在机器上留正式记录。详细边界见
 `docs/V0_5_QWEN3_REAL_MODEL.md`。
+
+## Qwen3 v0.6 Tensor Parallel 硬件验收
+
+软件 smoke 可以先在 tiny fixture 上执行：
+
+```bash
+python tests/test_qwen3_tp.py
+python tests/test_tp_scaling.py
+python infer_qwen3_tp.py \
+  --model-dir runs/tiny_qwen3_fixture \
+  --device cpu --precision fp32 --max-new-tokens 4 --prompt "Hello world"
+```
+
+允许本地 TCP 的 Linux 环境还必须执行：
+
+```bash
+MINIGPT_RUN_GLOO_TESTS=1 python tests/test_qwen3_tp.py
+```
+
+真实 32B 使用 `torchrun` 启动 TP=2/4/8，先跑 collective，再跑相同 workload 的推理报告，
+最后合并 Scaling。完整命令、拓扑字段和证据等级见
+[`docs/V0_6_QWEN3_TENSOR_PARALLEL.md`](docs/V0_6_QWEN3_TENSOR_PARALLEL.md)。
 
 ## 独立运行一次推理
 
@@ -406,7 +454,7 @@ python train.py --config configs/tiny_cpu.json --resume runs/tiny_cpu/latest.pt 
 
 ## 你应该怎么读代码？
 
-机器实验窗口结束后，学习 v0.5 新增内容时推荐顺序：
+机器实验窗口结束后，学习 v0.5～v0.6 新增内容时推荐顺序：
 
 1. `src/minigpt/runtime.py`
 2. `src/minigpt/qwen3.py` 的 config 与完整 forward
@@ -418,6 +466,11 @@ python train.py --config configs/tiny_cpu.json --resume runs/tiny_cpu/latest.pt 
 8. `benchmarks/check_qwen3_parity.py`
 9. `benchmarks/infer_qwen3_single_device.py`
 10. `tests/test_qwen3.py`
+11. `src/minigpt/distributed.py`
+12. `src/minigpt/qwen3_tp.py`
+13. `infer_qwen3_tp.py` 与 `benchmarks/infer_qwen3_tp.py`
+14. `benchmarks/benchmark_tp_collectives.py` 与 `summarize_tp_scaling.py`
+15. `tests/test_qwen3_tp.py` 与 `tests/test_tp_scaling.py`
 
 核心顺序是先看真实模型怎样得到正确 logits 和 cache，再看通用生成与测量；不要先从 CLI
 参数或模型目录路径等工程胶水开始。当前机器窗口优先实现与实测，完整逐段讲解暂时后移，

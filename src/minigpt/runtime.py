@@ -56,23 +56,26 @@ class RuntimeContext:
         requested_device: str,
         requested_precision: str,
         warn: Callable[[str], None] = print,
+        device_index: int | None = None,
     ) -> "RuntimeContext":
         """把用户请求解析成当前机器真正可以执行的运行时。
 
         CPU/CUDA/Ascend 的后端差异集中在这里，模型与推理引擎不按厂商散落分支。
         """
 
+        if device_index is not None and device_index < 0:
+            raise ValueError("device_index 不能小于 0")
         device_name = requested_device.lower()
         if device_name == "auto":
             if torch.cuda.is_available():
-                device = torch.device("cuda")
+                device = torch.device("cuda", device_index)
             elif _npu_available():
-                device = torch.device("npu")
+                device = torch.device("npu", device_index)
             else:
                 device = torch.device("cpu")
         elif device_name == "cuda":
             if torch.cuda.is_available():
-                device = torch.device("cuda")
+                device = torch.device("cuda", device_index)
             else:
                 warn("[warning] 请求了 CUDA，但当前不可用；回退到 CPU。")
                 device = torch.device("cpu")
@@ -80,12 +83,27 @@ class RuntimeContext:
             device = torch.device("cpu")
         elif device_name == "npu":
             if _npu_available():
-                device = torch.device("npu")
+                device = torch.device("npu", device_index)
             else:
                 warn("[warning] 请求了 NPU，但 torch_npu 或 NPU 当前不可用；回退到 CPU。")
                 device = torch.device("cpu")
         else:
             raise ValueError("device 必须是 auto、cpu、cuda 或 npu")
+
+        if device.type == "cuda" and device.index is not None:
+            if device.index >= torch.cuda.device_count():
+                raise ValueError(
+                    f"CUDA device_index={device.index} 超出可见设备数 "
+                    f"{torch.cuda.device_count()}"
+                )
+            torch.cuda.set_device(device)
+        elif device.type == "npu" and device.index is not None:
+            device_count = torch.npu.device_count()  # type: ignore[attr-defined]
+            if device.index >= device_count:
+                raise ValueError(
+                    f"NPU device_index={device.index} 超出可见设备数 {device_count}"
+                )
+            torch.npu.set_device(device)  # type: ignore[attr-defined]
 
         precision_name = requested_precision.lower()
         if precision_name not in {"fp32", "fp16", "bf16"}:

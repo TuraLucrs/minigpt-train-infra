@@ -113,6 +113,7 @@ def timed_generate(engine: InferenceEngine, prompt: str, config: GenerationConfi
     prefill_start = time.perf_counter()
     next_logits = engine.runner.prefill(input_ids, attention_mask)
     next_id = engine.select_next_token(next_logits, config, generator)
+    next_id = engine.synchronize_next_ids(next_id)
     runtime.synchronize()
     prefill_end = time.perf_counter()
     generated_ids = [int(next_id[0, 0].item())]
@@ -125,10 +126,15 @@ def timed_generate(engine: InferenceEngine, prompt: str, config: GenerationConfi
     if finished:
         stop_reason = "eos"
     for _ in range(1, config.max_new_tokens):
-        if finished: break
+        if finished:
+            break
         decode_start = time.perf_counter()
-        next_logits = engine.runner.decode(next_id, torch.ones(1, dtype=torch.bool, device=next_id.device))
+        next_logits = engine.runner.decode(
+            next_id,
+            torch.ones(1, dtype=torch.bool, device=next_id.device),
+        )
         next_id = engine.select_next_token(next_logits, config, generator)
+        next_id = engine.synchronize_next_ids(next_id)
         runtime.synchronize()
         token_id = int(next_id[0, 0].item())
         generated_ids.append(token_id)

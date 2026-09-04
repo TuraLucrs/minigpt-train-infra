@@ -9,7 +9,7 @@ from typing import Sequence
 import torch
 
 from .inference import InferenceEngine, _validate_prefill_inputs
-from .qwen3 import Qwen3ForCausalLM, Qwen3KVCache, load_qwen3_from_pretrained
+from .qwen3 import Qwen3Config, Qwen3ForCausalLM, Qwen3KVCache, load_qwen3_from_pretrained
 from .runtime import RuntimeContext
 
 
@@ -307,6 +307,28 @@ class CachedQwen3ModelRunner:
         return logits[:, 0]
 
 
+def validate_qwen3_tokenizer_config(
+    tokenizer: Qwen3Tokenizer,
+    config: Qwen3Config,
+) -> None:
+    """确保 tokenizer、generation config 与模型输出词表使用同一编号空间。"""
+
+    if tokenizer.vocab_size > config.vocab_size:
+        raise ValueError(
+            "tokenizer 词表不能大于模型输出词表："
+            f"tokenizer={tokenizer.vocab_size}, model={config.vocab_size}"
+        )
+    if tokenizer.pad_token_id >= config.vocab_size:
+        raise ValueError("tokenizer pad_token_id 超出模型词表")
+    if tokenizer.eos_token_id is not None and tokenizer.eos_token_id >= config.vocab_size:
+        raise ValueError("tokenizer eos_token_id 超出模型词表")
+    if any(
+        token_id >= config.vocab_size
+        for token_id in tokenizer.generation_eos_token_ids
+    ):
+        raise ValueError("generation config 停止 token 超出模型词表")
+
+
 def load_qwen3_engine(
     model_dir: str | Path,
     runtime: RuntimeContext,
@@ -330,23 +352,7 @@ def load_qwen3_engine(
         device=runtime.device,
         dtype=dtype,
     )
-    if tokenizer.vocab_size > model.config.vocab_size:
-        raise ValueError(
-            "tokenizer 词表不能大于模型输出词表："
-            f"tokenizer={tokenizer.vocab_size}, model={model.config.vocab_size}"
-        )
-    if tokenizer.pad_token_id >= model.config.vocab_size:
-        raise ValueError("tokenizer pad_token_id 超出模型词表")
-    if (
-        tokenizer.eos_token_id is not None
-        and tokenizer.eos_token_id >= model.config.vocab_size
-    ):
-        raise ValueError("tokenizer eos_token_id 超出模型词表")
-    if any(
-        token_id >= model.config.vocab_size
-        for token_id in tokenizer.generation_eos_token_ids
-    ):
-        raise ValueError("generation config 停止 token 超出模型词表")
+    validate_qwen3_tokenizer_config(tokenizer, model.config)
     if decode_mode == "kv_cache":
         runner = CachedQwen3ModelRunner(model, runtime)
     elif decode_mode == "recompute":
