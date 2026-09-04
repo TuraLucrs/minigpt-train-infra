@@ -12,7 +12,7 @@
 | 模型 | `Qwen/Qwen3-32B` dense，32,762,123,264 参数 |
 | 权重 | BF16 safetensors，17 个分片；每份正式报告内嵌完整 SHA-256 清单 |
 | 设备 | Ascend Atlas A3，单物理卡 2 个 logical device，每芯 64 GB HBM |
-| 软件栈 | Python 3.12.13、PyTorch 2.10.0、torch_npu 2.10.0、Transformers 5.14.1 |
+| 软件栈 | Python 3.12.13、PyTorch 2.10.0+cpu、torch_npu 2.10.0.post5.dev20260821、Transformers 5.14.1 |
 | 分布式后端 | HCCL |
 
 ## 门禁结果
@@ -64,5 +64,7 @@
 - CANN/driver 组合触发 allocator 32-byte padding 提示，不影响本次正确性。
 - 环境快照记录的物理卡 6 健康告警未参与本次 logical device 0–7 的 TP 验收。
 
-完整命令、端口冲突处理、容器 hostname 处理和原始运行顺序见 `RUN_LOG.md`。所有 JSON 保留
-完整 argv、环境、逐次样本、逐 rank HBM、Git provenance 和权重哈希。
+完整命令、端口冲突处理、容器 hostname 处理和原始运行顺序见 `RUN_LOG.md`；其末尾待办是采集
+时刻的历史状态，以本目录说明和当前分支为准。正式 32B JSON 保留完整 argv、环境、逐次样本、
+逐 rank HBM、Git provenance 和权重哈希；smoke 与 collective JSON 保留各自适用的环境、
+拓扑和逐 rank/逐消息数据。
