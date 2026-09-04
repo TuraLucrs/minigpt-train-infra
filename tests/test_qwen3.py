@@ -23,6 +23,7 @@ from minigpt.qwen3 import (  # noqa: E402
 )
 from minigpt.qwen3_inference import (  # noqa: E402
     CachedQwen3ModelRunner,
+    Qwen3Tokenizer,
     _load_generation_eos_token_ids,
     _last_valid_positions,
 )
@@ -126,8 +127,37 @@ def compare_with_transformers(
     assert_close(actual[attention_mask.bool()], expected[attention_mask.bool()], "HF full logits")
 
 
+def check_chat_template_result_normalization() -> None:
+    """锁住 Transformers 4.x list 与 5.x BatchEncoding 两种返回形态。"""
+
+    class FakeTokenizer:
+        def __init__(self, result: object) -> None:
+            self.result = result
+
+        def apply_chat_template(self, *_args: object, **_kwargs: object) -> object:
+            return self.result
+
+    def encode(result: object) -> list[int]:
+        tokenizer = object.__new__(Qwen3Tokenizer)
+        tokenizer._tokenizer = FakeTokenizer(result)
+        tokenizer.use_chat_template = True
+        tokenizer.system_prompt = None
+        tokenizer.enable_thinking = False
+        return tokenizer.encode("hello")
+
+    assert encode([11, 12, 13]) == [11, 12, 13]
+    assert encode({"input_ids": torch.tensor([[21, 22, 23]])}) == [21, 22, 23]
+    try:
+        encode({"input_ids": [[31, 32], [41, 42]]})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("chat template 的多行 token 结果必须被拒绝")
+
+
 def main() -> None:
     torch.manual_seed(2026)
+    check_chat_template_result_normalization()
     raw_config = tiny_config_dict()
     config = Qwen3Config.from_dict(raw_config)
     assert config.query_width == 32

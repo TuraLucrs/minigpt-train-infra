@@ -36,8 +36,9 @@
 `v0.1～v0.2.2` 已经完成单设备训练基础。它们保留为知识基础和项目演进证据，但后续不再
 持续扩建完整训练平台。`v0.5` 已将同一套生成引擎接入 Qwen3，并完成 tokenizer、config、
 safetensors、full forward、KV Cache 和 Transformers 数值对齐。当前 `v0.6` 分支已完成
-Tensor Parallel 软件实现和无 socket 的 TP=2/4 数学门禁，正在等待真实 Gloo/HCCL 与
-Qwen3-32B TP=2/4/8 硬件验收；验收前不创建最终 v0.6 tag。正式模型固定为
+Tensor Parallel 软件实现，并于 2026-09-04 在 Ascend Atlas A3 上通过真实 Gloo/HCCL 与
+Qwen3-32B TP=2/4/8 硬件验收；精选证据位于 `artifacts/v0.6_qwen3_tp_acceptance/`。最终 tag
+等待实机修复的自动回归、证据提交和冻结复核完成后创建。正式模型固定为
 `Qwen/Qwen3-32B`，tiny 模型仍只承担正确性与 CI。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
@@ -90,7 +91,8 @@ SwiGLU、GQA、full/cached forward，并建立 Transformers logits 对齐、32B 
 `v0.6` 使用一进程一 logical device 的 Tensor Parallel，按列/行切分 attention 与 MLP、按词表
 切分 Embedding/LM head，并只从 safetensors 读取本 rank 参数。rank 0 统一选择并广播 token；
 Benchmark 记录模型加载、逐 rank HBM、TTFT/TPOT/吞吐、collective 与相对最小可运行 TP
-基线的 Scaling Efficiency。当前分支属于硬件验收候选，不把线程 collective 仿真冒充 HCCL。
+基线的 Scaling Efficiency。真实 Atlas A3 验收显示单 rank HBM 基本按 `1 / TP` 缩减，但
+batch=1 单请求没有随 TP 增加而加速；项目不把容量扩展包装成吞吐扩展。
 
 当前工程化分支已经把学完且官方实现更成熟的部分逐步替换为 PyTorch 原生算子。
 

@@ -16,6 +16,11 @@ Parallel。正式模型仍固定为 `Qwen/Qwen3-32B` dense；tiny fixture 只做
 - Scaling 报告的设备型号、后端、BF16 精度、PyTorch/torch-npu 版本、warmup 和 repeats 一致；
 - 完成提交后的冻结版本独立自查，再决定高性价比改进是否进入 v0.7。
 
+2026-09-04 已在 Ascend Atlas A3 上完成 Gloo、HCCL 和 Qwen3-32B TP=2/4/8 实机门禁；
+原始与精选证据见 `artifacts/v0.6_qwen3_tp_acceptance/`。实机发现的 Transformers 5.x
+tokenizer 兼容修复位于 `ea672a6f`。最终 tag 仍需等待该修复的自动回归、验收资料提交和冻结
+版本复核全部完成。
+
 ## 2. 进程、设备与通信边界
 
 每个 `torchrun` rank 对应一个 logical device：
@@ -219,3 +224,21 @@ commit、同一模型配置、同一请求、同一测量协议和同一执行�
   batch/context workload；较高 TP 会降低每卡权重占用，v0.7 再通过真实并发提高有效利用率；
 - Ascend Profiler 深度归因和 CUDA/NPU 系统对照属于 v0.9，但 v0.6 必须先留下原始 HCCL、
   TTFT、TPOT、吞吐和 HBM 数据。
+
+## 10. 2026-09-04 Ascend Atlas A3 实机验收
+
+正式模型为 Qwen3-32B BF16，使用同一权重、提交、prompt、2 次 warmup 和 5 次正式重复：
+
+| TP | TTFT ms | TPOT ms | E2E ms | 输出 tok/s | 单 rank 峰值 HBM |
+|---:|---:|---:|---:|---:|---:|
+| 2 | 162.1 | 172.1 | 5,494 | 5.824 | 31,462 MB |
+| 4 | 188.9 | 174.2 | 5,602 | 5.712 | 15,643 MB |
+| 8 | 198.0 | 178.1 | 5,713 | 5.601 | 8,070 MB |
+
+结果证明 rank-local 参数和显存基本按 `1 / TP` 缩减，HCCL collective、Prefill、逐 token
+Decode 和 rank 0 token 广播在 TP=2/4/8 下均正确，且三档生成 token 完全相同。它也明确
+显示 batch=1 单请求在该拓扑下由 Decode 通信主导：更多 TP 没有降低延迟，不能把容量扩展
+报告包装成吞吐加速报告。并发调度、真实服务吞吐和更高有效 HBM 利用率留给 v0.7。
+
+完整可审阅证据、环境警告和结论边界见
+[`artifacts/v0.6_qwen3_tp_acceptance/README.md`](../artifacts/v0.6_qwen3_tp_acceptance/README.md)。

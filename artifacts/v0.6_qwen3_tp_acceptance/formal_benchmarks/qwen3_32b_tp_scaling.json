@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-04T06:28:53.459970+00:00",
+  "benchmark": "qwen3_tensor_parallel_scaling",
+  "evidence_class": "formal_qwen3_32b_tp_scaling",
+  "baseline_world_size": 2,
+  "world_sizes": [
+    2,
+    4,
+    8
+  ],
+  "same_weight_manifest": true,
+  "same_git_commit": true,
+  "comparison_rule": "latency speedup=baseline/current; throughput speedup=current/baseline; efficiency=speedup/(world_size/baseline_world_size)",
+  "rows": [
+    {
+      "report": "/root/minigpt-train/runs/qwen3_32b_tp2.json",
+      "world_size": 2,
+      "relative_device_count": 1.0,
+      "latency": {
+        "ttft_ms": {
+          "median": 162.07863006275147,
+          "speedup_vs_baseline": 1.0,
+          "scaling_efficiency": 1.0
+        },
+        "tpot_ms": {
+          "median": 172.08835644827735,
+          "speedup_vs_baseline": 1.0,
+          "scaling_efficiency": 1.0
+        },
+        "e2e_latency_ms": {
+          "median": 5494.254859979264,
+          "speedup_vs_baseline": 1.0,
+          "scaling_efficiency": 1.0
+        }
+      },
+      "throughput": {
+        "median_output_tokens_per_second": 5.82426567669647,
+        "speedup_vs_baseline": 1.0,
+        "scaling_efficiency": 1.0
+      },
+      "memory": {
+        "max_rank_median_request_peak_mb": 31462.25390625,
+        "per_rank_reduction_vs_baseline": 1.0,
+        "sum_rank_median_request_peak_mb": 62924.5078125
+      },
+      "evidence_class": "formal_qwen3_32b_tp_hashed",
+      "git_commit": "ea672a6f31c06fb5cad6ee474203a695b6d2bab3"
+    },
+    {
+      "report": "/root/minigpt-train/runs/qwen3_32b_tp4.json",
+      "world_size": 4,
+      "relative_device_count": 2.0,
+      "latency": {
+        "ttft_ms": {
+          "median": 188.85572999715805,
+          "speedup_vs_baseline": 0.8582139925814826,
+          "scaling_efficiency": 0.4291069962907413
+        },
+        "tpot_ms": {
+          "median": 174.19780612803035,
+          "speedup_vs_baseline": 0.9878904922705938,
+          "scaling_efficiency": 0.4939452461352969
+        },
+        "e2e_latency_ms": {
+          "median": 5602.04910999164,
+          "speedup_vs_baseline": 0.9807580676470478,
+          "scaling_efficiency": 0.4903790338235239
+        }
+      },
+      "throughput": {
+        "median_output_tokens_per_second": 5.712195550539855,
+        "speedup_vs_baseline": 0.9807580676470478,
+        "scaling_efficiency": 0.4903790338235239
+      },
+      "memory": {
+        "max_rank_median_request_peak_mb": 15643.400390625,
+        "per_rank_reduction_vs_baseline": 2.0112157920029423,
+        "sum_rank_median_request_peak_mb": 62573.6015625
+      },
+      "evidence_class": "formal_qwen3_32b_tp_hashed",
+      "git_commit": "ea672a6f31c06fb5cad6ee474203a695b6d2bab3"
+    },
+    {
+      "report": "/root/minigpt-train/runs/qwen3_32b_tp8.json",
+      "world_size": 8,
+      "relative_device_count": 4.0,
+      "latency": {
+        "ttft_ms": {
+          "median": 197.97328009735793,
+          "speedup_vs_baseline": 0.8186894210321998,
+          "scaling_efficiency": 0.20467235525804994
+        },
+        "tpot_ms": {
+          "median": 178.05337774071603,
+          "speedup_vs_baseline": 0.9664986906279024,
+          "scaling_efficiency": 0.2416246726569756
+        },
+        "e2e_latency_ms": {
+          "median": 5713.4954100474715,
+          "speedup_vs_baseline": 0.9616275967102973,
+          "scaling_efficiency": 0.24040689917757432
+        }
+      },
+      "throughput": {
+        "median_output_tokens_per_second": 5.6007746052839,
+        "speedup_vs_baseline": 0.9616275967102973,
+        "scaling_efficiency": 0.24040689917757432
+      },
+      "memory": {
+        "max_rank_median_request_peak_mb": 8070.04931640625,
+        "per_rank_reduction_vs_baseline": 3.8986445649455774,
+        "sum_rank_median_request_peak_mb": 64560.39453125
+      },
+      "evidence_class": "formal_qwen3_32b_tp_hashed",
+      "git_commit": "ea672a6f31c06fb5cad6ee474203a695b6d2bab3"
+    }
+  ]
+}
