@@ -32,6 +32,7 @@ def _load_report(path: Path) -> dict[str, object]:
         raise ValueError(f"无法读取 TP 报告：{path}") from exc
     required = {
         "benchmark",
+        "environment",
         "summary",
         "distributed",
         "provenance",
@@ -57,11 +58,19 @@ def _ratio(numerator: float | None, denominator: float | None) -> float | None:
     return numerator / max(denominator, 1e-12)
 
 
-def _comparable_request(report: dict[str, object]) -> dict[str, object]:
-    request = dict(report["request"])
-    request.pop("warmup", None)
-    request.pop("repeats", None)
-    return request
+def _execution_fingerprint(report: dict[str, object]) -> dict[str, object]:
+    environment = report["environment"]
+    distributed = report["distributed"]
+    return {
+        "device_type": environment.get("device_type"),
+        "device_name": environment.get("device_name"),
+        "precision": environment.get("precision"),
+        "torch": environment.get("torch"),
+        "torch_npu": environment.get("torch_npu"),
+        "total_memory_mb": environment.get("total_memory_mb"),
+        "backend": distributed.get("backend"),
+        "chips_per_card": distributed.get("chips_per_card"),
+    }
 
 
 def summarize_scaling(
@@ -82,8 +91,10 @@ def summarize_scaling(
             raise ValueError(f"benchmark 类型不一致：{path}")
         if report["model"]["config"] != first["model"]["config"]:
             raise ValueError(f"模型 config 不一致：{path}")
-        if _comparable_request(report) != _comparable_request(first):
+        if report["request"] != first["request"]:
             raise ValueError(f"请求配置不一致：{path}")
+        if _execution_fingerprint(report) != _execution_fingerprint(first):
+            raise ValueError(f"设备、精度或软件环境不一致：{path}")
         if report["workload_fingerprint"] != first["workload_fingerprint"]:
             raise ValueError(f"prompt/tokenizer workload 指纹不一致：{path}")
         if (

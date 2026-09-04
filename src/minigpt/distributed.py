@@ -80,21 +80,14 @@ class DistributedContext:
             if requested_device.lower() in {"auto", "cuda", "npu"}
             else None
         )
-        requested_device_name = requested_device.lower()
         runtime = RuntimeContext.create(
             requested_device,
             requested_precision,
             warn=warn,
             device_index=accelerator_index,
+            allow_accelerator_fallback=False,
+            allow_precision_fallback=False,
         )
-        if (
-            requested_device_name in {"cuda", "npu"}
-            and runtime.device.type != requested_device_name
-        ):
-            raise RuntimeError(
-                f"分布式任务明确请求 {requested_device_name}，禁止静默回退到 "
-                f"{runtime.device.type}"
-            )
 
         backend_requested = backend.lower()
         backend_name = (

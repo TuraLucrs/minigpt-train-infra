@@ -17,8 +17,12 @@ from minigpt.runtime import DeviceIntervalTimer, RuntimeContext  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="运行 Runtime 后端 smoke test 并输出 JSON。")
-    parser.add_argument("--device", choices=("auto", "cpu", "cuda", "npu"), default="auto")
+    parser = argparse.ArgumentParser(
+        description="运行 Runtime 后端 smoke test 并输出 JSON。"
+    )
+    parser.add_argument(
+        "--device", choices=("auto", "cpu", "cuda", "npu"), default="auto"
+    )
     parser.add_argument("--precision", choices=("fp32", "fp16", "bf16"), default="bf16")
     parser.add_argument("--matrix-size", type=int, default=512)
     parser.add_argument("--output", default="runs/runtime_smoke.json")
@@ -34,7 +38,12 @@ def main() -> None:
     args = parse_args()
     if args.matrix_size <= 0:
         raise ValueError("matrix-size 必须大于 0")
-    runtime = RuntimeContext.create(args.device, args.precision)
+    runtime = RuntimeContext.create(
+        args.device,
+        args.precision,
+        allow_accelerator_fallback=False,
+        allow_precision_fallback=False,
+    )
     runtime.manual_seed(2026)
     runtime.empty_cache()
     runtime.reset_peak_memory()
@@ -60,7 +69,9 @@ def main() -> None:
     }
     output = project_path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    output.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     print(f"报告：{output}")
 

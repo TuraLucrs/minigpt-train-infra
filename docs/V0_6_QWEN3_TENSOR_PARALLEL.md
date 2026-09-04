@@ -13,6 +13,7 @@ Parallel。正式模型仍固定为 `Qwen/Qwen3-32B` dense；tiny fixture 只做
 - 真实 32B 至少完成 TP=2/4/8 HCCL 或 NCCL 相同 workload 的报告；
 - 每份正式报告包含完整权重 SHA-256、干净 Git commit 和物理/逻辑设备拓扑；
 - Scaling 汇总证明所有报告来自同一模型、同一请求和同一提交；
+- Scaling 报告的设备型号、后端、BF16 精度、PyTorch/torch-npu 版本、warmup 和 repeats 一致；
 - 完成提交后的冻结版本独立自查，再决定高性价比改进是否进入 v0.7。
 
 ## 2. 进程、设备与通信边界
@@ -122,18 +123,24 @@ MINIGPT_RUN_GLOO_TESTS=1 python tests/test_qwen3_tp.py
 
 以下命令中的模型目录、物理卡数、每卡芯片数和互联描述必须替换为机器真实值。
 
-先做 Runtime 与 HCCL smoke：
+先做单设备 Runtime smoke。显式指定 NPU/BF16 时设备或精度不可用会直接失败，不允许回退
+CPU/FP32 后报告通过：
 
 ```bash
 python benchmarks/runtime_smoke.py --device npu --precision bf16
-
-torchrun --standalone --nproc-per-node=2 infer_qwen3_tp.py \
-  --model-dir /path/to/Qwen3-32B \
-  --device npu --backend hccl --precision bf16 \
-  --chat-template --max-new-tokens 8
 ```
 
-再测 collective：
+再让不依赖 32B 权重的 tiny Qwen3 经过真实 HCCL 和 TP 路径。该入口同时验证分片
+safetensors loader、AllReduce、AllGather、cached Prefill/Decode 和 rank 0 token broadcast；
+结果仅是硬件正确性 smoke，不是性能证据：
+
+```bash
+torchrun --standalone --nproc-per-node=2 benchmarks/tp_hardware_smoke.py \
+  --device npu --backend hccl --precision bf16 \
+  --output runs/tp2_hardware_smoke.json
+```
+
+然后测相同 TP 规模的 collective：
 
 ```bash
 torchrun --standalone --nproc-per-node=2 benchmarks/benchmark_tp_collectives.py \
@@ -144,7 +151,16 @@ torchrun --standalone --nproc-per-node=2 benchmarks/benchmark_tp_collectives.py 
   --output runs/tp2_collectives.json
 ```
 
-然后以完全相同的 prompt、生成参数、warmup 和 repeats 分别执行 TP=2/4/8：
+上述三项通过后，先用真实 32B 做短生成，提前暴露权重结构、NPU 算子或显存问题：
+
+```bash
+torchrun --standalone --nproc-per-node=2 infer_qwen3_tp.py \
+  --model-dir /path/to/Qwen3-32B \
+  --device npu --backend hccl --precision bf16 \
+  --chat-template --max-new-tokens 8
+```
+
+短生成通过后，以完全相同的 prompt、生成参数、warmup 和 repeats 分别执行 TP=2/4/8：
 
 ```bash
 torchrun --standalone --nproc-per-node=2 benchmarks/infer_qwen3_tp.py \
@@ -159,7 +175,9 @@ torchrun --standalone --nproc-per-node=2 benchmarks/infer_qwen3_tp.py \
   --output runs/qwen3_32b_tp2.json
 ```
 
-把 `--nproc-per-node`、拓扑字段、run label 和输出文件分别改成 TP=4、TP=8。最后汇总：
+TP=4、TP=8 不能只修改正式 benchmark 命令：每扩大一次规模，都先把 hardware smoke 和
+collective 的 `--nproc-per-node`、拓扑字段及输出文件改成相同 TP 值并通过，再运行 32B。
+最后汇总：
 
 ```bash
 python benchmarks/summarize_tp_scaling.py \
@@ -187,8 +205,9 @@ TP 报告在 v0.5 指标之外增加：
 - collective 消息大小、延迟、输入带宽和估算 rank 流量。
 
 只有真实 32B、TP≥2、accelerator、完整拓扑、完整权重哈希、干净 Git commit 同时满足时，单次
-报告才标为 `formal_qwen3_32b_tp_hashed`。只有所有输入报告还使用同一权重清单、同一 commit、
-同一模型配置和同一请求时，汇总才标为 `formal_qwen3_32b_tp_scaling`。
+BF16 报告才标为 `formal_qwen3_32b_tp_hashed`。只有所有输入报告还使用同一权重清单、同一
+commit、同一模型配置、同一请求、同一测量协议和同一执行环境时，汇总才标为
+`formal_qwen3_32b_tp_scaling`。
 
 ## 9. 当前有意保留的边界
 

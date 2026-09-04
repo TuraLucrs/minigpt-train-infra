@@ -61,7 +61,9 @@ def main() -> None:
     # v0.3 的 Decode 明确仍重算完整上下文；它必须与直接 model forward 的最后位置一致。
     extended_ids = torch.cat((input_ids, torch.tensor([[1]], dtype=torch.long)), dim=1)
     with torch.inference_mode():
-        decode_logits = engine.runner.decode(torch.tensor([[1]], dtype=torch.long), torch.ones(1, dtype=torch.bool))
+        decode_logits = engine.runner.decode(
+            torch.tensor([[1]], dtype=torch.long), torch.ones(1, dtype=torch.bool)
+        )
         expected_decode = model(extended_ids)[:, -1, :]
     assert torch.equal(decode_logits, expected_decode)
 
@@ -80,12 +82,22 @@ def main() -> None:
     long_mask = torch.ones_like(long_input_ids, dtype=torch.bool)
     with torch.inference_mode():
         long_prefill = engine.runner.prefill(long_input_ids, long_mask)
-        cropped_expected = model(long_input_ids[:, -model.config.block_size :])[:, -1, :]
+        cropped_expected = model(long_input_ids[:, -model.config.block_size :])[
+            :, -1, :
+        ]
     assert torch.equal(long_prefill, cropped_expected)
-    assert engine.generate(long_prompt, GenerationConfig(max_new_tokens=1)).prefill_tokens == model.config.block_size
+    assert (
+        engine.generate(long_prompt, GenerationConfig(max_new_tokens=1)).prefill_tokens
+        == model.config.block_size
+    )
 
-    sample_config = GenerationConfig(max_new_tokens=5, strategy="sample", temperature=0.8, top_k=4, seed=7)
-    assert engine.generate(prompt, sample_config).generated_ids == engine.generate(prompt, sample_config).generated_ids
+    sample_config = GenerationConfig(
+        max_new_tokens=5, strategy="sample", temperature=0.8, top_k=4, seed=7
+    )
+    assert (
+        engine.generate(prompt, sample_config).generated_ids
+        == engine.generate(prompt, sample_config).generated_ids
+    )
 
     nucleus_config = GenerationConfig(strategy="sample", top_p=0.5, seed=11)
     nucleus_generator = engine.make_generator(nucleus_config)
@@ -138,6 +150,34 @@ def main() -> None:
     assert cpu_fallback.precision == "fp32"
     assert warnings
     assert runtime.device_name() == "CPU"
+
+    unavailable_accelerator = None
+    if not torch.cuda.is_available():
+        unavailable_accelerator = "cuda"
+    elif not hasattr(torch, "npu"):
+        unavailable_accelerator = "npu"
+    if unavailable_accelerator is not None:
+        try:
+            RuntimeContext.create(
+                unavailable_accelerator,
+                "fp32",
+                allow_accelerator_fallback=False,
+            )
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("严格设备 smoke 不能回退到 CPU 后报告成功")
+
+    try:
+        RuntimeContext.create(
+            "cpu",
+            "bf16",
+            allow_precision_fallback=False,
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("严格精度 smoke 不能回退到 fp32 后报告成功")
 
     # 独立推理入口必须能直接读取训练版本保存的 config/model/tokenizer。
     with tempfile.TemporaryDirectory() as tmpdir:

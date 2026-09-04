@@ -140,6 +140,7 @@ minigpt-train/
     check_qwen3_parity.py
     plan_qwen3_memory.py
     runtime_smoke.py
+    tp_hardware_smoke.py
     infer_qwen3_tp.py
     benchmark_tp_collectives.py
     summarize_tp_scaling.py
@@ -294,8 +295,20 @@ python infer_qwen3_tp.py \
 MINIGPT_RUN_GLOO_TESTS=1 python tests/test_qwen3_tp.py
 ```
 
-真实 32B 使用 `torchrun` 启动 TP=2/4/8，先跑 collective，再跑相同 workload 的推理报告，
-最后合并 Scaling。完整命令、拓扑字段和证据等级见
+Ascend 上在加载 32B 权重前，必须先让 tiny Qwen3 经过真实 HCCL、分片 loader、TP
+AllReduce/AllGather、KV Cache 和 token broadcast：
+
+```bash
+python benchmarks/runtime_smoke.py --device npu --precision bf16
+torchrun --standalone --nproc-per-node=2 benchmarks/tp_hardware_smoke.py \
+  --device npu --backend hccl --precision bf16 \
+  --output runs/tp2_hardware_smoke.json
+```
+
+显式指定 NPU/CUDA 和低精度的 smoke 在设备或精度不可用时直接失败，不会回退 CPU/FP32
+后输出 `passed`。
+真实 32B 使用 `torchrun` 启动 TP=2/4/8，先过对应规模的 hardware smoke 和 collective，
+再跑相同 workload 的推理报告，最后合并 Scaling。完整命令、拓扑字段和证据等级见
 [`docs/V0_6_QWEN3_TENSOR_PARALLEL.md`](docs/V0_6_QWEN3_TENSOR_PARALLEL.md)。
 
 ## 独立运行一次推理

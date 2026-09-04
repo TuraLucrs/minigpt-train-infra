@@ -8,6 +8,8 @@
 - v0.5 基线：`3eefbc9241f127a7e5db50d36de37df3f253c4f0`
 - 基线标签：`v0.5-qwen3-real-model`
 - v0.5 分支与 annotated tag 已通过 GitHub Actions + 精确 Git bundle 上传并核验远端 SHA；
+- v0.6 首个软件 RC 提交 `bc4e8b5aa0c5caa1a7fe74f1bd517c7a826c169a` 已上传 GitHub，
+  Actions `33830149834` 成功且远端分支 SHA 精确一致；
 - v0.6 尚未创建最终 tag。真实 Gloo/HCCL 和 32B TP=2/4/8 硬件验收完成前，不得声称版本完成。
 
 ## 已实现
@@ -38,6 +40,8 @@
 - `infer_qwen3_tp.py`：torchrun TP 推理入口；
 - `benchmarks/infer_qwen3_tp.py`：单请求或静态 batch，记录加载时间、TTFT、TPOT、吞吐和逐 rank HBM；
 - `benchmarks/benchmark_tp_collectives.py`：AllReduce/AllGather 消息大小、延迟和估算流量；
+- `benchmarks/tp_hardware_smoke.py`：无需真实权重，在 torchrun 下验证 tiny Qwen3 的真实
+  process group、分片 loader、TP full/cached 路径和 token broadcast；
 - `benchmarks/summarize_tp_scaling.py`：合并 TP=2/4/8，计算相对最小可运行基线的 speedup/efficiency；
 - 正式证据要求 32B、TP≥2、accelerator、完整拓扑、完整权重 hash、干净 Git commit；
 - 请求、config、权重或 commit 不同的报告不会被标成正式 Scaling。
@@ -53,6 +57,10 @@
 - full logits、cached Prefill、cached Decode、静态 batch greedy generation 对齐通过；
 - TP Scaling 公式与不可比报告拒绝测试通过；
 - TP=1 tiny CLI、TP benchmark 和 collective benchmark smoke 通过；
+- hardware smoke 的 CPU/world-size=1 开发路径通过；
+- 显式 NPU/CUDA 和低精度 runtime smoke 改为能力不可用时直接失败，禁止回退 CPU/FP32 后假通过；
+- Scaling 汇总新增设备型号、backend、precision、PyTorch/torch-npu、chips/card、warmup 和
+  repeats 一致性门禁；正式 32B TP 证据限定为 BF16；
 - compileall 与 `git diff --check` 通过。
 
 ## 当前环境无法完成的验证
@@ -69,11 +77,11 @@ v0.6 最终冻结前的硬门禁：
 
 ## 下一步（严格按顺序）
 
-1. 完成当前软件候选的全量回归、文档核对和开发期 review；
-2. commit 一个可供硬件拉取的 v0.6 RC 检查点，但不创建最终 v0.6 tag；
-3. 立即把 RC 分支上传 GitHub，并核验远端 branch SHA；
-4. 在 NPU 机器先跑 Runtime/Gloo/HCCL/tiny smoke，再跑 32B TP=2；
-5. TP=2 正确后，保持同一 commit/权重/request 扩展 TP=4/8；
+1. 对 hardware smoke 与严格设备门禁执行全量回归和开发期 review；
+2. 提交新的可供硬件拉取的 v0.6 RC，不创建最终 v0.6 tag；
+3. 立即把新 RC 上传 GitHub，并核验远端 branch SHA；
+4. 在 NPU 机器依次跑 Runtime smoke、tiny HCCL TP smoke、collective、32B 短生成；
+5. TP=2 正确后，保持同一 commit/权重/request，把完整门禁扩展到 TP=4/8；
 6. 收集 JSON 原始报告与控制台日志，运行 scaling 汇总；
 7. 若发现问题，在当前 v0.6 分支修复并重复上述门禁；
 8. 全部通过后才提交最终版本、创建 annotated tag、立即上传并核验；

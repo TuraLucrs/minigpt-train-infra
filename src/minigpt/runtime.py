@@ -24,9 +24,7 @@ except ImportError:
 
 def _npu_available() -> bool:
     return bool(
-        torch_npu is not None
-        and hasattr(torch, "npu")
-        and torch.npu.is_available()  # type: ignore[attr-defined]
+        torch_npu is not None and hasattr(torch, "npu") and torch.npu.is_available()  # type: ignore[attr-defined]
     )
 
 
@@ -57,6 +55,8 @@ class RuntimeContext:
         requested_precision: str,
         warn: Callable[[str], None] = print,
         device_index: int | None = None,
+        allow_accelerator_fallback: bool = True,
+        allow_precision_fallback: bool = True,
     ) -> "RuntimeContext":
         """把用户请求解析成当前机器真正可以执行的运行时。
 
@@ -77,6 +77,8 @@ class RuntimeContext:
             if torch.cuda.is_available():
                 device = torch.device("cuda", device_index)
             else:
+                if not allow_accelerator_fallback:
+                    raise RuntimeError("请求了 CUDA，但当前不可用")
                 warn("[warning] 请求了 CUDA，但当前不可用；回退到 CPU。")
                 device = torch.device("cpu")
         elif device_name == "cpu":
@@ -85,7 +87,11 @@ class RuntimeContext:
             if _npu_available():
                 device = torch.device("npu", device_index)
             else:
-                warn("[warning] 请求了 NPU，但 torch_npu 或 NPU 当前不可用；回退到 CPU。")
+                if not allow_accelerator_fallback:
+                    raise RuntimeError("请求了 NPU，但 torch_npu 或 NPU 当前不可用")
+                warn(
+                    "[warning] 请求了 NPU，但 torch_npu 或 NPU 当前不可用；回退到 CPU。"
+                )
                 device = torch.device("cpu")
         else:
             raise ValueError("device 必须是 auto、cpu、cuda 或 npu")
@@ -127,16 +133,28 @@ class RuntimeContext:
         amp_dtype: torch.dtype | None = None
         if precision_name != "fp32":
             if device.type not in {"cuda", "npu"}:
-                warn(f"[warning] 当前 {device.type} 路径不启用 {precision_name} autocast；回退到 fp32。")
+                if not allow_precision_fallback:
+                    raise RuntimeError(
+                        f"当前 {device.type} 路径不支持请求的 {precision_name}"
+                    )
+                warn(
+                    f"[warning] 当前 {device.type} 路径不启用 {precision_name} autocast；回退到 fp32。"
+                )
                 precision_name = "fp32"
             elif precision_name == "bf16" and not supports_bf16:
+                if not allow_precision_fallback:
+                    raise RuntimeError(f"当前 {device.type} 设备不支持请求的 bf16")
                 warn(f"[warning] 当前 {device.type} 设备不支持 bf16；回退到 fp32。")
                 precision_name = "fp32"
             elif precision_name == "fp16" and not supports_fp16:
+                if not allow_precision_fallback:
+                    raise RuntimeError(f"当前 {device.type} 设备不支持请求的 fp16")
                 warn(f"[warning] 当前 {device.type} 设备不支持 fp16；回退到 fp32。")
                 precision_name = "fp32"
             else:
-                amp_dtype = torch.float16 if precision_name == "fp16" else torch.bfloat16
+                amp_dtype = (
+                    torch.float16 if precision_name == "fp16" else torch.bfloat16
+                )
 
         capabilities = RuntimeCapabilities(
             supports_autocast=amp_dtype is not None,

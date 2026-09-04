@@ -184,6 +184,7 @@ def _evidence_class(
         full_parameter_count == QWEN3_32B_PARAMETERS
         and distributed.world_size >= 2
         and distributed.runtime.device.type in {"cuda", "npu"}
+        and distributed.runtime.precision == "bf16"
         and topology_complete
         and hash_weights
         and clean_commit

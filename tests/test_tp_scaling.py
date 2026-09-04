@@ -30,9 +30,19 @@ def fake_report(
             "output_tokens_per_second": {"median": throughput},
         },
         "distributed": {
+            "backend": "hccl",
+            "chips_per_card": 2,
             "world_size": world_size,
             "max_rank_median_request_peak_mb": peak_mb,
             "sum_rank_median_request_peak_mb": peak_mb * world_size,
+        },
+        "environment": {
+            "device_type": "npu",
+            "device_name": "Ascend 950",
+            "precision": "bf16",
+            "torch": "2.10.0",
+            "torch_npu": "2.10.0.post2",
+            "total_memory_mb": 65536.0,
         },
         "provenance": {
             "config_sha256": "config",
@@ -101,6 +111,42 @@ def main() -> None:
         pass
     else:
         raise AssertionError("请求配置不同的报告必须拒绝比较")
+
+    incompatible_environment = fake_report(
+        8,
+        ttft_ms=50.0,
+        tpot_ms=5.0,
+        e2e_ms=100.0,
+        throughput=25.0,
+        peak_mb=15_000.0,
+    )
+    incompatible_environment["environment"]["precision"] = "fp16"
+    try:
+        summarize_scaling(
+            [(Path("tp2.json"), tp2), (Path("tp8.json"), incompatible_environment)]
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("设备或精度不同的报告必须拒绝比较")
+
+    incompatible_protocol = fake_report(
+        8,
+        ttft_ms=50.0,
+        tpot_ms=5.0,
+        e2e_ms=100.0,
+        throughput=25.0,
+        peak_mb=15_000.0,
+    )
+    incompatible_protocol["request"]["repeats"] = 3
+    try:
+        summarize_scaling(
+            [(Path("tp2.json"), tp2), (Path("tp8.json"), incompatible_protocol)]
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("warmup/repeats 不同的报告必须拒绝比较")
 
     print("v0.6 TP scaling summary tests passed.")
 
