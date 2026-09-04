@@ -106,13 +106,23 @@ class Qwen3Tokenizer:
             if self.system_prompt:
                 messages.append({"role": "system", "content": self.system_prompt})
             messages.append({"role": "user", "content": text})
-            token_ids = self._tokenizer.apply_chat_template(
+            templated = self._tokenizer.apply_chat_template(
                 messages,
                 tokenize=True,
                 add_generation_prompt=True,
                 enable_thinking=self.enable_thinking,
             )
-            return [int(token_id) for token_id in token_ids]
+            # transformers 4.x 返回 list[int]；5.x 返回 BatchEncoding，
+            # 其 input_ids 可能是 list[int] 或带 batch 维的张量。
+            if hasattr(templated, "keys") and "input_ids" in templated:
+                templated = templated["input_ids"]
+            if hasattr(templated, "tolist"):
+                templated = templated.tolist()
+            if templated and isinstance(templated[0], (list, tuple)):
+                if len(templated) != 1:
+                    raise ValueError("chat template 必须返回单行 token 序列")
+                templated = templated[0]
+            return [int(token_id) for token_id in templated]
         return [
             int(token_id)
             for token_id in self._tokenizer.encode(text, add_special_tokens=False)
