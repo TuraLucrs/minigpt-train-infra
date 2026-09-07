@@ -5,7 +5,6 @@ on:
     branches:
       - codex/exact-git-sync
     paths:
-      - codex-sync/minigpt-train.bundle
       - codex-sync/minigpt-train.bundle.sha256
 
 permissions:
@@ -30,8 +29,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          bundle_path="codex-sync/minigpt-train.bundle"
+          encoded_parts=(
+            codex-sync/minigpt-train.bundle.b64.part00
+            codex-sync/minigpt-train.bundle.b64.part01
+            codex-sync/minigpt-train.bundle.b64.part02
+            codex-sync/minigpt-train.bundle.b64.part03
+          )
+          bundle_path="$RUNNER_TEMP/minigpt-train.bundle"
           checksum_path="codex-sync/minigpt-train.bundle.sha256"
+
+          for encoded_part in "${encoded_parts[@]}"; do
+            if [[ ! -f "$encoded_part" ]]; then
+              echo "Missing encoded bundle part: $encoded_part" >&2
+              exit 1
+            fi
+          done
+          cat "${encoded_parts[@]}" | base64 --decode > "$bundle_path"
+
           expected_sha256="$(tr -d '[:space:]' < "$checksum_path")"
           actual_sha256="$(sha256sum "$bundle_path" | awk '{print $1}')"
 
