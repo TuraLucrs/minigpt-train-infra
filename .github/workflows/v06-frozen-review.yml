@@ -1,0 +1,136 @@
+name: v0.6 frozen review
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/v06-frozen-review.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v0.6-frozen-review
+  cancel-in-progress: false
+
+jobs:
+  cpu-and-gloo-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GLOO_SOCKET_IFNAME: lo
+      MINIGPT_RUN_GLOO_TESTS: "1"
+    steps:
+      - name: Check out the frozen v0.6 tag
+        uses: actions/checkout@v4
+        with:
+          ref: v0.6-qwen3-tensor-parallel
+          fetch-depth: 0
+
+      - name: Verify immutable source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "7998581bc61003a8cd98aef874e11d698b66e912"
+          test "$(git describe --tags --exact-match HEAD)" = "v0.6-qwen3-tensor-parallel"
+          git diff --check
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install declared CPU dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            --index-url https://download.pytorch.org/whl/cpu \
+            "torch>=2.8,<2.11"
+          python -m pip install \
+            "numpy>=1.26" \
+            "safetensors>=0.5" \
+            "transformers>=5,<6"
+          python -m pip install --no-deps -e .
+
+      - name: Record resolved environment
+        shell: bash
+        run: |
+          python - <<'PY'
+          import platform
+          import numpy
+          import safetensors
+          import torch
+          import transformers
+
+          print("python=", platform.python_version())
+          print("torch=", torch.__version__)
+          print("numpy=", numpy.__version__)
+          print("safetensors=", safetensors.__version__)
+          print("transformers=", transformers.__version__)
+          PY
+
+      - name: Verify Python and archived evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import ast
+          import json
+          from pathlib import Path
+
+          python_files = sorted(Path(".").rglob("*.py"))
+          for path in python_files:
+              if ".git" not in path.parts:
+                  ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+          json_files = sorted(Path("artifacts/v0.6_qwen3_tp_acceptance").rglob("*.json"))
+          for path in json_files:
+              json.loads(path.read_text(encoding="utf-8"))
+          print(f"parsed_python_files={len(python_files)}")
+          print(f"parsed_acceptance_json_files={len(json_files)}")
+          PY
+          (cd artifacts/v0.6_qwen3_tp_acceptance && sha256sum -c SHA256SUMS.txt)
+
+      - name: Run all CPU and Gloo regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/test_core.py
+          python tests/test_inference.py
+          python tests/test_kv_cache.py
+          python tests/test_qwen3.py
+          python tests/test_qwen3_tp.py
+          python tests/test_reference_parity.py
+          python tests/test_resume_consistency.py
+          python tests/test_tp_scaling.py
+
+      - name: Exercise the real Transformers 5.x BatchEncoding type
+        shell: bash
+        run: |
+          python - <<'PY'
+          import torch
+          from transformers import BatchEncoding
+          from minigpt.qwen3_inference import Qwen3Tokenizer
+
+          class FakeTokenizer:
+              def apply_chat_template(self, *_args, **_kwargs):
+                  return BatchEncoding({"input_ids": torch.tensor([[21, 22, 23]])})
+
+          tokenizer = object.__new__(Qwen3Tokenizer)
+          tokenizer._tokenizer = FakeTokenizer()
+          tokenizer.use_chat_template = True
+          tokenizer.system_prompt = None
+          tokenizer.enable_thinking = False
+          assert tokenizer.encode("hello") == [21, 22, 23]
+          print("transformers_batch_encoding_regression=passed")
+          PY
+
+      - name: Publish immutable success marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin HEAD:refs/heads/verification/v0.6-frozen-review-pass
