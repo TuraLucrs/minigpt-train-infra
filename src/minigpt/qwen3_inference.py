@@ -317,6 +317,105 @@ class CachedQwen3ModelRunner:
         return logits[:, 0]
 
 
+class SlotCachedQwen3ModelRunner:
+    """Qwen3 Continuous Batching 的预分配 slot runner。"""
+
+    implementation_name = "qwen3_slot_kv_cache"
+
+    def __init__(
+        self,
+        model: Qwen3ForCausalLM,
+        runtime: RuntimeContext,
+        *,
+        max_slots: int,
+        max_seq_len: int,
+    ) -> None:
+        if max_slots <= 0:
+            raise ValueError("max_slots 必须大于 0")
+        if max_seq_len <= 0 or max_seq_len > model.config.max_position_embeddings:
+            raise ValueError("max_seq_len 超出 Qwen3 上下文容量")
+        self.model = model.eval()
+        self.runtime = runtime
+        self.max_slots = max_slots
+        self.max_seq_len = max_seq_len
+        self._cache = model.allocate_kv_cache(
+            max_slots,
+            max_seq_len,
+            device=runtime.device,
+            dtype=next(model.parameters()).dtype,
+        )
+
+    @property
+    def block_size(self) -> int:
+        return self.model.config.max_position_embeddings
+
+    @property
+    def cache(self) -> Qwen3KVCache:
+        return self._cache
+
+    def _rows(self, slot_ids: Sequence[int]) -> torch.Tensor:
+        if not slot_ids:
+            raise ValueError("一次 slot 模型调用至少需要一个请求")
+        return torch.tensor(slot_ids, dtype=torch.long, device=self.runtime.device)
+
+    def validate_request(self, prompt_length: int, max_new_tokens: int) -> None:
+        required = prompt_length + max_new_tokens - 1
+        if prompt_length <= 0:
+            raise ValueError("prompt 至少需要一个 token")
+        if required > self.max_seq_len:
+            raise ValueError(
+                f"prompt + max_new_tokens 需要 {required} 个 cache 位置，"
+                f"超过本次 Qwen3 cache 容量 {self.max_seq_len}"
+            )
+
+    def prefill_slots(
+        self,
+        slot_ids: Sequence[int],
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        _validate_prefill_inputs(input_ids, attention_mask)
+        if input_ids.shape[0] != len(slot_ids):
+            raise ValueError("slot_ids 必须与 Qwen3 Prefill batch 一一对应")
+        last_positions = _last_valid_positions(attention_mask)
+        with self.runtime.autocast():
+            return self.model.prefill_with_cache(
+                input_ids,
+                attention_mask,
+                self._cache,
+                logit_positions=last_positions,
+                cache_rows=self._rows(slot_ids),
+            )
+
+    def decode_slots(
+        self,
+        slot_ids: Sequence[int],
+        input_ids: torch.Tensor,
+    ) -> torch.Tensor:
+        if input_ids.shape != (len(slot_ids), 1):
+            raise ValueError("Qwen3 slot Decode 需要与 slot_ids 等长的 [B,1] input_ids")
+        active = torch.ones(len(slot_ids), dtype=torch.bool, device=input_ids.device)
+        with self.runtime.autocast():
+            return self.model.decode_with_cache(
+                input_ids,
+                active,
+                self._cache,
+                cache_rows=self._rows(slot_ids),
+            )[:, 0]
+
+    def release_slots(self, slot_ids: Sequence[int]) -> None:
+        if not slot_ids:
+            return
+        rows = self._rows(slot_ids)
+        self._cache.lengths[rows].zero_()
+        self._cache.current_max_length = int(self._cache.lengths.max().item())
+
+    def cache_lengths(self, slot_ids: Sequence[int]) -> list[int]:
+        if not slot_ids:
+            return []
+        return [int(value) for value in self._cache.lengths[self._rows(slot_ids)].tolist()]
+
+
 def validate_qwen3_tokenizer_config(
     tokenizer: Qwen3Tokenizer,
     config: Qwen3Config,

@@ -13,23 +13,37 @@ from .inference import (
     InferenceEngine,
     MiniGPTModelRunner,
     RecomputeMiniGPTModelRunner,
+    SlotCachedMiniGPTModelRunner,
 )
 from .model import MiniGPT, MiniGPTConfig, MiniGPTKVCache
 from .qwen3 import Qwen3Config, Qwen3ForCausalLM, Qwen3KVCache
-from .qwen3_inference import CachedQwen3ModelRunner, RecomputeQwen3ModelRunner
+from .qwen3_inference import (
+    CachedQwen3ModelRunner,
+    RecomputeQwen3ModelRunner,
+    SlotCachedQwen3ModelRunner,
+)
 from .qwen3_tp import (
     CachedTensorParallelQwen3ModelRunner,
     Qwen3TensorParallelPlan,
     TensorParallelInferenceEngine,
     TensorParallelQwen3ForCausalLM,
+    SlotCachedTensorParallelQwen3ModelRunner,
 )
 from .runtime import RuntimeContext
+from .serving import (
+    ContinuousBatchEngine,
+    KVSlotAllocator,
+    RequestSpec,
+    RequestState,
+    ServingRequest,
+)
 from .tokenizer import CharTokenizer
 
 __all__ = [
     "CharTokenizer",
     "CachedMiniGPTModelRunner",
     "CachedTensorParallelQwen3ModelRunner",
+    "ContinuousBatchEngine",
     "DistributedContext",
     "ExperimentConfig",
     "GenerationConfig",
@@ -44,9 +58,16 @@ __all__ = [
     "Qwen3ForCausalLM",
     "Qwen3KVCache",
     "Qwen3TensorParallelPlan",
+    "KVSlotAllocator",
+    "RequestSpec",
+    "RequestState",
+    "ServingRequest",
     "CachedQwen3ModelRunner",
     "RecomputeQwen3ModelRunner",
     "RuntimeContext",
+    "SlotCachedMiniGPTModelRunner",
+    "SlotCachedQwen3ModelRunner",
+    "SlotCachedTensorParallelQwen3ModelRunner",
     "TensorParallelInferenceEngine",
     "TensorParallelQwen3ForCausalLM",
     "RecomputeMiniGPTModelRunner",

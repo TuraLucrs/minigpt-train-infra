@@ -15,6 +15,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from .cache_utils import normalize_cache_rows
+
 
 @dataclass(frozen=True)
 class Qwen3Config:
@@ -390,14 +392,16 @@ class Qwen3Attention(nn.Module):
         attention_mask: torch.Tensor,
         position_ids: torch.Tensor,
         cache: Qwen3LayerKVCache,
+        cache_rows: torch.Tensor,
     ) -> torch.Tensor:
         query, key, value = self._project(hidden_states)
         query, key = _apply_rope(query, key, *position_embeddings)
 
         rows, token_positions = torch.where(attention_mask.bool())
         cache_positions = position_ids[rows, token_positions]
-        cache.key[rows, :, cache_positions] = key[rows, :, token_positions]
-        cache.value[rows, :, cache_positions] = value[rows, :, token_positions]
+        target_rows = cache_rows[rows]
+        cache.key[target_rows, :, cache_positions] = key[rows, :, token_positions]
+        cache.value[target_rows, :, cache_positions] = value[rows, :, token_positions]
 
         sdpa_mask = _causal_key_mask(attention_mask)
         return self._attend(
@@ -417,6 +421,7 @@ class Qwen3Attention(nn.Module):
         active_mask: torch.Tensor,
         new_lengths: torch.Tensor,
         max_length: int,
+        cache_rows: torch.Tensor,
     ) -> torch.Tensor:
         query, key, value = self._project(hidden_states)
         query, key = _apply_rope(query, key, *position_embeddings)
@@ -424,15 +429,16 @@ class Qwen3Attention(nn.Module):
         active_rows = torch.arange(batch_size, device=hidden_states.device)[active_mask]
         if active_rows.numel():
             write_positions = positions[active_mask]
-            cache.key[active_rows, :, write_positions] = key[active_mask, :, 0]
-            cache.value[active_rows, :, write_positions] = value[active_mask, :, 0]
+            target_rows = cache_rows[active_rows]
+            cache.key[target_rows, :, write_positions] = key[active_mask, :, 0]
+            cache.value[target_rows, :, write_positions] = value[active_mask, :, 0]
 
         key_positions = torch.arange(max_length, device=hidden_states.device)
         allowed = key_positions[None] < new_lengths[:, None]
         return self._attend(
             query,
-            cache.key[:batch_size, :, :max_length],
-            cache.value[:batch_size, :, :max_length],
+            cache.key[cache_rows, :, :max_length],
+            cache.value[cache_rows, :, :max_length],
             attention_mask=allowed[:, None, None],
             is_causal=False,
         )
@@ -514,6 +520,7 @@ class Qwen3DecoderLayer(nn.Module):
         attention_mask: torch.Tensor,
         position_ids: torch.Tensor,
         cache: Qwen3LayerKVCache,
+        cache_rows: torch.Tensor,
     ) -> torch.Tensor:
         hidden_states = hidden_states + self.self_attn.prefill_with_cache(
             self.input_layernorm(hidden_states),
@@ -521,6 +528,7 @@ class Qwen3DecoderLayer(nn.Module):
             attention_mask,
             position_ids,
             cache,
+            cache_rows,
         )
         return hidden_states + self.mlp(self.post_attention_layernorm(hidden_states))
 
@@ -533,6 +541,7 @@ class Qwen3DecoderLayer(nn.Module):
         active_mask: torch.Tensor,
         new_lengths: torch.Tensor,
         max_length: int,
+        cache_rows: torch.Tensor,
     ) -> torch.Tensor:
         hidden_states = hidden_states + self.self_attn.decode_with_cache(
             self.input_layernorm(hidden_states),
@@ -542,6 +551,7 @@ class Qwen3DecoderLayer(nn.Module):
             active_mask,
             new_lengths,
             max_length,
+            cache_rows,
         )
         return hidden_states + self.mlp(self.post_attention_layernorm(hidden_states))
 
@@ -613,6 +623,8 @@ class Qwen3Model(nn.Module):
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
         cache: Qwen3KVCache,
+        *,
+        cache_rows: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if input_ids.ndim != 2 or attention_mask.shape != input_ids.shape:
             raise ValueError("Qwen3 Prefill 需要同形状 [B,T] input_ids/attention_mask")
@@ -623,7 +635,17 @@ class Qwen3Model(nn.Module):
         if int(lengths.max().item()) > cache.max_seq_len:
             raise ValueError("Qwen3 Prefill 超过 KV Cache 容量")
 
-        cache.reset(batch_size)
+        rows = normalize_cache_rows(
+            cache_rows,
+            batch_size=batch_size,
+            max_batch_size=cache.max_batch_size,
+            device=input_ids.device,
+        )
+        if cache_rows is None:
+            cache.reset(batch_size)
+        else:
+            cache.lengths[rows].zero_()
+            cache.batch_size = max(cache.batch_size, int(rows.max().item()) + 1)
         position_ids = self._position_ids(attention_mask)
         hidden_states = self.embed_tokens(input_ids)
         position_embeddings = self.rotary_emb(hidden_states, position_ids)
@@ -634,9 +656,10 @@ class Qwen3Model(nn.Module):
                 attention_mask,
                 position_ids,
                 layer_cache,
+                rows,
             )
-        cache.lengths[:batch_size].copy_(lengths)
-        cache.current_max_length = int(lengths.max().item())
+        cache.lengths[rows] = lengths
+        cache.current_max_length = int(cache.lengths.max().item())
         return self.norm(hidden_states)
 
     def decode_with_cache(
@@ -644,12 +667,20 @@ class Qwen3Model(nn.Module):
         input_ids: torch.Tensor,
         active_mask: torch.Tensor,
         cache: Qwen3KVCache,
+        *,
+        cache_rows: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        batch_size = cache.batch_size
+        batch_size = cache.batch_size if cache_rows is None else input_ids.shape[0]
         if input_ids.shape != (batch_size, 1) or active_mask.shape != (batch_size,):
             raise ValueError("Qwen3 Decode 需要 [B,1] input_ids 和 [B] active_mask")
         active_mask = active_mask.bool()
-        positions = cache.lengths[:batch_size].clone()
+        rows = normalize_cache_rows(
+            cache_rows,
+            batch_size=batch_size,
+            max_batch_size=cache.max_batch_size,
+            device=input_ids.device,
+        )
+        positions = cache.lengths[rows].clone()
         new_lengths = positions + active_mask.long()
         max_length = int(new_lengths.max().item())
         if max_length > cache.max_seq_len:
@@ -667,9 +698,10 @@ class Qwen3Model(nn.Module):
                 active_mask,
                 new_lengths,
                 max_length,
+                rows,
             )
-        cache.lengths[:batch_size].copy_(new_lengths)
-        cache.current_max_length = max_length
+        cache.lengths[rows] = new_lengths
+        cache.current_max_length = int(cache.lengths.max().item())
         return self.norm(hidden_states)
 
 
@@ -764,8 +796,15 @@ class Qwen3ForCausalLM(nn.Module):
         attention_mask: torch.Tensor,
         cache: Qwen3KVCache,
         logit_positions: torch.Tensor | None = None,
+        *,
+        cache_rows: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        hidden_states = self.model.prefill_with_cache(input_ids, attention_mask, cache)
+        hidden_states = self.model.prefill_with_cache(
+            input_ids,
+            attention_mask,
+            cache,
+            cache_rows=cache_rows,
+        )
         if logit_positions is not None:
             if logit_positions.shape != (input_ids.shape[0],):
                 raise ValueError("logit_positions 必须是 [B]")
@@ -778,8 +817,15 @@ class Qwen3ForCausalLM(nn.Module):
         input_ids: torch.Tensor,
         active_mask: torch.Tensor,
         cache: Qwen3KVCache,
+        *,
+        cache_rows: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        hidden_states = self.model.decode_with_cache(input_ids, active_mask, cache)
+        hidden_states = self.model.decode_with_cache(
+            input_ids,
+            active_mask,
+            cache,
+            cache_rows=cache_rows,
+        )
         return self.lm_head(hidden_states)
 
     def reset_non_persistent_buffers(self, device: torch.device) -> None:

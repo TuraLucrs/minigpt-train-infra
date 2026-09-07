@@ -315,6 +315,105 @@ class CachedMiniGPTModelRunner:
         return logits[:, 0]
 
 
+class SlotCachedMiniGPTModelRunner:
+    """为 Continuous Batching 预分配稳定 cache slots 的 MiniGPT runner。"""
+
+    implementation_name = "minigpt_slot_kv_cache"
+
+    def __init__(
+        self,
+        model: MiniGPT,
+        runtime: RuntimeContext,
+        *,
+        max_slots: int,
+    ) -> None:
+        if max_slots <= 0:
+            raise ValueError("max_slots 必须大于 0")
+        self.model = model.eval()
+        self.runtime = runtime
+        self.max_slots = max_slots
+        self.max_seq_len = model.config.block_size
+        dtype = runtime.amp_dtype or next(model.parameters()).dtype
+        self._cache = model.allocate_kv_cache(
+            max_slots,
+            device=runtime.device,
+            dtype=dtype,
+        )
+
+    @property
+    def block_size(self) -> int:
+        return self.model.config.block_size
+
+    @property
+    def cache(self) -> MiniGPTKVCache:
+        return self._cache
+
+    def _rows(self, slot_ids: Sequence[int]) -> torch.Tensor:
+        if not slot_ids:
+            raise ValueError("一次 slot 模型调用至少需要一个请求")
+        return torch.tensor(slot_ids, dtype=torch.long, device=self.runtime.device)
+
+    def validate_request(self, prompt_length: int, max_new_tokens: int) -> None:
+        required = prompt_length + max_new_tokens - 1
+        if prompt_length <= 0:
+            raise ValueError("prompt 至少需要一个 token")
+        if required > self.max_seq_len:
+            raise ValueError(
+                f"prompt + max_new_tokens 需要 {required} 个 cache 位置，"
+                f"超过 MiniGPT 上限 {self.max_seq_len}"
+            )
+
+    def prefill_slots(
+        self,
+        slot_ids: Sequence[int],
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        _validate_prefill_inputs(input_ids, attention_mask)
+        if input_ids.shape[0] != len(slot_ids):
+            raise ValueError("slot_ids 必须与 Prefill batch 一一对应")
+        rows = self._rows(slot_ids)
+        with self.runtime.autocast():
+            logits = self.model.prefill_with_cache(
+                input_ids,
+                attention_mask,
+                self._cache,
+                cache_rows=rows,
+            )
+        last_positions = attention_mask.long().sum(dim=1) - 1
+        batch_indices = torch.arange(input_ids.shape[0], device=input_ids.device)
+        return logits[batch_indices, last_positions]
+
+    def decode_slots(
+        self,
+        slot_ids: Sequence[int],
+        input_ids: torch.Tensor,
+    ) -> torch.Tensor:
+        if input_ids.shape != (len(slot_ids), 1):
+            raise ValueError("slot Decode 需要与 slot_ids 等长的 [B,1] input_ids")
+        rows = self._rows(slot_ids)
+        active = torch.ones(len(slot_ids), dtype=torch.bool, device=input_ids.device)
+        with self.runtime.autocast():
+            return self.model.decode_with_cache(
+                input_ids,
+                active,
+                self._cache,
+                cache_rows=rows,
+            )[:, 0]
+
+    def release_slots(self, slot_ids: Sequence[int]) -> None:
+        if not slot_ids:
+            return
+        rows = self._rows(slot_ids)
+        self._cache.lengths[rows].zero_()
+        self._cache.current_max_length = int(self._cache.lengths.max().item())
+
+    def cache_lengths(self, slot_ids: Sequence[int]) -> list[int]:
+        if not slot_ids:
+            return []
+        return [int(value) for value in self._cache.lengths[self._rows(slot_ids)].tolist()]
+
+
 # 保留 v0.3 公共名称，旧调用方默认得到 recompute reference runner。
 MiniGPTModelRunner = RecomputeMiniGPTModelRunner
 
