@@ -407,7 +407,9 @@ class SlotCachedQwen3ModelRunner:
         if not slot_ids:
             return
         rows = self._rows(slot_ids)
-        self._cache.lengths[rows].zero_()
+        # Advanced indexing returns a copy; update the authoritative cache
+        # metadata in place so a reused slot always starts at position zero.
+        self._cache.lengths.index_fill_(0, rows, 0)
         self._cache.current_max_length = int(self._cache.lengths.max().item())
 
     def cache_lengths(self, slot_ids: Sequence[int]) -> list[int]:
