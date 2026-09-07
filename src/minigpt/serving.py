@@ -927,6 +927,10 @@ class ContinuousBatchEngine:
                 for limit, value in checks
             )
 
+        for item in request_metrics:
+            item["slo_met"] = (
+                item["state"] == RequestState.FINISHED.value and meets_slo(item)
+            )
         good_requests = sum(meets_slo(item) for item in completed)
         input_tokens = sum(int(item["input_tokens"]) for item in completed)
         output_tokens = sum(int(item["output_tokens"]) for item in completed)
@@ -966,7 +970,13 @@ class ContinuousBatchEngine:
             },
             "summary": {
                 "requests": len(request_metrics),
+                "completed_requests": len(completed),
+                "good_requests": good_requests,
                 "state_counts": state_counts,
+                "rejection_rate": (
+                    state_counts[RequestState.REJECTED.value]
+                    / max(len(request_metrics), 1)
+                ),
                 "duration_ms": duration_ms,
                 "completed_requests_per_second": len(completed) / duration_seconds,
                 "goodput_requests_per_second": good_requests / duration_seconds,
@@ -976,6 +986,15 @@ class ContinuousBatchEngine:
                 "ttft_ms": _latency_summary(numeric("ttft_ms")),
                 "tpot_ms": _latency_summary(numeric("tpot_ms")),
                 "e2e_latency_ms": _latency_summary(numeric("e2e_latency_ms")),
+                "active_batch_size": _latency_summary(
+                    [float(step["active_after"]) for step in self.steps]
+                ),
+                "decode_batch_size": _latency_summary(
+                    [float(step["decode_batch_size"]) for step in self.steps]
+                ),
+                "prefill_batch_size": _latency_summary(
+                    [float(step["prefill_batch_size"]) for step in self.steps]
+                ),
             },
             "kv_cache": {
                 "slot_capacity": self.allocator.capacity,

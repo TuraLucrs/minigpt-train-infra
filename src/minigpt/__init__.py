@@ -32,6 +32,13 @@ from .qwen3_tp import (
     load_tp_qwen3_slot_runner,
 )
 from .runtime import RuntimeContext
+from .replay import OfflineTraceReplayer, ReplaySummary
+from .replica import (
+    LeastLoadedRouter,
+    MultiReplicaServing,
+    ReplicaSnapshot,
+    partition_workload_by_projected_load,
+)
 from .serving import (
     ContinuousBatchEngine,
     KVSlotAllocator,
@@ -39,7 +46,9 @@ from .serving import (
     RequestState,
     ServingRequest,
 )
+from .serving_benchmark import benchmark_trace_replay, summarize_samples
 from .tokenizer import CharTokenizer
+from .workload import WorkloadPartition, WorkloadTrace, generate_workload
 
 __all__ = [
     "CharTokenizer",
@@ -56,6 +65,9 @@ __all__ = [
     "MiniGPTKVCache",
     "MiniGPTModelRunner",
     "ModelConfig",
+    "MultiReplicaServing",
+    "LeastLoadedRouter",
+    "OfflineTraceReplayer",
     "Qwen3Config",
     "Qwen3ForCausalLM",
     "Qwen3KVCache",
@@ -63,6 +75,8 @@ __all__ = [
     "KVSlotAllocator",
     "RequestSpec",
     "RequestState",
+    "ReplaySummary",
+    "ReplicaSnapshot",
     "ServingRequest",
     "CachedQwen3ModelRunner",
     "RecomputeQwen3ModelRunner",
@@ -76,4 +90,10 @@ __all__ = [
     "TensorParallelQwen3ForCausalLM",
     "RecomputeMiniGPTModelRunner",
     "TrainConfig",
+    "WorkloadPartition",
+    "WorkloadTrace",
+    "generate_workload",
+    "partition_workload_by_projected_load",
+    "benchmark_trace_replay",
+    "summarize_samples",
 ]
