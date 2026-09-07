@@ -21,6 +21,7 @@ from .qwen3_inference import (
     CachedQwen3ModelRunner,
     RecomputeQwen3ModelRunner,
     SlotCachedQwen3ModelRunner,
+    load_qwen3_slot_runner,
 )
 from .qwen3_tp import (
     CachedTensorParallelQwen3ModelRunner,
@@ -28,6 +29,7 @@ from .qwen3_tp import (
     TensorParallelInferenceEngine,
     TensorParallelQwen3ForCausalLM,
     SlotCachedTensorParallelQwen3ModelRunner,
+    load_tp_qwen3_slot_runner,
 )
 from .runtime import RuntimeContext
 from .serving import (
@@ -68,6 +70,8 @@ __all__ = [
     "SlotCachedMiniGPTModelRunner",
     "SlotCachedQwen3ModelRunner",
     "SlotCachedTensorParallelQwen3ModelRunner",
+    "load_qwen3_slot_runner",
+    "load_tp_qwen3_slot_runner",
     "TensorParallelInferenceEngine",
     "TensorParallelQwen3ForCausalLM",
     "RecomputeMiniGPTModelRunner",

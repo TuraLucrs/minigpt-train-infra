@@ -29,9 +29,11 @@ from minigpt.qwen3_inference import CachedQwen3ModelRunner  # noqa: E402
 from minigpt.qwen3_tp import (  # noqa: E402
     CachedTensorParallelQwen3ModelRunner,
     Qwen3TensorParallelPlan,
+    SlotCachedTensorParallelQwen3ModelRunner,
     TensorParallelInferenceEngine,
     load_tp_qwen3_from_pretrained,
 )
+from minigpt.serving import ContinuousBatchEngine, RequestSpec, RequestState  # noqa: E402
 
 
 def tiny_config_dict() -> dict[str, object]:
@@ -327,6 +329,50 @@ def _check_tp_model(distributed: object, model_dir: str) -> None:
         item.generated_ids for item in expected_sample
     ]
 
+    slot_engine = ContinuousBatchEngine(
+        SlotCachedTensorParallelQwen3ModelRunner(
+            tp_model,
+            runtime,
+            max_slots=2,
+            max_seq_len=12,
+        ),
+        tokenizer,
+        distributed=distributed,  # type: ignore[arg-type]
+    )
+    dynamic_specs = [
+        RequestSpec("dynamic-a", "4 5 6", GenerationConfig(max_new_tokens=5)),
+        RequestSpec(
+            "dynamic-b",
+            "7 8",
+            GenerationConfig(
+                max_new_tokens=2,
+                strategy="sample",
+                top_k=1,
+                seed=17,
+            ),
+        ),
+        RequestSpec("dynamic-c", "9 10 11 12", GenerationConfig(max_new_tokens=3)),
+    ]
+    expected_dynamic = {
+        spec.request_id: reference_engine.generate(spec.prompt, spec.config).generated_ids
+        for spec in dynamic_specs
+    }
+    for spec in dynamic_specs:
+        slot_engine.submit(spec)
+    if rank != 0:
+        # 故意打乱 follower 的本地 deque；实际 admission 必须服从 rank 0
+        # 广播的 request sequence/slot plan，而不是各 rank 自行取队首。
+        slot_engine._waiting.rotate(1)
+    first_step = slot_engine.step()
+    assert first_step["prefill_batch_size"] == 2
+    slot_engine.run_until_idle()
+    for request_id, expected_ids in expected_dynamic.items():
+        request = slot_engine.requests[request_id]
+        assert request.state == RequestState.FINISHED
+        assert request.generated_ids == expected_ids
+    assert slot_engine.allocator.used == 0
+    assert slot_engine.runner.cache_lengths([0, 1]) == [0, 0]
+
 
 class _ThreadCollectives:
     """无 socket 的确定性 collective，只用于当前 CI 的多 rank 数学验证。"""
@@ -433,6 +479,68 @@ def check_threaded_tp(model_dir: str, world_size: int) -> None:
             future.result()
 
 
+def check_scheduler_mismatch_fails_all_ranks() -> None:
+    from minigpt.runtime import RuntimeContext
+
+    runtime = RuntimeContext.create("cpu", "fp32")
+    collectives = _ThreadCollectives(2)
+    contexts = [
+        _ThreadDistributedContext(rank, 2, runtime, collectives)
+        for rank in range(2)
+    ]
+
+    class NeverCalledRunner:
+        implementation_name = "never_called"
+        max_slots = 1
+        max_seq_len = 8
+
+        def __init__(self) -> None:
+            self.runtime = runtime
+            self.model_calls = 0
+
+        @staticmethod
+        def validate_request(prompt_length: int, max_new_tokens: int) -> None:
+            if prompt_length + max_new_tokens - 1 > 8:
+                raise ValueError("request 太长")
+
+        def prefill_slots(self, *_args: object) -> torch.Tensor:
+            self.model_calls += 1
+            raise AssertionError("control plan 不一致时不能进入模型")
+
+        def decode_slots(self, *_args: object) -> torch.Tensor:
+            self.model_calls += 1
+            raise AssertionError("control plan 不一致时不能进入模型")
+
+        @staticmethod
+        def release_slots(_slot_ids: Sequence[int]) -> None:
+            return None
+
+        @staticmethod
+        def cache_lengths(slot_ids: Sequence[int]) -> list[int]:
+            return [0 for _slot_id in slot_ids]
+
+    runners = [NeverCalledRunner(), NeverCalledRunner()]
+
+    def run_rank(rank: int) -> str:
+        engine = ContinuousBatchEngine(
+            runners[rank],
+            IntegerTokenizer(),
+            distributed=contexts[rank],
+        )
+        prompt = "4 5" if rank == 0 else "6 7"
+        engine.submit(RequestSpec("same-id", prompt, GenerationConfig(max_new_tokens=2)))
+        try:
+            engine.step()
+        except RuntimeError as exc:
+            return str(exc)
+        raise AssertionError("不同 rank 的请求内容不一致时必须共同失败")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        errors = list(executor.map(run_rank, range(2)))
+    assert all("control plan" in error for error in errors)
+    assert all(runner.model_calls == 0 for runner in runners)
+
+
 def main() -> None:
     check_plan_boundaries()
     check_distributed_boundaries()
@@ -444,6 +552,7 @@ def main() -> None:
         # TP=4 走 world_size > KV heads 的复制分支；确保 replicated KV 与 query
         # group 的对应关系仍能恢复完整模型结果。
         check_threaded_tp(str(model_dir), 4)
+        check_scheduler_mismatch_fails_all_ranks()
         if os.environ.get("MINIGPT_RUN_GLOO_TESTS") == "1":
             rendezvous_path = root / "gloo-rendezvous"
             mp.spawn(

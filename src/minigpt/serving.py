@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
+import hashlib
 import heapq
 import math
 import statistics
@@ -67,6 +68,7 @@ class ServingRequest:
 
     spec: RequestSpec
     prompt_ids: list[int]
+    sequence_id: int
     state: RequestState = RequestState.WAITING
     generated_ids: list[int] = field(default_factory=list)
     slot_id: int | None = None
@@ -115,10 +117,15 @@ class SlotModelRunner(Protocol):
     def cache_lengths(self, slot_ids: Sequence[int]) -> list[int]: ...
 
 
-class TokenBroadcast(Protocol):
+class SchedulerCollectives(Protocol):
+    """TP scheduler 热路径所需的最小 collective 接口。"""
+
     is_primary: bool
+    world_size: int
 
     def broadcast(self, tensor: torch.Tensor, src: int = 0) -> torch.Tensor: ...
+
+    def all_reduce_sum(self, tensor: torch.Tensor) -> torch.Tensor: ...
 
 
 class KVSlotAllocator:
@@ -147,12 +154,25 @@ class KVSlotAllocator:
     def owners(self) -> dict[int, str]:
         return dict(self._owners)
 
-    def allocate(self, request_id: str) -> int:
+    @property
+    def available_slots(self) -> tuple[int, ...]:
+        return tuple(sorted(self._free))
+
+    def allocate(self, request_id: str, *, slot_id: int | None = None) -> int:
         if request_id in self._owners.values():
             raise RuntimeError(f"请求 {request_id!r} 已经持有 KV slot")
         if not self._free:
             raise RuntimeError("没有可用 KV slot")
-        slot_id = heapq.heappop(self._free)
+        if slot_id is None:
+            slot_id = heapq.heappop(self._free)
+        else:
+            if not 0 <= slot_id < self.capacity:
+                raise RuntimeError(f"KV slot {slot_id} 越界")
+            try:
+                self._free.remove(slot_id)
+            except ValueError as exc:
+                raise RuntimeError(f"KV slot {slot_id} 不可用") from exc
+            heapq.heapify(self._free)
         self._owners[slot_id] = request_id
         self.allocations += 1
         self.peak_used = max(self.peak_used, self.used)
@@ -212,7 +232,7 @@ class ContinuousBatchEngine:
         *,
         pad_token_id: int | None = None,
         max_queue_size: int = 1024,
-        distributed: TokenBroadcast | None = None,
+        distributed: SchedulerCollectives | None = None,
         clock: Callable[[], float] = time.perf_counter,
     ) -> None:
         if max_queue_size <= 0:
@@ -237,6 +257,7 @@ class ContinuousBatchEngine:
         self.requests: dict[str, ServingRequest] = {}
         self._waiting: deque[str] = deque()
         self._running: dict[str, ServingRequest] = {}
+        self._next_sequence_id = 0
         self.events: list[dict[str, object]] = []
         self.steps: list[dict[str, object]] = []
 
@@ -276,6 +297,7 @@ class ContinuousBatchEngine:
         self,
         spec: RequestSpec,
         prompt_ids: list[int],
+        sequence_id: int,
         now_ms: float,
         reason: str,
         error: str,
@@ -283,6 +305,7 @@ class ContinuousBatchEngine:
         request = ServingRequest(
             spec=spec,
             prompt_ids=prompt_ids,
+            sequence_id=sequence_id,
             state=RequestState.REJECTED,
             submitted_at_ms=now_ms,
             finished_at_ms=now_ms,
@@ -296,6 +319,8 @@ class ContinuousBatchEngine:
     def submit(self, spec: RequestSpec, *, now_ms: float | None = None) -> ServingRequest:
         if spec.request_id in self.requests:
             raise ValueError(f"重复 request_id：{spec.request_id}")
+        sequence_id = self._next_sequence_id
+        self._next_sequence_id += 1
         timestamp = self.now_ms() if now_ms is None else float(now_ms)
         prompt_ids: list[int] = []
         try:
@@ -311,6 +336,7 @@ class ContinuousBatchEngine:
             return self._reject(
                 spec,
                 prompt_ids,
+                sequence_id,
                 timestamp,
                 "invalid_request",
                 str(exc),
@@ -319,6 +345,7 @@ class ContinuousBatchEngine:
             return self._reject(
                 spec,
                 prompt_ids,
+                sequence_id,
                 timestamp,
                 "queue_full",
                 f"等待队列已达到上限 {self.max_queue_size}",
@@ -333,6 +360,7 @@ class ContinuousBatchEngine:
         request = ServingRequest(
             spec=spec,
             prompt_ids=prompt_ids,
+            sequence_id=sequence_id,
             submitted_at_ms=timestamp,
             generator=generator,
         )
@@ -460,11 +488,246 @@ class ContinuousBatchEngine:
             self._event("failed", request, timestamp_ms, error=request.error)
             self._release(request)
 
-    def _decode_running(self) -> tuple[list[str], list[str]]:
-        requests = sorted(
+    @staticmethod
+    def _request_fingerprint(request: ServingRequest) -> int:
+        config = request.spec.config
+        canonical = repr(
+            (
+                request.request_id,
+                tuple(request.prompt_ids),
+                config.max_new_tokens,
+                config.strategy,
+                config.temperature,
+                config.top_k,
+                config.top_p,
+                config.seed,
+                config.eos_token_id,
+                config.eos_token_ids,
+                request.spec.deadline_ms,
+            )
+        ).encode("utf-8")
+        return int.from_bytes(hashlib.sha256(canonical).digest()[:8], "big") & (
+            (1 << 63) - 1
+        )
+
+    def _raise_if_any_rank_invalid(
+        self,
+        local_error: str | None,
+        *,
+        phase: str,
+    ) -> None:
+        if self.distributed is None:
+            if local_error is not None:
+                raise RuntimeError(local_error)
+            return
+        flag = torch.tensor(
+            [1 if local_error is not None else 0],
+            dtype=torch.int32,
+            device=self.runner.runtime.device,
+        )
+        self.distributed.all_reduce_sum(flag)
+        if int(flag.item()) > 0:
+            rank = getattr(self.distributed, "rank", "unknown")
+            detail = local_error or "另一个 rank 的本地 scheduler 状态不一致"
+            raise RuntimeError(
+                f"{phase} control plan 在至少一个 rank 无效；"
+                f"当前 rank={rank}：{detail}"
+            )
+
+    def _broadcast_control_plan(
+        self,
+        phase: str,
+        entries: Sequence[tuple[int, int, int]],
+        *,
+        population: int,
+    ) -> tuple[list[tuple[int, int, int]], int]:
+        if self.distributed is None:
+            return list(entries), population
+
+        phase_codes = {"decode": 1, "prefill": 2}
+        expected_phase = phase_codes[phase]
+        if self.distributed.is_primary:
+            header = torch.tensor(
+                [expected_phase, len(entries), population],
+                dtype=torch.long,
+                device=self.runner.runtime.device,
+            )
+        else:
+            header = torch.zeros(
+                3,
+                dtype=torch.long,
+                device=self.runner.runtime.device,
+            )
+        self.distributed.broadcast(header, src=0)
+        actual_phase, count, primary_population = [
+            int(value) for value in header.cpu().tolist()
+        ]
+        header_error = None
+        if actual_phase != expected_phase:
+            header_error = (
+                f"phase code 不一致：expected={expected_phase}, actual={actual_phase}"
+            )
+        elif count < 0 or count > self.runner.max_slots:
+            header_error = f"control plan count 越界：{count}"
+        elif primary_population < count or primary_population > (
+            self.max_queue_size + self.runner.max_slots
+        ):
+            header_error = f"control plan population 越界：{primary_population}"
+        self._raise_if_any_rank_invalid(header_error, phase=phase)
+
+        if self.distributed.is_primary:
+            payload = torch.tensor(
+                entries,
+                dtype=torch.long,
+                device=self.runner.runtime.device,
+            ).reshape(count, 3)
+        else:
+            payload = torch.zeros(
+                (count, 3),
+                dtype=torch.long,
+                device=self.runner.runtime.device,
+            )
+        if count:
+            self.distributed.broadcast(payload, src=0)
+        return [
+            (int(row[0]), int(row[1]), int(row[2]))
+            for row in payload.cpu().tolist()
+        ], primary_population
+
+    def _requests_by_sequence(self) -> dict[int, ServingRequest]:
+        return {
+            request.sequence_id: request
+            for request in self.requests.values()
+            if not request.is_terminal
+        }
+
+    def _synchronized_decode_requests(self) -> list[ServingRequest]:
+        local = sorted(
             self._running.values(),
             key=lambda request: int(request.slot_id),
         )
+        entries = [
+            (
+                request.sequence_id,
+                int(request.slot_id),
+                self._request_fingerprint(request),
+            )
+            for request in local
+        ]
+        primary_entries = (
+            entries
+            if self.distributed is None or self.distributed.is_primary
+            else []
+        )
+        plan, population = self._broadcast_control_plan(
+            "decode",
+            primary_entries,
+            population=len(local),
+        )
+
+        by_sequence = self._requests_by_sequence()
+        resolved: list[ServingRequest] = []
+        error = None
+        if len(local) != population:
+            error = (
+                f"running request 数不一致：local={len(local)}, "
+                f"primary={population}"
+            )
+        elif len({sequence for sequence, _slot, _fingerprint in plan}) != len(plan):
+            error = "Decode plan 包含重复 request sequence"
+        elif len({slot for _sequence, slot, _fingerprint in plan}) != len(plan):
+            error = "Decode plan 包含重复 KV slot"
+        else:
+            for sequence, slot_id, fingerprint in plan:
+                request = by_sequence.get(sequence)
+                if request is None:
+                    error = f"本 rank 缺少 Decode request sequence={sequence}"
+                    break
+                if (
+                    request.state != RequestState.DECODING
+                    or request.slot_id != slot_id
+                    or request.request_id not in self._running
+                ):
+                    error = (
+                        f"Decode request {request.request_id!r} 状态/slot 不一致"
+                    )
+                    break
+                if self._request_fingerprint(request) != fingerprint:
+                    error = f"Decode request {request.request_id!r} 内容或配置不一致"
+                    break
+                resolved.append(request)
+            if error is None and {
+                request.sequence_id for request in local
+            } != {sequence for sequence, _slot, _fingerprint in plan}:
+                error = "Decode running 集合与 rank 0 control plan 不一致"
+        self._raise_if_any_rank_invalid(error, phase="decode")
+        return resolved
+
+    def _synchronized_admissions(self) -> list[ServingRequest]:
+        if self.distributed is None or self.distributed.is_primary:
+            count = min(self.waiting_count, self.allocator.free)
+            free_slots = self.allocator.available_slots[:count]
+            request_ids = list(self._waiting)[:count]
+            entries = [
+                (
+                    self.requests[request_id].sequence_id,
+                    slot_id,
+                    self._request_fingerprint(self.requests[request_id]),
+                )
+                for request_id, slot_id in zip(request_ids, free_slots)
+            ]
+        else:
+            entries = []
+        plan, population = self._broadcast_control_plan(
+            "prefill",
+            entries,
+            population=self.waiting_count,
+        )
+
+        by_sequence = self._requests_by_sequence()
+        waiting_ids = set(self._waiting)
+        available_slots = set(self.allocator.available_slots)
+        resolved: list[ServingRequest] = []
+        error = None
+        if self.waiting_count != population:
+            error = (
+                f"waiting request 数不一致：local={self.waiting_count}, "
+                f"primary={population}"
+            )
+        elif len({sequence for sequence, _slot, _fingerprint in plan}) != len(plan):
+            error = "Prefill plan 包含重复 request sequence"
+        elif len({slot for _sequence, slot, _fingerprint in plan}) != len(plan):
+            error = "Prefill plan 包含重复 KV slot"
+        else:
+            for sequence, slot_id, fingerprint in plan:
+                request = by_sequence.get(sequence)
+                if request is None:
+                    error = f"本 rank 缺少 Prefill request sequence={sequence}"
+                    break
+                if request.state != RequestState.WAITING or request.request_id not in waiting_ids:
+                    error = f"Prefill request {request.request_id!r} 不在 waiting 队列"
+                    break
+                if slot_id not in available_slots:
+                    error = f"Prefill plan 指定的 KV slot {slot_id} 在本 rank 不可用"
+                    break
+                if self._request_fingerprint(request) != fingerprint:
+                    error = f"Prefill request {request.request_id!r} 内容或配置不一致"
+                    break
+                resolved.append(request)
+        self._raise_if_any_rank_invalid(error, phase="prefill")
+
+        for request, (_sequence, slot_id, _fingerprint) in zip(resolved, plan):
+            self._waiting.remove(request.request_id)
+            self.allocator.allocate(request.request_id, slot_id=slot_id)
+            request.slot_id = slot_id
+            request.state = RequestState.PREFILLING
+            request.admitted_at_ms = self.now_ms()
+            self._running[request.request_id] = request
+            self._event("admitted", request, request.admitted_at_ms)
+        return resolved
+
+    def _decode_running(self) -> tuple[list[str], list[str]]:
+        requests = self._synchronized_decode_requests()
         if not requests:
             return [], []
         slot_ids = [int(request.slot_id) for request in requests]
@@ -490,16 +753,7 @@ class ContinuousBatchEngine:
         return [request.request_id for request in requests], finished
 
     def _admit_and_prefill(self) -> tuple[list[str], list[str]]:
-        requests: list[ServingRequest] = []
-        while self._waiting and self.allocator.free:
-            request = self.requests[self._waiting.popleft()]
-            slot_id = self.allocator.allocate(request.request_id)
-            request.slot_id = slot_id
-            request.state = RequestState.PREFILLING
-            request.admitted_at_ms = self.now_ms()
-            self._running[request.request_id] = request
-            self._event("admitted", request, request.admitted_at_ms)
-            requests.append(request)
+        requests = self._synchronized_admissions()
         if not requests:
             return [], []
 
@@ -524,6 +778,7 @@ class ContinuousBatchEngine:
                 self._event("first_token", request, ready_at)
         return [request.request_id for request in requests], finished
 
+    @torch.inference_mode()
     def step(self) -> dict[str, object]:
         """执行一个调度周期；没有请求时返回空 step，但不制造模型调用。"""
 
@@ -561,7 +816,32 @@ class ContinuousBatchEngine:
         if max_steps <= 0:
             raise ValueError("max_steps 必须大于 0")
         steps = 0
-        while not self.is_idle:
+        while True:
+            if self.distributed is None:
+                should_step = not self.is_idle
+            else:
+                should_step_on_primary = (
+                    self.distributed.is_primary and not self.is_idle
+                )
+                primary_decision = torch.tensor(
+                    [1 if should_step_on_primary else 0],
+                    dtype=torch.int32,
+                    device=self.runner.runtime.device,
+                )
+                self.distributed.broadcast(primary_decision, src=0)
+                should_step = bool(primary_decision.item())
+                if not should_step:
+                    local_error = (
+                        None
+                        if self.is_idle
+                        else "rank 0 已 idle，但本 rank 仍有 waiting/running 请求"
+                    )
+                    self._raise_if_any_rank_invalid(
+                        local_error,
+                        phase="run_until_idle",
+                    )
+            if not should_step:
+                break
             if steps >= max_steps:
                 raise RuntimeError("调度器超过 max_steps，可能存在无法结束的请求")
             self.step()
@@ -575,6 +855,7 @@ class ContinuousBatchEngine:
         self.requests.clear()
         self.events.clear()
         self.steps.clear()
+        self._next_sequence_id = 0
         self._origin = self._clock()
 
     @staticmethod
@@ -589,6 +870,7 @@ class ContinuousBatchEngine:
             ) / (len(request.token_ready_at_ms) - 1)
         return {
             "request_id": request.request_id,
+            "sequence_id": request.sequence_id,
             "state": request.state.value,
             "stop_reason": request.stop_reason,
             "error": request.error,
