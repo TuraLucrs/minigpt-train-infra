@@ -1,4 +1,4 @@
-"""Small smoke tests for MiniGPT-Train.
+"""MiniGPT-Train最小smoke test。
 
 这个文件不追求覆盖所有训练行为，只检查最核心的部件能不能协同工作：
 - tokenizer 能 encode/decode
@@ -74,7 +74,7 @@ def main() -> None:
     logits = model(x)
     assert logits.shape == (2, 8, tokenizer.vocab_size)
 
-    # Causal attention: changing future tokens must not change earlier logits.
+    # 因果 Attention：改变未来 token 不得影响更早位置的 logits。
     model.eval()
     causal_a = x[:1].clone()
     causal_b = causal_a.clone()
@@ -98,7 +98,7 @@ def main() -> None:
 
     loss.backward()
 
-    # A sequence of block_size + 1 tokens is exactly enough to form one GPT sample.
+    # block_size+1 个 token 恰好足够组成一个 GPT 样本。
     exact_batcher = RandomTokenBatcher(
         tokens=torch.arange(9),
         batch_size=4,
@@ -111,8 +111,7 @@ def main() -> None:
     assert by.shape == (4, 8)
     assert torch.equal(by, bx + 1)
 
-    # With 10 tokens and block_size 8, starts 0 and 1 are both legal.
-    # The old off-by-one bug silently made start 1 impossible.
+    # 共有10个token且block_size为8时，起点0和1都合法；旧版边界错误会漏掉起点1。
     boundary_batcher = RandomTokenBatcher(
         tokens=torch.arange(10),
         batch_size=256,
@@ -130,8 +129,8 @@ def main() -> None:
     after = model.token_embedding.weight.detach().clone()
     assert not torch.equal(before, after)
 
-    # v0.2 used one AdamW group in model registration order.  Loading it into
-    # the new decay/no_decay layout must preserve moments by parameter name.
+    # v0.2按模型注册顺序只保存一个AdamW参数组；恢复到新的decay/no_decay布局时，
+    # 必须按参数名保留动量。
     old_native_optimizer = torch.optim.AdamW(model.parameters(), lr=7e-4, weight_decay=0.02)
     old_native_optimizer.zero_grad(set_to_none=True)
     old_native_loss = next_token_cross_entropy(model(x), y)
@@ -149,8 +148,7 @@ def main() -> None:
     assert grouped_optimizer.param_groups[0]["weight_decay"] == 0.02
     assert grouped_optimizer.param_groups[1]["weight_decay"] == 0.0
 
-    # Checkpoint migration: baseline-v0.1 stored one state dictionary per
-    # parameter instead of native optimizer parameter IDs/groups.
+    # checkpoint迁移：baseline-v0.1按参数逐项保存状态，而不是原生optimizer参数ID/组。
     migrated_optimizer = torch.optim.AdamW(model.parameters(), lr=9e-4)
     parameters = [parameter for group in migrated_optimizer.param_groups for parameter in group["params"]]
     legacy_optimizer_state = {
@@ -183,8 +181,7 @@ def main() -> None:
     )
     assert migrated_scaler.get_scale() == 4096.0
 
-    # Native SDPA drops the mask buffer and fused QKV replaces three Linear
-    # modules. Reconstruct the old layout and require lossless strict loading.
+    # 原生SDPA删除mask buffer，融合QKV替代三个Linear；重建旧布局并验证无损严格加载。
     legacy_model_state = dict(model.state_dict())
     for block_index in range(config.n_layer):
         prefix = f"blocks.{block_index}.attn."
@@ -224,8 +221,7 @@ def main() -> None:
         assert loaded["config"]["test"] is True
         assert "model_state" in loaded
 
-        # A failed replacement must leave the previous valid checkpoint in
-        # place and remove its incomplete temporary file.
+        # 替换失败时必须保留原有效checkpoint，并清理不完整的临时文件。
         original_torch_save = torch.save
 
         def fail_after_partial_write(_payload, file, *_args, **_kwargs):  # type: ignore[no-untyped-def]

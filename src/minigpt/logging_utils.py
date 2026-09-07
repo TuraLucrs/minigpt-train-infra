@@ -1,4 +1,4 @@
-"""Logging helpers for training.
+"""训练日志辅助函数。
 
 本项目不引入 TensorBoard / WandB，是为了保持依赖最少。
 训练日志会同时：
@@ -12,8 +12,6 @@ import csv
 import time
 from pathlib import Path
 from typing import Dict, Iterable
-
-import torch
 
 
 class CSVLogger:
@@ -44,69 +42,3 @@ class CSVLogger:
 
     def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[no-untyped-def]
         self.close()
-
-
-def reset_peak_memory(device: torch.device) -> None:
-    if device.type == "cuda":
-        torch.cuda.reset_peak_memory_stats(device)
-
-
-def memory_stats_mb(device: torch.device) -> tuple[float, float]:
-    """返回当前显存和峰值显存，单位 MB。
-
-    CPU 训练时没有 GPU memory，返回 0。
-    """
-
-    if device.type != "cuda":
-        return 0.0, 0.0
-    allocated = torch.cuda.memory_allocated(device) / (1024 * 1024)
-    peak = torch.cuda.max_memory_allocated(device) / (1024 * 1024)
-    return float(allocated), float(peak)
-
-
-class DeviceIntervalTimer:
-    """Measure a window without synchronizing the accelerator every step.
-
-    ``tokens_per_sec`` remains an end-to-end wall-time metric for the pure
-    training window.  On CUDA, events delimit the queued device work and wait
-    only when a logging/evaluation/checkpoint boundary closes the window.  The
-    device-only elapsed time is retained for later profiler/metrics expansion.
-    """
-
-    def __init__(self, device: torch.device) -> None:
-        self.device = device
-        self._wall_start: float | None = None
-        self._cuda_start: torch.cuda.Event | None = None
-        self.last_device_seconds: float | None = None
-        self._running = False
-
-    def start(self) -> None:
-        if self._running:
-            raise RuntimeError("Timer window is already running")
-        self._wall_start = time.perf_counter()
-        if self.device.type == "cuda":
-            self._cuda_start = torch.cuda.Event(enable_timing=True)
-            self._cuda_start.record()
-        self._running = True
-
-    def elapsed_seconds(self) -> float:
-        if not self._running:
-            raise RuntimeError("Timer window has not been started")
-        if self._wall_start is None:
-            raise RuntimeError("Wall timer start value is missing")
-
-        if self.device.type == "cuda":
-            if self._cuda_start is None:
-                raise RuntimeError("CUDA timer start event is missing")
-            end = torch.cuda.Event(enable_timing=True)
-            end.record()
-            end.synchronize()
-            self.last_device_seconds = self._cuda_start.elapsed_time(end) / 1000.0
-            self._cuda_start = None
-        else:
-            self.last_device_seconds = None
-
-        elapsed = time.perf_counter() - self._wall_start
-        self._wall_start = None
-        self._running = False
-        return elapsed

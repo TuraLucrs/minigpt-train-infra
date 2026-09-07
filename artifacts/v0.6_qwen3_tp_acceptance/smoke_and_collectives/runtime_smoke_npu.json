@@ -1,0 +1,20 @@
+{
+  "status": "passed",
+  "backend": {
+    "device": "npu",
+    "device_type": "npu",
+    "device_name": "Ascend910_9382",
+    "precision": "bf16",
+    "supports_bf16": true,
+    "total_memory_mb": 62732.0,
+    "torch": "2.10.0+cpu",
+    "torch_npu": "2.10.0.post5.dev20260821"
+  },
+  "matrix_size": 512,
+  "result_dtype": "torch.bfloat16",
+  "result_isfinite": true,
+  "wall_seconds": 0.28815091005526483,
+  "device_seconds": 0.28668856811523435,
+  "current_memory_mb": 2.50146484375,
+  "peak_memory_mb": 3.50244140625
+}

@@ -1,4 +1,4 @@
-"""Configuration objects for MiniGPT-Train.
+"""MiniGPT-Train配置对象。
 
 为什么不用很复杂的配置系统？
 --------------------------------

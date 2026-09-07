@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-04T06:50:14.315915+00:00",
+  "benchmark": "tensor_parallel_hardware_smoke",
+  "status": "passed",
+  "evidence_class": "real_accelerator_tp_correctness_smoke_not_performance_evidence",
+  "environment": {
+    "python": "3.12.13",
+    "device": "npu:0",
+    "device_type": "npu",
+    "device_name": "Ascend910_9382",
+    "precision": "bf16",
+    "supports_bf16": true,
+    "total_memory_mb": 62732.0,
+    "torch": "2.10.0+cpu",
+    "torch_npu": "2.10.0.post5.dev20260821"
+  },
+  "distributed": {
+    "backend": "hccl",
+    "rank": 0,
+    "local_rank": 0,
+    "world_size": 2,
+    "is_primary": true,
+    "process_group_initialized": true,
+    "hostname": "node-21-123",
+    "visible_device_count": 16
+  },
+  "model": {
+    "config": {
+      "vocab_size": 64,
+      "hidden_size": 32,
+      "intermediate_size": 64,
+      "num_hidden_layers": 2,
+      "num_attention_heads": 8,
+      "num_key_value_heads": 2,
+      "head_dim": 8,
+      "max_position_embeddings": 32,
+      "rms_norm_eps": 1e-06,
+      "rope_theta": 1000000.0,
+      "attention_bias": false,
+      "attention_dropout": 0.0,
+      "hidden_act": "silu",
+      "tie_word_embeddings": false,
+      "bos_token_id": 1,
+      "eos_token_id": 2,
+      "pad_token_id": 0,
+      "torch_dtype": "float32",
+      "initializer_range": 0.02,
+      "use_sliding_window": false,
+      "sliding_window": null,
+      "rope_scaling": null
+    },
+    "full_parameter_count": 26816,
+    "local_parameter_count": 13504
+  },
+  "tolerances": {
+    "atol": 0.03,
+    "rtol": 0.03
+  },
+  "selected_token_ids": [
+    33,
+    11
+  ],
+  "per_rank": [
+    {
+      "rank": 0,
+      "full_max_abs": 0.001953125,
+      "prefill_max_abs": 0.001953125,
+      "decode_max_abs": 0.001953125,
+      "load_seconds": 1.2175365686416626,
+      "current_memory_mb": 0.0,
+      "peak_memory_mb": 20.1357421875,
+      "full_passed": true,
+      "prefill_passed": true,
+      "decode_passed": true,
+      "token_broadcast_passed": true
+    },
+    {
+      "rank": 1,
+      "full_max_abs": 0.001953125,
+      "prefill_max_abs": 0.001953125,
+      "decode_max_abs": 0.001953125,
+      "load_seconds": 0.8988115191459656,
+      "current_memory_mb": 0.0,
+      "peak_memory_mb": 20.1357421875,
+      "full_passed": true,
+      "prefill_passed": true,
+      "decode_passed": true,
+      "token_broadcast_passed": true
+    }
+  ],
+  "provenance": {
+    "git": {
+      "commit": "ea672a6f31c06fb5cad6ee474203a695b6d2bab3",
+      "branch": "upgrade/v0.6-qwen3-tensor-parallel",
+      "dirty": false
+    },
+    "command": [
+      "benchmarks/tp_hardware_smoke.py",
+      "--device",
+      "npu",
+      "--backend",
+      "hccl",
+      "--precision",
+      "bf16",
+      "--output",
+      "/tmp/tp2_reproof_smoke.json"
+    ]
+  }
+}

@@ -64,7 +64,15 @@ loss 的微小变化来自新版本不再对 bias/LayerNorm 参数应用 weight 
 
 这些测试在阶段 C 的最小后端兼容中补齐，不阻塞本版本代码冻结和讲解。
 
-## 5. 讲解顺序
+## 5. v0.2.2 修正
+
+- checkpoint 恢复统一先加载到 CPU，避免 CPU RNG 与 batcher Generator 状态被映射到 CUDA；
+- checkpoint 新增 `iteration_step` 与 `optimizer_step`，保留 `step` 作为循环次数兼容字段；
+- 训练日志记录窗口 `grad_norm_last`、`grad_norm_max` 和 `skipped_steps`；
+- validation 未独立测量的显存字段留空，不再复用训练窗口数据；
+- 修正涉及文件的注释以中文为主。
+
+## 6. 讲解顺序
 
 1. `src/minigpt/optim.py`：为什么分组、参数如何只出现一次、旧 optimizer state 怎样迁移；
 2. `train.py`：设备侧 loss 累计、窗口边界、为什么删除第二次 `zero_grad()`；

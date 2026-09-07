@@ -1,0 +1,25 @@
+===== test_core =====
+All core smoke tests passed.
+===== test_inference =====
+v0.3 inference and benchmark tests passed.
+===== test_kv_cache =====
+v0.4 KV Cache and static batching tests passed.
+===== test_qwen3 =====
+Qwen3 parity, cache, loading and memory planning tests passed.
+===== test_qwen3_tp =====
+v0.6 Gloo test skipped; set MINIGPT_RUN_GLOO_TESTS=1 to enable it.
+v0.6 Qwen3 Tensor Parallel simulation tests passed.
+===== test_reference_parity =====
+Reference-vs-optimized parity tests passed.
+===== test_resume_consistency =====
+Exact resume consistency test passed.
+===== test_tp_scaling =====
+v0.6 TP scaling summary tests passed.
+===== GLOO GATE: test_qwen3_tp =====
+[W904 12:05:34.720132620 ProcessGroupGloo.cpp:511] Warning: Unable to resolve hostname to a (local) address. Using the loopback address as fallback. Manually set the network interface to bind to with GLOO_SOCKET_IFNAME. (function operator())
+[W904 12:05:34.870179750 ProcessGroupGloo.cpp:511] Warning: Unable to resolve hostname to a (local) address. Using the loopback address as fallback. Manually set the network interface to bind to with GLOO_SOCKET_IFNAME. (function operator())
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+v0.6 Gloo process-group tests passed.
+v0.6 Qwen3 Tensor Parallel simulation tests passed.
+===== ALL_TESTS_DONE =====

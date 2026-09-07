@@ -1,2 +1,4 @@
-torch>=2.0
+torch>=2.8
 numpy>=1.26
+safetensors>=0.5
+transformers>=4.51,<6

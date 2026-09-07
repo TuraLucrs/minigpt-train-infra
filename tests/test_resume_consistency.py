@@ -1,4 +1,4 @@
-"""Verify that uninterrupted and checkpoint-resumed training are identical.
+"""验证连续训练与 checkpoint 恢复训练完全一致。
 
 Run:
     python tests/test_resume_consistency.py
@@ -127,12 +127,14 @@ def main() -> None:
         continuous = torch.load(continuous_dir / "latest.pt", map_location="cpu")
         resumed = torch.load(resumed_dir / "latest.pt", map_location="cpu")
 
-        # Runtime output paths differ, so compare only trajectory-defining state.
+        # 两次运行的输出路径不同，因此只比较决定训练轨迹的状态。
         keys = (
             "model_state",
             "optimizer_state",
             "scaler_state",
             "step",
+            "iteration_step",
+            "optimizer_step",
             "best_val_loss",
             "rng_state",
             "train_batcher_state",

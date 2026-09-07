@@ -1,0 +1,195 @@
+W0904 12:19:00.707000 2080444 site-packages/torch/distributed/run.py:852] 
+W0904 12:19:00.707000 2080444 site-packages/torch/distributed/run.py:852] *****************************************
+W0904 12:19:00.707000 2080444 site-packages/torch/distributed/run.py:852] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0904 12:19:00.707000 2080444 site-packages/torch/distributed/run.py:852] *****************************************
+[W904 12:19:05.778412660 ProcessGroupHCCL.cpp:1302] Warning: The watchdog timeout 180000ms(which is set by init_process_group) is less than or equal to HCCL execution timeout 1836000ms! The plog may not be recorded. (function ProcessGroupHCCL)
+[rank0]:[W904 12:19:06.439393030 NPUCachingAllocator.cpp:204] Warning: The current CANN and HDK(driver) versions require processing for 32 padding size, with memory allocation. (function operator())
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-04T04:19:08.309792+00:00",
+  "benchmark": "tensor_parallel_hardware_smoke",
+  "status": "passed",
+  "evidence_class": "real_accelerator_tp_correctness_smoke_not_performance_evidence",
+  "environment": {
+    "python": "3.12.13",
+    "device": "npu:0",
+    "device_type": "npu",
+    "device_name": "Ascend910_9382",
+    "precision": "bf16",
+    "supports_bf16": true,
+    "total_memory_mb": 62732.0,
+    "torch": "2.10.0+cpu",
+    "torch_npu": "2.10.0.post5.dev20260821"
+  },
+  "distributed": {
+    "backend": "hccl",
+    "rank": 0,
+    "local_rank": 0,
+    "world_size": 8,
+    "is_primary": true,
+    "process_group_initialized": true,
+    "hostname": "node-21-123",
+    "visible_device_count": 16
+  },
+  "model": {
+    "config": {
+      "vocab_size": 64,
+      "hidden_size": 32,
+      "intermediate_size": 64,
+      "num_hidden_layers": 2,
+      "num_attention_heads": 8,
+      "num_key_value_heads": 2,
+      "head_dim": 8,
+      "max_position_embeddings": 32,
+      "rms_norm_eps": 1e-06,
+      "rope_theta": 1000000.0,
+      "attention_bias": false,
+      "attention_dropout": 0.0,
+      "hidden_act": "silu",
+      "tie_word_embeddings": false,
+      "bos_token_id": 1,
+      "eos_token_id": 2,
+      "pad_token_id": 0,
+      "torch_dtype": "float32",
+      "initializer_range": 0.02,
+      "use_sliding_window": false,
+      "sliding_window": null,
+      "rope_scaling": null
+    },
+    "full_parameter_count": 26816,
+    "local_parameter_count": 4288
+  },
+  "tolerances": {
+    "atol": 0.03,
+    "rtol": 0.03
+  },
+  "selected_token_ids": [
+    33,
+    11
+  ],
+  "per_rank": [
+    {
+      "rank": 0,
+      "full_max_abs": 0.001953125,
+      "prefill_max_abs": 0.001953125,
+      "decode_max_abs": 0.001953125,
+      "load_seconds": 0.8148609399795532,
+      "current_memory_mb": 0.0,
+      "peak_memory_mb": 20.1181640625,
+      "full_passed": true,
+      "prefill_passed": true,
+      "decode_passed": true,
+      "token_broadcast_passed": true
+    },
+    {
+      "rank": 1,
+      "full_max_abs": 0.001953125,
+      "prefill_max_abs": 0.001953125,
+      "decode_max_abs": 0.001953125,
+      "load_seconds": 1.2125991582870483,
+      "current_memory_mb": 0.0,
+      "peak_memory_mb": 20.1181640625,
+      "full_passed": true,
+      "prefill_passed": true,
+      "decode_passed": true,
+      "token_broadcast_passed": true
+    },
+    {
+      "rank": 2,
+      "full_max_abs": 0.001953125,
+      "prefill_max_abs": 0.001953125,
+      "decode_max_abs": 0.001953125,
+      "load_seconds": 0.8226713538169861,
+      "current_memory_mb": 0.0,
+      "peak_memory_mb": 20.1181640625,
+      "full_passed": true,
+      "prefill_passed": true,
+      "decode_passed": true,
+      "token_broadcast_passed": true
+    },
+    {
+      "rank": 3,
+      "full_max_abs": 0.001953125,
+      "prefill_max_abs": 0.001953125,
+      "decode_max_abs": 0.001953125,
+      "load_seconds": 0.9193425178527832,
+      "current_memory_mb": 0.0,
+      "peak_memory_mb": 20.1181640625,
+      "full_passed": true,
+      "prefill_passed": true,
+      "decode_passed": true,
+      "token_broadcast_passed": true
+    },
+    {
+      "rank": 4,
+      "full_max_abs": 0.001953125,
+      "prefill_max_abs": 0.001953125,
+      "decode_max_abs": 0.001953125,
+      "load_seconds": 0.9470840692520142,
+      "current_memory_mb": 0.0,
+      "peak_memory_mb": 20.1181640625,
+      "full_passed": true,
+      "prefill_passed": true,
+      "decode_passed": true,
+      "token_broadcast_passed": true
+    },
+    {
+      "rank": 5,
+      "full_max_abs": 0.001953125,
+      "prefill_max_abs": 0.001953125,
+      "decode_max_abs": 0.001953125,
+      "load_seconds": 1.0658267736434937,
+      "current_memory_mb": 0.0,
+      "peak_memory_mb": 20.1181640625,
+      "full_passed": true,
+      "prefill_passed": true,
+      "decode_passed": true,
+      "token_broadcast_passed": true
+    },
+    {
+      "rank": 6,
+      "full_max_abs": 0.001953125,
+      "prefill_max_abs": 0.001953125,
+      "decode_max_abs": 0.001953125,
+      "load_seconds": 0.7681922912597656,
+      "current_memory_mb": 0.0,
+      "peak_memory_mb": 20.1181640625,
+      "full_passed": true,
+      "prefill_passed": true,
+      "decode_passed": true,
+      "token_broadcast_passed": true
+    },
+    {
+      "rank": 7,
+      "full_max_abs": 0.001953125,
+      "prefill_max_abs": 0.001953125,
+      "decode_max_abs": 0.001953125,
+      "load_seconds": 0.8610576391220093,
+      "current_memory_mb": 0.0,
+      "peak_memory_mb": 20.1181640625,
+      "full_passed": true,
+      "prefill_passed": true,
+      "decode_passed": true,
+      "token_broadcast_passed": true
+    }
+  ],
+  "provenance": {
+    "git": {
+      "commit": "ac87a499ba658b389ca02738ef792ab4e7675873",
+      "branch": "upgrade/v0.6-qwen3-tensor-parallel",
+      "dirty": false
+    },
+    "command": [
+      "benchmarks/tp_hardware_smoke.py",
+      "--device",
+      "npu",
+      "--backend",
+      "hccl",
+      "--precision",
+      "bf16",
+      "--output",
+      "runs/tp8_hardware_smoke.json"
+    ]
+  }
+}
+报告：/root/minigpt-train/runs/tp8_hardware_smoke.json
