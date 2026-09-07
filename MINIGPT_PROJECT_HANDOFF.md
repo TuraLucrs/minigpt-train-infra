@@ -7,7 +7,7 @@
 - 当前最新正式版本：`v0.6-qwen3-tensor-parallel`
 - 当前冻结源码提交：`7998581bc61003a8cd98aef874e11d698b66e912`
 - 当前源码分支：`upgrade/v0.6-qwen3-tensor-parallel`
-- 当前进度：v0.6 已完成真实 Ascend Atlas A3 验收、远端分支/tag 同步和双份恢复归档；v0.7 尚未开始。
+- 当前进度：v0.6 已完成真实 Ascend Atlas A3 验收、远端分支/tag、双份恢复归档和冻结后独立 CPU/Gloo 自动化复核；v0.7 尚未开始。
 
 ---
 
@@ -31,7 +31,7 @@
    - `docs/INFERENCE_FIRST_ROADMAP.md`
    - `docs/V0_6_QWEN3_TENSOR_PARALLEL.md`
    - `artifacts/v0.6_qwen3_tp_acceptance/README.md`
-5. 在开始 v0.7 代码前，先完成本文件第 10 节列出的“v0.6 冻结后收尾”。
+5. 阅读 `docs/reviews/MINIGPT_V0_6_FROZEN_REVIEW.md`；v0.6 冻结复核已经完成，开始 v0.7 前只需按第 10 节核对学习断点和项目入口方案。
 6. 从 `7998581...` 新建 v0.7 分支；不得移动或改写现有 v0.6 tag，也不得为了头像重写已有证据链提交。
 
 若实时 GitHub/资料库状态与本文件不一致，按第 2 节的证据优先级判断，并更新本文件，而不是静默选择一个版本。
@@ -199,7 +199,7 @@ Qwen3-32B 承担：
 | v0.3 | `v0.3-measurable-single-device-inference` | `9da4e57a8ca9a1eb049f13f384fc5d38864eb32f` | 可测量单设备推理基线已冻结 |
 | v0.4 | `v0.4-kv-cache-static-batching` | `a09e5a96879f4a1c985732d9dbefc32e2cfd5b5f` | KV Cache 与静态 Batching 已冻结 |
 | v0.5 | `v0.5-qwen3-real-model` | `3eefbc9241f127a7e5db50d36de37df3f253c4f0` | Qwen3 真实模型接入已冻结 |
-| v0.6 | `v0.6-qwen3-tensor-parallel` | `7998581bc61003a8cd98aef874e11d698b66e912` | TP 软件、实机验收、证据归档和最终 tag 已完成 |
+| v0.6 | `v0.6-qwen3-tensor-parallel` | `7998581bc61003a8cd98aef874e11d698b66e912` | TP 软件、实机验收、证据归档、最终 tag 和冻结后自动化复核已完成 |
 
 ### 6.2 v0.1：教学单设备训练闭环
 
@@ -367,7 +367,7 @@ MiniGPT 使用 learned absolute position；窗口左滑会改变保留 token 的
 
 | 分支 | HEAD | 用途 |
 |---|---|---|
-| `main` | `c191972e10c321e103b80e1d79e31ab3ca446fc5` | 旧 v0.2.1 内容 + exact bundle sync workflow；不是最新源码 |
+| `main` | 以 GitHub 实时 HEAD 为准 | 旧 v0.2.1 源码 + 项目导航、exact bundle sync 和 v0.6 frozen-review workflow；不是最新源码入口 |
 | `upgrade/native-model-primitives` | `66d1023a...` | v0.2 |
 | `upgrade/v0.2-single-device-closeout` | `bd70bc8f...` | v0.2.1 等价树、用户 GitHub 作者身份版 |
 | `upgrade/v0.2.2-single-device-correctness` | `01c1109c...` | v0.2.2 等价树、用户作者身份版 |
@@ -483,6 +483,8 @@ NPU/HCCL 仍通过人工申请机器后的版本验收，不伪装成普通 CI�
 | `minigpt-train-v0.6-acceptance-7998581.bundle` | 导入验收证据与文档后的恢复包 |
 | `minigpt-train-v0.6-qwen3-tensor-parallel.bundle` | 最终双-ref 完整 Git bundle，含正式分支和 annotated tag；canonical 恢复入口 |
 | `minigpt-train-v0.6-qwen3-tensor-parallel-source.tar.gz` | 从最终 tag 直接导出的源码快照 |
+| `MINIGPT_V0_6_FROZEN_REVIEW.md` | 2026-09-07 冻结后独立复核、锁定依赖的 CPU/Gloo CI、真实 BatchEncoding 回归和文档勘误 |
+| `V0_6_EMERGENCY_CHECKPOINT_2026-09-07.md` | 复核完成后的紧急恢复状态和续作步骤 |
 
 最终 manifest 记录：
 
@@ -496,21 +498,18 @@ NPU/HCCL 仍通过人工申请机器后的版本验收，不伪装成普通 CI�
 
 ## 10. 当前真正未完成的事项
 
-v0.6 代码和发布已经完成，但按项目自己的硬规则，在开始 v0.7 前仍有三个高优先级收尾项。
+v0.6 代码、发布和冻结后复核已经完成。开始 v0.7 前还剩学习断点与项目入口两项；它们不要求修改 v0.6 tag。
 
-### P0-1：v0.6 冻结版本独立自查
+### P0-1：v0.6 冻结版本独立自查（已完成）
 
-现有资料库有 v0.5 独立审查文件，没有同名的 v0.6 最终冻结审查文件。应从最终 tag/bundle 新建一个干净、detached 的检查目录，核对：
+2026-09-07 已完成并保存 `MINIGPT_V0_6_FROZEN_REVIEW.md`：
 
-- HEAD/tag/branch/bundle/ref 一致；
-- 工作树和归档无未记录差异；
-- `compileall`、`git diff --check` 和无需设备的测试；
-- 若环境有 PyTorch/Transformers，执行完整 CPU/tiny 回归；
-- v0.6 文档中“tag 待创建”等旧表述仅标记为历史，不改写冻结 tag；
-- 实机 JSON、README 数字、commit、权重哈希和环境互相一致；
-- 把高性价比问题列入 v0.7，而不是修改 v0.6 历史。
-
-输出建议：资料库 `/MINIGPT_V0_6_FROZEN_REVIEW.md`，并在后续管理分支记录一份；不得移动 v0.6 tag。
+- GitHub Actions run `34076364408`（run #2）为 `success`；
+- 锁定环境为 Python 3.12.14、PyTorch 2.10.0+cpu、NumPy 2.5.3、safetensors 0.8.0、Transformers 5.16.1；
+- 41 个 Python AST、12 份 JSON、验收 SHA-256、全部 CPU/tiny/Gloo 回归通过；
+- 使用真实 Transformers 5.16.1 `BatchEncoding` 类型的专项回归通过；
+- 成功标记分支 `verification/v0.6-frozen-review-pass` 精确指向 `7998581...`；
+- 冻结 tag 未移动，旧文档中的“tag 待创建”只作为历史表述记录勘误。
 
 ### P0-2：补齐学习进度，而不是默认“版本做完=用户学完”
 
@@ -530,16 +529,18 @@ v0.6 代码和发布已经完成，但按项目自己的硬规则，在开始 v0
 
 每讲完一个小节更新 `/MINIGPT_TRAIN_LEARNING_NOTES.md`；先修正它的“当前进度”字段，再增量写入，不应整篇重写丢失原有追问记录。
 
-### P0-3：修复项目入口和低成本 CI
+### P0-3：修复项目入口和低成本 CI（部分完成）
 
 默认 `main` 过旧，会让新 clone/new conversation误判当前状态。不要直接 force-push 覆盖。应先设计一个可恢复方案，例如：
 
 - 保留 `main` 和 `codex/exact-git-sync` 的同步历史；
 - 创建稳定入口分支（如 `stable`）指向最新正式 tag，或在确认影响后调整默认分支；
 - 在默认可见位置放置本交接文档，明确最新源码入口；
-- v0.7 分支增加 CPU/tiny 项目 CI，与 bundle 同步 workflow 分开命名。
+- v0.7 分支继承并扩展 CPU/tiny 项目 CI，与 bundle 同步 workflow 分开命名。
 
-本轮已经把本文件放到 GitHub 默认分支作为导航，但没有更改默认分支、重写历史或移动任何版本 ref。
+本文件和 `docs/reviews/MINIGPT_V0_6_FROZEN_REVIEW.md` 已放到 GitHub 默认分支；
+`.github/workflows/v06-frozen-review.yml` 已证明冻结 tag 的 CPU/tiny/Gloo 回归可自动执行。
+尚未调整默认分支或创建稳定源码入口，v0.7 开发前需先确定 `stable`/默认分支方案。
 
 ---
 
@@ -728,9 +729,10 @@ TTFT/TPOT/E2E/throughput/goodput/memory/communication
 ```text
 请先从资料库读取《MINIGPT_PROJECT_HANDOFF.md》，再实时核对 GitHub 私有仓库
 TuraLucrs/minigpt-train-infra 的分支、tag 和 v0.6 最终提交。不要从默认 main 续作；
-当前稳定入口应为 tag v0.6-qwen3-tensor-parallel / commit 7998581。先完成文档列出的
-v0.6 冻结后独立自查和学习断点核对，不得移动 v0.6 tag、重写已有实机证据链，也不要
-直接开始 v0.7。事实冲突时按交接文档中的证据优先级处理，并明确报告。
+当前稳定入口应为 tag v0.6-qwen3-tensor-parallel / commit 7998581。先读取
+docs/reviews/MINIGPT_V0_6_FROZEN_REVIEW.md，确认冻结复核已经通过，再核对学习断点；
+不得移动 v0.6 tag 或重写已有实机证据链。事实冲突时按交接文档中的证据优先级处理，
+并明确报告。
 ```
 
 若用户直接要求继续开发 v0.7，则新对话仍应先快速核对 P0 项是否已经被后续记录完成；完成后从 v0.6 tag 创建新分支，再进入调度设计。
@@ -739,4 +741,4 @@ v0.6 冻结后独立自查和学习断点核对，不得移动 v0.6 tag、重写
 
 ## 14. 当前一句话状态
 
-项目已经从“手写 MiniGPT 单卡训练教学项目”演进到“Qwen3-32B 在 Ascend Atlas A3 上完成 TP=2/4/8 的真实分布式推理与容量验证”；v0.6 已正式冻结，但它没有证明 batch=1 单请求加速。下一阶段的核心不是继续堆更大的 TP，而是先完成冻结后独立审查和学习补课，再用 v0.7 Continuous Batching、KV 生命周期和 TP/多副本部署对照，真正证明并发吞吐/goodput 的系统优化价值。
+项目已经从“手写 MiniGPT 单卡训练教学项目”演进到“Qwen3-32B 在 Ascend Atlas A3 上完成 TP=2/4/8 的真实分布式推理与容量验证”；v0.6 已完成正式冻结和独立 CPU/Gloo 自动化复核，但它没有证明 batch=1 单请求加速。下一阶段先补齐学习断点并确定稳定源码入口，再用 v0.7 Continuous Batching、KV 生命周期和 TP/多副本部署对照，真正证明并发吞吐/goodput 的系统优化价值。
