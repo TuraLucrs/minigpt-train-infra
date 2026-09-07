@@ -1,0 +1,93 @@
+name: Codex exact Git bundle sync
+
+on:
+  push:
+    branches:
+      - codex/exact-git-sync
+    paths:
+      - codex-sync/minigpt-train.bundle
+      - codex-sync/minigpt-train.bundle.sha256
+
+permissions:
+  contents: write
+
+concurrency:
+  group: codex-exact-git-sync
+  cancel-in-progress: false
+
+jobs:
+  import-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out sync branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify and import approved refs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          bundle_path="codex-sync/minigpt-train.bundle"
+          checksum_path="codex-sync/minigpt-train.bundle.sha256"
+          expected_sha256="$(tr -d '[:space:]' < "$checksum_path")"
+          actual_sha256="$(sha256sum "$bundle_path" | awk '{print $1}')"
+
+          if [[ ! "$expected_sha256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Invalid expected SHA-256" >&2
+            exit 1
+          fi
+          if [[ "$actual_sha256" != "$expected_sha256" ]]; then
+            echo "Bundle SHA-256 mismatch" >&2
+            exit 1
+          fi
+
+          git bundle verify "$bundle_path"
+          mapfile -t advertised_refs < <(git bundle list-heads "$bundle_path")
+          if (( ${#advertised_refs[@]} == 0 || ${#advertised_refs[@]} > 32 )); then
+            echo "Bundle must advertise between 1 and 32 refs" >&2
+            exit 1
+          fi
+
+          index=0
+          for advertised in "${advertised_refs[@]}"; do
+            object_sha="${advertised%% *}"
+            target_ref="${advertised#* }"
+
+            if [[ ! "$object_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Invalid object SHA: $object_sha" >&2
+              exit 1
+            fi
+            case "$target_ref" in
+              refs/heads/upgrade/v*|refs/tags/v*) ;;
+              *)
+                echo "Forbidden target ref: $target_ref" >&2
+                exit 1
+                ;;
+            esac
+
+            local_ref="refs/codex-import/${GITHUB_RUN_ID}/${index}"
+            git fetch --no-tags "$bundle_path" "$target_ref:$local_ref"
+            imported_sha="$(git rev-parse "$local_ref")"
+            if [[ "$imported_sha" != "$object_sha" ]]; then
+              echo "Imported object mismatch for $target_ref" >&2
+              exit 1
+            fi
+
+            remote_line="$(git ls-remote --refs origin "$target_ref")"
+            remote_sha="${remote_line%%$'\t'*}"
+            if [[ -n "$remote_line" && "$remote_sha" == "$object_sha" ]]; then
+              echo "Already synchronized: $target_ref"
+            elif [[ -n "$remote_line" && "$target_ref" == refs/tags/* ]]; then
+              echo "Refusing to replace existing tag: $target_ref" >&2
+              exit 1
+            else
+              git push origin "$local_ref:$target_ref"
+            fi
+
+            index=$((index + 1))
+          done
+
+          echo "Imported ${#advertised_refs[@]} verified refs from $actual_sha256"

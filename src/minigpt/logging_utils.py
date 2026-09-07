@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import csv
+import time
 from pathlib import Path
 from typing import Dict, Iterable
 
