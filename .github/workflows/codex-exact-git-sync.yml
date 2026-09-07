@@ -17,23 +17,34 @@ concurrency:
 jobs:
   import-bundle:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Check out sync branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Verify and import approved refs
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.14"
+          cache: pip
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install             torch==2.10.0             numpy==2.5.3             safetensors==0.8.0             transformers==5.16.1
+
+      - name: Verify, test, and import approved refs
         shell: bash
         run: |
           set -euo pipefail
 
           encoded_parts=(
-            codex-sync/minigpt-train.bundle.b64.part00
-            codex-sync/minigpt-train.bundle.b64.part01
-            codex-sync/minigpt-train.bundle.b64.part02
-            codex-sync/minigpt-train.bundle.b64.part03
+            codex-sync/minigpt-train-v07.bundle.b64.part00
+            codex-sync/minigpt-train-v07.bundle.b64.part01
+            codex-sync/minigpt-train-v07.bundle.b64.part02
+            codex-sync/minigpt-train-v07.bundle.b64.part03
           )
           bundle_path="$RUNNER_TEMP/minigpt-train.bundle"
           checksum_path="codex-sync/minigpt-train.bundle.sha256"
@@ -90,6 +101,18 @@ jobs:
               exit 1
             fi
 
+            worktree_path="$RUNNER_TEMP/minigpt-train-${index}"
+            git worktree add --detach "$worktree_path" "$local_ref"
+            (
+              cd "$worktree_path"
+              python -m compileall -q src tests benchmarks
+              git diff --check
+              for test_file in tests/test_*.py; do
+                python "$test_file"
+              done
+            )
+            git worktree remove "$worktree_path"
+
             remote_line="$(git ls-remote --refs origin "$target_ref")"
             remote_sha="${remote_line%%$'\t'*}"
             if [[ -n "$remote_line" && "$remote_sha" == "$object_sha" ]]; then
@@ -104,4 +127,4 @@ jobs:
             index=$((index + 1))
           done
 
-          echo "Imported ${#advertised_refs[@]} verified refs from $actual_sha256"
+          echo "Tested and imported ${#advertised_refs[@]} verified refs from $actual_sha256"
