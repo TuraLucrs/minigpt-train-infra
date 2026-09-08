@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -31,7 +32,9 @@ def project_path(value: str) -> Path:
 
 def main() -> None:
     args = parse_args()
-    trace = WorkloadTrace.load(project_path(args.workload))
+    workload_path = project_path(args.workload)
+    source_file_sha256 = hashlib.sha256(workload_path.read_bytes()).hexdigest()
+    trace = WorkloadTrace.load(workload_path)
     partitions, assignments = partition_workload_by_projected_load(
         trace,
         replica_count=args.replica_count,
@@ -50,6 +53,7 @@ def main() -> None:
         "method": "least_projected_character_plus_output_work",
         "source_workload_id": trace.workload_id,
         "source_request_sha256": trace.request_sha256,
+        "source_file_sha256": source_file_sha256,
         "replica_count": args.replica_count,
         "max_slots_per_replica": args.max_slots_per_replica,
         "partition_files": partition_files,
@@ -61,6 +65,7 @@ def main() -> None:
         encoding="utf-8",
     )
     print(f"source SHA-256 : {trace.request_sha256}")
+    print(f"file SHA-256   : {source_file_sha256}")
     print(f"replicas       : {args.replica_count}")
     print(f"manifest       : {manifest_path}")
 

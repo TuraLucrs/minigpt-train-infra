@@ -18,7 +18,10 @@ import torch.multiprocessing as mp
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from minigpt.distributed import DistributedContext  # noqa: E402
+from minigpt.distributed import (  # noqa: E402
+    DistributedContext,
+    TensorParallelReplicaContext,
+)
 from minigpt.inference import GenerationConfig, InferenceEngine  # noqa: E402
 from minigpt.qwen3 import (  # noqa: E402
     Qwen3Config,
@@ -174,6 +177,11 @@ def check_distributed_boundaries() -> None:
     assert single.all_reduce_sum(value) is value
     assert single.all_gather_last_dim(value) is value
     assert single.all_gather_floats([1.5]) == [[1.5]]
+    single_replica = TensorParallelReplicaContext.create(single, tp_size=1)
+    assert single_replica.rank == 0
+    assert single_replica.replica_count == 1
+    assert single_replica.group_ranks == (0,)
+    assert single_replica.all_gather_last_dim(value) is value
     try:
         single.broadcast(torch.tensor([1]), src=1)
     except ValueError:
@@ -230,7 +238,64 @@ def _tp_worker(
         distributed.broadcast(broadcast)
         assert broadcast.item() == 17
 
+        replica = TensorParallelReplicaContext.create(distributed, tp_size=1)
+        assert replica.rank == 0
+        assert replica.replica_count == world_size
+        assert replica.replica_index == rank
+        assert replica.group_ranks == (rank,)
+        local = torch.tensor([float(rank)])
+        assert replica.all_reduce_sum(local).item() == float(rank)
+        replica.global_barrier()
+
         _check_tp_model(distributed, model_dir)
+    finally:
+        if distributed is not None:
+            distributed.close()
+
+
+def _replica_group_worker(
+    rank: int,
+    world_size: int,
+    rendezvous_path: str,
+) -> None:
+    torch.set_num_threads(1)
+    distributed: DistributedContext | None = None
+    try:
+        distributed = DistributedContext.create(
+            "cpu",
+            "fp32",
+            rank=rank,
+            local_rank=rank,
+            world_size=world_size,
+            init_method=f"file://{rendezvous_path}",
+            timeout_seconds=60,
+        )
+        replica = TensorParallelReplicaContext.create(distributed, tp_size=2)
+        expected_replica = rank // 2
+        expected_group = (expected_replica * 2, expected_replica * 2 + 1)
+        assert replica.replica_index == expected_replica
+        assert replica.replica_count == 2
+        assert replica.rank == rank % 2
+        assert replica.group_ranks == expected_group
+
+        reduced = torch.tensor([float(rank + 1)])
+        replica.all_reduce_sum(reduced)
+        assert reduced.item() == (3.0 if expected_replica == 0 else 7.0)
+        gathered = replica.all_gather_last_dim(torch.tensor([[float(rank)]]))
+        assert gathered.tolist() == [[float(value) for value in expected_group]]
+        broadcast = torch.tensor(
+            [100 + expected_replica if replica.rank == 0 else -1],
+            dtype=torch.long,
+        )
+        replica.broadcast(broadcast, src=0)
+        assert broadcast.item() == 100 + expected_replica
+        measurements = replica.all_gather_floats([rank + 0.5])
+        assert measurements == [[value + 0.5] for value in expected_group]
+
+        replica.global_barrier()
+        global_value = torch.tensor([1.0])
+        distributed.all_reduce_sum(global_value)
+        assert global_value.item() == float(world_size)
     finally:
         if distributed is not None:
             distributed.close()
@@ -562,9 +627,17 @@ def main() -> None:
                 join=True,
             )
             print("v0.6 Gloo process-group tests passed.")
+            replica_rendezvous = root / "gloo-replica-rendezvous"
+            mp.spawn(
+                _replica_group_worker,
+                args=(4, str(replica_rendezvous)),
+                nprocs=4,
+                join=True,
+            )
+            print("v0.7 Gloo TP subgroup tests passed.")
         else:
             print("v0.6 Gloo test skipped; set MINIGPT_RUN_GLOO_TESTS=1 to enable it.")
-    print("v0.6 Qwen3 Tensor Parallel simulation tests passed.")
+    print("Qwen3 TP and v0.7 replica-group simulation tests passed.")
 
 
 if __name__ == "__main__":

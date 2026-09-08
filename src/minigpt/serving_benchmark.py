@@ -14,8 +14,7 @@ from typing import Callable, Sequence
 import torch
 
 from .benchmark import percentile
-from .distributed import DistributedContext
-from .replay import OfflineTraceReplayer
+from .replay import OfflineTraceReplayer, ReplayCollectives
 from .serving import ContinuousBatchEngine
 from .workload import WorkloadTrace
 
@@ -38,7 +37,9 @@ def summarize_samples(values: Sequence[float]) -> dict[str, float | int] | None:
     }
 
 
-def _output_digest(serving_report: dict[str, object]) -> str:
+def serving_output_digest(serving_report: dict[str, object]) -> str:
+    """由逐请求终态与实际生成 token 重新计算可审计输出摘要。"""
+
     requests = serving_report["requests"]
     canonical = [
         {
@@ -161,9 +162,11 @@ def benchmark_trace_replay(
     ttft_slo_ms: float | None = None,
     tpot_slo_ms: float | None = None,
     e2e_slo_ms: float | None = None,
-    distributed: DistributedContext | None = None,
+    distributed: ReplayCollectives | None = None,
     clock: Callable[[], float] = time.perf_counter,
     sleeper: Callable[[float], None] = time.sleep,
+    before_replay: Callable[[], None] | None = None,
+    after_replay: Callable[[], None] | None = None,
 ) -> dict[str, object]:
     """重放同一 trace，保存每次原始请求/step，并验证输出可重复。"""
 
@@ -174,6 +177,8 @@ def benchmark_trace_replay(
     trace.validate()
 
     def replay_once() -> tuple[dict[str, object], dict[str, object]]:
+        if before_replay is not None:
+            before_replay()
         engine.runner.runtime.reset_peak_memory()
         replay = OfflineTraceReplayer(
             engine,
@@ -187,6 +192,8 @@ def benchmark_trace_replay(
         ).run()
         engine.runner.runtime.synchronize()
         current_memory_mb, peak_memory_mb = engine.runner.runtime.memory_stats_mb()
+        if after_replay is not None:
+            after_replay()
         serving = engine.report(
             ttft_slo_ms=ttft_slo_ms,
             tpot_slo_ms=tpot_slo_ms,
@@ -199,7 +206,7 @@ def benchmark_trace_replay(
                 "current_device_memory_mb": current_memory_mb,
                 "peak_device_memory_mb": peak_memory_mb,
             },
-            "output_sha256": _output_digest(serving),
+            "output_sha256": serving_output_digest(serving),
             "serving": serving,
         }
         return run, serving

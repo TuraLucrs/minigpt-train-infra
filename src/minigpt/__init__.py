@@ -5,7 +5,7 @@
 """
 
 from .config import ExperimentConfig, ModelConfig, TrainConfig
-from .distributed import DistributedContext
+from .distributed import DistributedContext, TensorParallelReplicaContext
 from .inference import (
     CachedMiniGPTModelRunner,
     GenerationConfig,
@@ -47,6 +47,23 @@ from .serving import (
     ServingRequest,
 )
 from .serving_benchmark import benchmark_trace_replay, summarize_samples
+from .serving_acceptance import (
+    load_layout_comparison,
+    summarize_v07_acceptance,
+)
+from .serving_layout import (
+    load_layout_manifest,
+    load_serving_report,
+    summarize_serving_layouts,
+)
+from .serving_telemetry import (
+    NpuTelemetryTarget,
+    load_telemetry,
+    parse_npu_smi_common,
+    parse_npu_smi_usages,
+    parse_npu_target,
+    summarize_telemetry,
+)
 from .tokenizer import CharTokenizer
 from .workload import WorkloadPartition, WorkloadTrace, generate_workload
 
@@ -87,6 +104,7 @@ __all__ = [
     "load_qwen3_slot_runner",
     "load_tp_qwen3_slot_runner",
     "TensorParallelInferenceEngine",
+    "TensorParallelReplicaContext",
     "TensorParallelQwen3ForCausalLM",
     "RecomputeMiniGPTModelRunner",
     "TrainConfig",
@@ -96,4 +114,15 @@ __all__ = [
     "partition_workload_by_projected_load",
     "benchmark_trace_replay",
     "summarize_samples",
+    "load_layout_comparison",
+    "summarize_v07_acceptance",
+    "load_serving_report",
+    "load_layout_manifest",
+    "summarize_serving_layouts",
+    "NpuTelemetryTarget",
+    "load_telemetry",
+    "parse_npu_smi_common",
+    "parse_npu_smi_usages",
+    "parse_npu_target",
+    "summarize_telemetry",
 ]

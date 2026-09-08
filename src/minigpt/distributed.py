@@ -226,3 +226,153 @@ class DistributedContext:
 
     def __exit__(self, *_exc_info: object) -> None:
         self.close()
+
+
+@dataclass
+class TensorParallelReplicaContext:
+    """全局 torchrun 内一个 TP 子组；rank/world_size 均为组内语义。"""
+
+    global_context: DistributedContext
+    replica_index: int
+    replica_count: int
+    group_ranks: tuple[int, ...]
+    process_group: object | None
+
+    @classmethod
+    def create(
+        cls,
+        global_context: DistributedContext,
+        *,
+        tp_size: int,
+    ) -> "TensorParallelReplicaContext":
+        if tp_size <= 0:
+            raise ValueError("tp_size 必须大于 0")
+        if global_context.world_size % tp_size != 0:
+            raise ValueError("global world_size 必须能被 tp_size 整除")
+        replica_count = global_context.world_size // tp_size
+        replica_index = global_context.rank // tp_size
+        process_group = None
+        selected_ranks: tuple[int, ...] | None = None
+
+        if global_context.world_size > 1 and tp_size < global_context.world_size:
+            global_context._require_process_group()
+            for index in range(replica_count):
+                ranks = tuple(range(index * tp_size, (index + 1) * tp_size))
+                group = dist.new_group(ranks=list(ranks), backend=global_context.backend)
+                if index == replica_index:
+                    process_group = group
+                    selected_ranks = ranks
+        else:
+            selected_ranks = tuple(range(global_context.world_size))
+
+        if selected_ranks is None:
+            raise RuntimeError("没有为当前 global rank 建立 TP replica group")
+        return cls(
+            global_context=global_context,
+            replica_index=replica_index,
+            replica_count=replica_count,
+            group_ranks=selected_ranks,
+            process_group=process_group,
+        )
+
+    @property
+    def runtime(self) -> RuntimeContext:
+        return self.global_context.runtime
+
+    @property
+    def backend(self) -> str:
+        return self.global_context.backend
+
+    @property
+    def rank(self) -> int:
+        return self.global_context.rank - self.group_ranks[0]
+
+    @property
+    def local_rank(self) -> int:
+        return self.global_context.local_rank
+
+    @property
+    def world_size(self) -> int:
+        return len(self.group_ranks)
+
+    @property
+    def global_rank(self) -> int:
+        return self.global_context.rank
+
+    @property
+    def global_world_size(self) -> int:
+        return self.global_context.world_size
+
+    @property
+    def is_distributed(self) -> bool:
+        return self.world_size > 1
+
+    @property
+    def is_primary(self) -> bool:
+        return self.rank == 0
+
+    def _require_process_group(self) -> None:
+        self.global_context._require_process_group()
+
+    def barrier(self) -> None:
+        if self.is_distributed:
+            self._require_process_group()
+            dist.barrier(group=self.process_group)
+
+    def global_barrier(self) -> None:
+        self.global_context.barrier()
+
+    def all_reduce_sum(self, tensor: torch.Tensor) -> torch.Tensor:
+        if self.is_distributed:
+            self._require_process_group()
+            dist.all_reduce(tensor, op=dist.ReduceOp.SUM, group=self.process_group)
+        return tensor
+
+    def all_gather_last_dim(self, tensor: torch.Tensor) -> torch.Tensor:
+        if not self.is_distributed:
+            return tensor
+        self._require_process_group()
+        gathered = [torch.empty_like(tensor) for _ in range(self.world_size)]
+        dist.all_gather(gathered, tensor, group=self.process_group)
+        return torch.cat(gathered, dim=-1)
+
+    def all_gather_floats(self, values: list[float]) -> list[list[float]]:
+        if not self.is_distributed:
+            return [list(values)]
+        self._require_process_group()
+        local = torch.tensor(values, dtype=torch.float32, device=self.runtime.device)
+        gathered = [torch.empty_like(local) for _ in range(self.world_size)]
+        dist.all_gather(gathered, local, group=self.process_group)
+        return [tensor.cpu().tolist() for tensor in gathered]
+
+    def broadcast(self, tensor: torch.Tensor, src: int = 0) -> torch.Tensor:
+        if not 0 <= src < self.world_size:
+            raise ValueError("broadcast src 必须位于 TP group 的 [0, world_size)")
+        if self.is_distributed:
+            self._require_process_group()
+            dist.broadcast(
+                tensor,
+                src=self.group_ranks[src],
+                group=self.process_group,
+            )
+        return tensor
+
+    def metadata(self) -> dict[str, object]:
+        global_metadata = self.global_context.metadata()
+        return {
+            "backend": self.backend,
+            "tp_rank": self.rank,
+            "tp_size": self.world_size,
+            "global_rank": self.global_rank,
+            "global_world_size": self.global_world_size,
+            "local_rank": self.local_rank,
+            "replica_index": self.replica_index,
+            "replica_count": self.replica_count,
+            "group_ranks": list(self.group_ranks),
+            "is_primary": self.is_primary,
+            "process_group_initialized": global_metadata[
+                "process_group_initialized"
+            ],
+            "hostname": global_metadata["hostname"],
+            "visible_device_count": global_metadata["visible_device_count"],
+        }

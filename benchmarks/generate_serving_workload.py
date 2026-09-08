@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 from pathlib import Path
 import sys
 
@@ -35,9 +36,11 @@ def main() -> None:
     if not output.is_absolute():
         output = PROJECT_ROOT / output
     trace.save(output)
+    file_sha256 = hashlib.sha256(output.read_bytes()).hexdigest()
     print(f"workload        : {trace.workload_id}")
     print(f"requests        : {len(trace.requests)}")
     print(f"request SHA-256 : {trace.request_sha256}")
+    print(f"file SHA-256    : {file_sha256}")
     print(f"output          : {output}")
 
 

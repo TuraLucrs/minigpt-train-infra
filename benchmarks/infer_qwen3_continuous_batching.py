@@ -11,20 +11,29 @@ import statistics
 import sys
 import time
 
+import torch
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from minigpt.distributed import DistributedContext  # noqa: E402
+from minigpt.distributed import (  # noqa: E402
+    DistributedContext,
+    TensorParallelReplicaContext,
+)
 from minigpt.experiment import build_model_directory_provenance  # noqa: E402
 from minigpt.qwen3 import count_qwen3_parameters  # noqa: E402
 from minigpt.qwen3_tp import load_tp_qwen3_slot_runner  # noqa: E402
 from minigpt.serving import ContinuousBatchEngine  # noqa: E402
 from minigpt.serving_benchmark import benchmark_trace_replay  # noqa: E402
+from minigpt.replica import partition_workload_by_projected_load  # noqa: E402
 from minigpt.workload import WorkloadTrace  # noqa: E402
 
 
 QWEN3_32B_PARAMETERS = 32_762_123_264
+WORKLOAD_CLASSES = frozenset(
+    {"short_short", "long_prefill_short_decode", "mixed"}
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,7 +41,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-dir", required=True)
     parser.add_argument("--workload", required=True)
     parser.add_argument("--mode", choices=("open_loop", "closed_loop"), required=True)
-    parser.add_argument("--closed-loop-clients", type=int, default=None)
+    parser.add_argument(
+        "--closed-loop-clients",
+        type=int,
+        default=None,
+        help="整个 layout 的 client 总数；按 replica 确定性拆分",
+    )
+    parser.add_argument("--tp-size", type=int, required=True)
     parser.add_argument("--max-slots", type=int, required=True)
     parser.add_argument("--max-seq-len", type=int, required=True)
     parser.add_argument("--max-queue-size", type=int, default=1024)
@@ -54,18 +69,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--distributed-timeout-seconds", type=int, default=600)
     parser.add_argument("--hash-weights", action="store_true")
     parser.add_argument("--layout-id", required=True)
-    parser.add_argument("--replica-index", type=int, default=0)
-    parser.add_argument("--replica-count", type=int, default=1)
     parser.add_argument(
         "--logical-device-ids",
         required=True,
-        help="当前 TP replica 实际使用的全局 logical device id，逗号分隔",
+        help="整个 torchrun 使用的 logical device id，按 global rank 逗号分隔",
     )
     parser.add_argument("--physical-card-count", type=int, required=True)
     parser.add_argument("--chips-per-card", type=int, required=True)
     parser.add_argument("--interconnect-topology", required=True)
+    parser.add_argument(
+        "--cann-version",
+        default=None,
+        help="正式 Ascend 证据必填；填写环境快照中确认的 CANN 完整版本",
+    )
     parser.add_argument("--run-label", default=None)
-    parser.add_argument("--output", required=True)
+    parser.add_argument("--output-dir", required=True)
     return parser.parse_args()
 
 
@@ -91,32 +109,91 @@ def parse_device_ids(value: str, world_size: int) -> list[int]:
 
 def validate_layout(
     args: argparse.Namespace,
-    trace: WorkloadTrace,
-    world_size: int,
+    global_world_size: int,
 ) -> list[int]:
-    if args.replica_count <= 0:
-        raise ValueError("replica-count 必须大于 0")
-    if not 0 <= args.replica_index < args.replica_count:
-        raise ValueError("replica-index 必须位于 [0, replica-count)")
     if args.physical_card_count <= 0 or args.chips_per_card <= 0:
         raise ValueError("physical-card-count/chips-per-card 必须大于 0")
-    if trace.partition is None:
-        if args.replica_count != 1 or args.replica_index != 0:
-            raise ValueError("多副本运行必须使用带 partition 身份的 workload")
-    elif (
-        trace.partition.replica_count != args.replica_count
-        or trace.partition.replica_index != args.replica_index
-    ):
-        raise ValueError("workload partition 与 replica-index/count 不一致")
-    device_ids = parse_device_ids(args.logical_device_ids, world_size)
+    if args.tp_size <= 0 or global_world_size % args.tp_size != 0:
+        raise ValueError("tp-size 必须为 global world_size 的正因数")
+    device_ids = parse_device_ids(args.logical_device_ids, global_world_size)
     declared_total_devices = args.physical_card_count * args.chips_per_card
-    if max(device_ids) >= declared_total_devices:
-        raise ValueError("logical-device-ids 超出声明的物理拓扑")
+    if len(device_ids) != declared_total_devices:
+        raise ValueError(
+            "本次正式 layout 必须声明 physical-card-count × chips-per-card 个 devices"
+        )
     return device_ids
 
 
-def _digest_numbers(value: str) -> tuple[float, float]:
-    return float(int(value[:6], 16)), float(len(value))
+def local_closed_loop_clients(
+    global_clients: int | None,
+    *,
+    mode: str,
+    replica_index: int,
+    replica_count: int,
+) -> int | None:
+    if mode == "open_loop":
+        if global_clients is not None:
+            raise ValueError("open_loop 不接受 closed-loop-clients")
+        return None
+    if global_clients is None or global_clients < replica_count:
+        raise ValueError("closed_loop client 总数必须不少于 replica 数")
+    base, remainder = divmod(global_clients, replica_count)
+    return base + (1 if replica_index < remainder else 0)
+
+
+def _digest_words(value: str) -> list[int]:
+    if len(value) != 64 or any(
+        character not in "0123456789abcdef" for character in value
+    ):
+        raise ValueError("digest 必须是小写 SHA-256")
+    return [int(value[index : index + 8], 16) for index in range(0, 64, 8)]
+
+
+def validate_global_trace_consistency(
+    trace: WorkloadTrace,
+    source_file_sha256: str,
+    distributed: DistributedContext,
+) -> None:
+    local = torch.tensor(
+        _digest_words(trace.request_sha256)
+        + _digest_words(source_file_sha256)
+        + [len(trace.requests)],
+        dtype=torch.long,
+        device=distributed.runtime.device,
+    )
+    expected = local.clone() if distributed.is_primary else torch.zeros_like(local)
+    distributed.broadcast(expected, src=0)
+    mismatch = torch.tensor(
+        [0 if torch.equal(local, expected) else 1],
+        dtype=torch.int32,
+        device=distributed.runtime.device,
+    )
+    distributed.all_reduce_sum(mismatch)
+    if int(mismatch.item()) > 0:
+        raise RuntimeError("global ranks 读取到的源 workload 不一致")
+
+
+def validate_replica_output_consistency(
+    output_sha256: str,
+    distributed: TensorParallelReplicaContext,
+) -> None:
+    """精确比较完整 SHA-256；所有 TP ranks 先走完相同 collective。"""
+
+    local = torch.tensor(
+        _digest_words(output_sha256),
+        dtype=torch.long,
+        device=distributed.runtime.device,
+    )
+    expected = local.clone() if distributed.is_primary else torch.zeros_like(local)
+    distributed.broadcast(expected, src=0)
+    mismatch = torch.tensor(
+        [0 if torch.equal(local, expected) else 1],
+        dtype=torch.int32,
+        device=distributed.runtime.device,
+    )
+    distributed.all_reduce_sum(mismatch)
+    if int(mismatch.item()) > 0:
+        raise AssertionError("不同 TP rank 的完整 trace 输出 SHA-256 不一致")
 
 
 def evidence_class(
@@ -128,18 +205,35 @@ def evidence_class(
     git = report["provenance"]["git"]
     protocol = report["protocol"]
     environment = report["environment"]
-    formal = (
+    distributed = report["distributed"]
+    workload = report["workload"]
+    source_file_sha256 = str(workload.get("source_file_sha256", ""))
+    formal_candidate = (
         parameter_count == QWEN3_32B_PARAMETERS
-        and environment["device_type"] in {"cuda", "npu"}
+        and environment["device_type"] == "npu"
         and environment["precision"] == "bf16"
+        and isinstance(environment.get("cann_version"), str)
+        and bool(str(environment["cann_version"]).strip())
+        and distributed["backend"] == "hccl"
+        and distributed["global_world_size"] == 8
         and hash_weights
         and git["commit"] != "unknown"
         and git["dirty"] is False
         and int(protocol["warmup"]) >= 1
         and int(protocol["repeats"]) >= 3
+        and workload.get("workload_class") in WORKLOAD_CLASSES
+        and len(source_file_sha256) == 64
+        and all(
+            character in "0123456789abcdef"
+            for character in source_file_sha256
+        )
+        and all(
+            protocol[field] is not None and float(protocol[field]) > 0.0
+            for field in ("ttft_slo_ms", "tpot_slo_ms", "e2e_slo_ms")
+        )
     )
-    if formal:
-        return "formal_qwen3_32b_continuous_batching"
+    if formal_candidate:
+        return "qwen3_32b_ascend_continuous_batching_candidate"
     if parameter_count == QWEN3_32B_PARAMETERS:
         return "qwen3_32b_continuous_batching_incomplete_evidence"
     return "correctness_or_nonformal_model"
@@ -147,16 +241,53 @@ def evidence_class(
 
 def main() -> None:
     args = parse_args()
-    distributed: DistributedContext | None = None
+    global_distributed: DistributedContext | None = None
     try:
-        distributed = DistributedContext.create(
+        global_distributed = DistributedContext.create(
             args.device,
             args.precision,
             backend=args.backend,
             timeout_seconds=args.distributed_timeout_seconds,
         )
-        trace = WorkloadTrace.load(project_path(args.workload))
-        logical_device_ids = validate_layout(args, trace, distributed.world_size)
+        logical_device_ids = validate_layout(args, global_distributed.world_size)
+        distributed = TensorParallelReplicaContext.create(
+            global_distributed,
+            tp_size=args.tp_size,
+        )
+        workload_path = project_path(args.workload)
+        source_payload = workload_path.read_bytes()
+        source_file_sha256 = hashlib.sha256(source_payload).hexdigest()
+        source_trace = WorkloadTrace.load(workload_path)
+        if source_trace.partition is not None:
+            raise ValueError("真实 layout benchmark 必须输入未分片的源 workload")
+        validate_global_trace_consistency(
+            source_trace,
+            source_file_sha256,
+            global_distributed,
+        )
+        if distributed.replica_count == 1:
+            trace = source_trace
+            _partitions, routing_manifest = partition_workload_by_projected_load(
+                source_trace,
+                replica_count=1,
+                max_slots_per_replica=args.max_slots,
+            )
+        else:
+            partitions, routing_manifest = partition_workload_by_projected_load(
+                source_trace,
+                replica_count=distributed.replica_count,
+                max_slots_per_replica=args.max_slots,
+            )
+            trace = partitions[distributed.replica_index]
+        clients = local_closed_loop_clients(
+            args.closed_loop_clients,
+            mode=args.mode,
+            replica_index=distributed.replica_index,
+            replica_count=distributed.replica_count,
+        )
+        replica_device_ids = [
+            logical_device_ids[rank] for rank in distributed.group_ranks
+        ]
         model_dir = project_path(args.model_dir)
 
         distributed.runtime.synchronize()
@@ -192,21 +323,24 @@ def main() -> None:
             engine,
             trace,
             mode=args.mode,
-            closed_loop_clients=args.closed_loop_clients,
+            closed_loop_clients=clients,
             warmup=args.warmup,
             repeats=args.repeats,
             ttft_slo_ms=args.ttft_slo_ms,
             tpot_slo_ms=args.tpot_slo_ms,
             e2e_slo_ms=args.e2e_slo_ms,
             distributed=distributed,
+            before_replay=distributed.global_barrier,
+            after_replay=distributed.global_barrier,
         )
 
         local_peaks = [
             float(run["memory"]["peak_device_memory_mb"])
             for run in report["runs"]
         ]
-        output_digest, output_digest_length = _digest_numbers(
-            str(report["runs"][0]["output_sha256"])
+        validate_replica_output_consistency(
+            str(report["runs"][0]["output_sha256"]),
+            distributed,
         )
         rank_values = distributed.all_gather_floats(
             [
@@ -215,12 +349,8 @@ def main() -> None:
                 model_load_seconds,
                 model_loaded_memory_mb,
                 model_loaded_peak_mb,
-                output_digest,
-                output_digest_length,
             ]
         )
-        if len({(round(values[5]), round(values[6])) for values in rank_values}) != 1:
-            raise AssertionError("不同 TP rank 的 trace 输出摘要不一致")
 
         model = runner.model
         full_parameter_count = count_qwen3_parameters(model.config)
@@ -234,13 +364,27 @@ def main() -> None:
             "local_parameter_count": local_parameter_count,
         }
         report["workload"]["encoded_prompt_lengths"] = encoded_prompt_lengths
+        report["workload"]["source_file_sha256"] = source_file_sha256
+        report["environment"]["cann_version"] = args.cann_version
+        routing_payload = json.dumps(
+            routing_manifest,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        report["workload"]["routing"] = {
+            "router": "least_projected_load",
+            "estimator": "prompt_unicode_codepoints_plus_max_new_tokens",
+            "assignment_sha256": hashlib.sha256(routing_payload).hexdigest(),
+            "assignments": routing_manifest,
+        }
         report["distributed"] = {
             **distributed.metadata(),
-            "tp_size": distributed.world_size,
             "layout_id": args.layout_id,
-            "replica_index": args.replica_index,
-            "replica_count": args.replica_count,
-            "logical_device_ids": logical_device_ids,
+            "logical_device_ids": replica_device_ids,
+            "global_logical_device_ids": logical_device_ids,
+            "global_closed_loop_clients": args.closed_loop_clients,
+            "replica_closed_loop_clients": clients,
             "physical_card_count": args.physical_card_count,
             "chips_per_card": args.chips_per_card,
             "interconnect_topology": args.interconnect_topology,
@@ -249,7 +393,8 @@ def main() -> None:
             "per_rank": [
                 {
                     "tp_rank": rank,
-                    "logical_device_id": logical_device_ids[rank],
+                    "global_rank": distributed.group_ranks[rank],
+                    "logical_device_id": replica_device_ids[rank],
                     "max_measured_peak_mb": values[0],
                     "median_measured_peak_mb": values[1],
                     "model_load_seconds": values[2],
@@ -259,51 +404,102 @@ def main() -> None:
                 for rank, values in enumerate(rank_values)
             ],
         }
-        if not distributed.is_primary:
-            return
+        output_dir = project_path(args.output_dir)
+        if global_distributed.is_primary:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / "source_workload.json").write_bytes(source_payload)
+            provenance = build_model_directory_provenance(
+                PROJECT_ROOT,
+                model_dir,
+                sys.argv,
+                hash_weights=args.hash_weights,
+            )
+            (output_dir / "layout_provenance.json").write_text(
+                json.dumps(provenance, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        global_distributed.barrier()
+        if distributed.is_primary:
+            report["provenance"] = json.loads(
+                (output_dir / "layout_provenance.json").read_text(encoding="utf-8")
+            )
+            report["evidence_class"] = evidence_class(
+                report,
+                parameter_count=full_parameter_count,
+                hash_weights=args.hash_weights,
+            )
+            output = output_dir / f"replica-{distributed.replica_index:02d}.json"
+            output.write_text(
+                json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
 
-        report["provenance"] = build_model_directory_provenance(
-            PROJECT_ROOT,
-            model_dir,
-            sys.argv,
-            hash_weights=args.hash_weights,
-        )
-        report["evidence_class"] = evidence_class(
-            report,
-            parameter_count=full_parameter_count,
-            hash_weights=args.hash_weights,
-        )
-        output = project_path(args.output)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(
-            json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-
-        summary = report["summary"]
-        print("=" * 80)
-        print("Qwen3 Continuous Batching Benchmark（measured repeats 中位数）")
-        print(f"layout / replica : {args.layout_id} / {args.replica_index}")
-        print(f"TP size          : {distributed.world_size}")
-        print(f"workload         : {trace.workload_id}")
-        print(f"mode             : {args.mode}")
-        print(
-            "request/s        : "
-            f"{summary['completed_requests_per_second']['median']:.3f}"
-        )
-        print(
-            "goodput request/s: "
-            f"{summary['goodput_requests_per_second']['median']:.3f}"
-        )
-        print(
-            "output token/s   : "
-            f"{summary['output_tokens_per_second']['median']:.3f}"
-        )
-        print(f"evidence class   : {report['evidence_class']}")
-        print(f"report           : {output}")
+            summary = report["summary"]
+            print("=" * 80)
+            print("Qwen3 Continuous Batching Benchmark（measured repeats 中位数）")
+            print(
+                f"layout / replica : {args.layout_id} / "
+                f"{distributed.replica_index}"
+            )
+            print(f"TP size          : {distributed.world_size}")
+            print(f"workload         : {trace.workload_id}")
+            print(f"mode             : {args.mode}")
+            print(
+                "request/s        : "
+                f"{summary['completed_requests_per_second']['median']:.3f}"
+            )
+            print(
+                "goodput request/s: "
+                f"{summary['goodput_requests_per_second']['median']:.3f}"
+            )
+            print(
+                "output token/s   : "
+                f"{summary['output_tokens_per_second']['median']:.3f}"
+            )
+            print(f"evidence class   : {report['evidence_class']}")
+            print(f"report           : {output}")
+        global_distributed.barrier()
+        if global_distributed.is_primary:
+            report_files = []
+            for replica_index in range(distributed.replica_count):
+                report_path = output_dir / f"replica-{replica_index:02d}.json"
+                payload = report_path.read_bytes()
+                report_files.append(
+                    {
+                        "replica_index": replica_index,
+                        "name": report_path.name,
+                        "sha256": hashlib.sha256(payload).hexdigest(),
+                        "size_bytes": len(payload),
+                    }
+                )
+            manifest = {
+                "schema_version": 1,
+                "layout_id": args.layout_id,
+                "tp_size": distributed.world_size,
+                "replica_count": distributed.replica_count,
+                "global_world_size": distributed.global_world_size,
+                "global_logical_device_ids": logical_device_ids,
+                "source_workload_sha256": source_trace.request_sha256,
+                "source_workload_file_sha256": source_file_sha256,
+                "workload_class": source_trace.workload_class,
+                "source_workload": {
+                    "name": "source_workload.json",
+                    "sha256": source_file_sha256,
+                    "size_bytes": len(source_payload),
+                },
+                "routing_assignment_sha256": hashlib.sha256(
+                    routing_payload
+                ).hexdigest(),
+                "reports": report_files,
+            }
+            (output_dir / "layout_manifest.json").write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        global_distributed.barrier()
     finally:
-        if distributed is not None:
-            distributed.close()
+        if global_distributed is not None:
+            global_distributed.close()
 
 
 if __name__ == "__main__":
