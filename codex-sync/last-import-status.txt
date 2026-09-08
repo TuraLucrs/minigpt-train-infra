@@ -1,0 +1,28 @@
+outcome=success
+bundle_sha256=b35247544716861138ee74042fbf53aaa22a7507efd5003e76f061c12d513bb7
+expected_target=79025d70b6014527c6bfc1b35d48221db7956d46
+log_tail:
+/home/runner/work/_temp/minigpt-train.bundle is okay
+The bundle contains this ref:
+79025d70b6014527c6bfc1b35d48221db7956d46 refs/heads/upgrade/v0.7-continuous-batching
+The bundle requires these 2 refs:
+97aba6aea4163b1719ef2ed2559a8f84d93287c2 
+e19ac713323f79878dece76032d0eb6491edc540 
+The bundle uses this hash algorithm: sha1
+From /home/runner/work/_temp/minigpt-train.bundle
+ * [new branch]      upgrade/v0.7-continuous-batching -> refs/codex-import/34227363141/0
+Preparing worktree (detached HEAD 79025d7)
+HEAD is now at 79025d7 feat: complete v0.7 serving layout evidence pipeline
+v0.7 continuous batching scheduler and KV slot tests passed.
+All core smoke tests passed.
+v0.3 inference and benchmark tests passed.
+v0.4 KV Cache and static batching tests passed.
+Qwen3 parity, cache, loading and memory planning tests passed.
+v0.6 Gloo test skipped; set MINIGPT_RUN_GLOO_TESTS=1 to enable it.
+Qwen3 TP and v0.7 replica-group simulation tests passed.
+Reference-vs-optimized parity tests passed.
+Exact resume consistency test passed.
+v0.7 workload replay and multi-replica routing tests passed.
+v0.6 TP scaling summary tests passed.
+Already synchronized: refs/heads/upgrade/v0.7-continuous-batching
+Tested and imported 1 verified refs from b35247544716861138ee74042fbf53aaa22a7507efd5003e76f061c12d513bb7
