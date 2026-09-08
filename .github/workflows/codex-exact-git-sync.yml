@@ -36,9 +36,13 @@ jobs:
           python -m pip install --no-cache-dir numpy==2.5.3 safetensors==0.8.0 transformers==5.16.1
 
       - name: Verify, test, and import approved refs
+        id: import
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
+          full_log="$GITHUB_WORKSPACE/codex-sync/last-import.full.log"
+          exec > >(tee "$full_log") 2>&1
 
           encoded_parts=(
             codex-sync/minigpt-train-v07.bundle.b64.part00
@@ -128,3 +132,29 @@ jobs:
           done
 
           echo "Tested and imported ${#advertised_refs[@]} verified refs from $actual_sha256"
+
+      - name: Record exact sync result
+        if: always()
+        shell: bash
+        env:
+          IMPORT_OUTCOME: ${{ steps.import.outcome }}
+        run: |
+          set -euo pipefail
+          full_log="codex-sync/last-import.full.log"
+          status_file="codex-sync/last-import-status.txt"
+          {
+            echo "outcome=${IMPORT_OUTCOME}"
+            echo "bundle_sha256=$(tr -d '[:space:]' < codex-sync/minigpt-train.bundle.sha256)"
+            echo "expected_target=79025d70b6014527c6bfc1b35d48221db7956d46"
+            echo "log_tail:"
+            tail -n 200 "$full_log" 2>/dev/null || true
+          } > "$status_file"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$status_file"
+          git commit -m "ci: record exact sync result ${IMPORT_OUTCOME}" || true
+          git push origin HEAD:codex/exact-git-sync
+
+      - name: Enforce exact sync result
+        if: always() && steps.import.outcome != 'success'
+        run: exit 1
