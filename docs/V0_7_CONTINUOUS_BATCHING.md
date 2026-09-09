@@ -339,7 +339,8 @@ python benchmarks/summarize_serving_layouts.py \
 - 三种布局使用同一 runner，且全局 slot 容量、全局 waiting queue 容量与 `max_seq_len` 相同；
 - 同一 Python/PyTorch/torch_npu/CANN、hostname、设备型号、精度、HCCL 和物理拓扑；
 - 同一 Qwen3-32B config、权重哈希、干净 Git commit；
-- 同一源 workload、mode、global clients、SLO、warmup/repeats；
+- 同一源 workload、mode、global clients、SLO、warmup/repeats，以及相同的
+  `open_loop_admission_scripted` 准入口径；
 - 每个 manifest 的拓扑、原始 workload artifact、routing SHA-256、报告数量、文件大小和报告
   SHA-256 一致；
 - routing assignment 自身哈希正确，能从原始 workload 确定性重算，并与每个 replica 的
@@ -404,3 +405,35 @@ workload 的 open/closed loop 必须复用同一个源 trace 和同一组 SLO。
 `formal_v0.7_qwen3_32b_ascend_continuous_batching_acceptance`。
 
 只有 D 阶段真实机器证据、完整回归和冻结后自查全部通过，才能创建 v0.7 最终 tag。
+
+## 15. Atlas A3 最终验收结果
+
+2026-09-09 在 Atlas A3 上完成了 3 类 workload × open/closed loop × TP8、2×TP4、4×TP2
+共 18 个正式布局运行。实机运行提交为
+`0bad74ef01e083b8e23d388ed145a80dc81dc309`；Qwen3-32B BF16、17 份权重哈希、HCCL、
+logical device 0–7、软件版本和冻结 SLO 均进入报告 provenance。
+
+| workload | 模式 | TP8 goodput req/s | 2×TP4 | 4×TP2 | 最优布局 |
+|---|---|---:|---:|---:|---|
+| short-short | closed | 9.756 | **10.044** | 7.810 | 2×TP4 |
+| short-short | open | 7.834 | **8.528** | 6.572 | 2×TP4 |
+| long-prefill/short-decode | closed | 8.070 | 9.343 | **10.440** | 4×TP2 |
+| long-prefill/short-decode | open | 5.360 | 4.269 | **6.055** | 4×TP2 |
+| mixed | closed | 2.497 | 3.263 | **3.491** | 4×TP2 |
+| mixed | open | 1.179 | 2.872 | **5.004** | 4×TP2 |
+
+mixed open-loop 中 4×TP2 的 goodput 是 TP8 的 4.24 倍；mixed closed-loop 为 1.40 倍，
+long-prefill closed-loop 为 1.29 倍。short-short 则由 2×TP4 小幅领先，说明最佳 TP/副本
+组合取决于请求长度与到达模式，不能固定宣称“副本越多越快”。
+
+正式 open-loop 使用 warmup 记录的 `(submit_count, action, wait_us)` admission script，在
+measured repeats 中重放同一批组成，解决 NPU BF16 在不同 batch shape 下的近平局 token
+漂移；各轮吞吐和延迟仍按真实墙钟测量。这个口径以
+`protocol.open_loop_admission_scripted=true` 写入原始报告，并进入布局比较协议指纹。它是
+确定性的离线 open-loop 准入重放，不等同于独立网络线程驱动的生产流量发生器。
+
+完整压缩证据位于仓库根目录 `v0.7_ascend_evidence.tar.gz`，精选索引位于
+`artifacts/v0.7_qwen3_continuous_batching_acceptance/`。压缩包解压后约 59 MB，核心
+`SHA256SUMS` 143/143 通过；六份 comparison 均从原始 manifest、逐副本报告、workload 与
+telemetry 独立重算为 formal，最终 acceptance 的 `complete_matrix=true` 且
+`incomplete_reasons=[]`。

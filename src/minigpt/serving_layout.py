@@ -257,6 +257,10 @@ def _protocol_fingerprint(report: dict[str, object]) -> dict[str, object]:
     distributed = _require_mapping(report["distributed"], "distributed")
     return {
         "mode": protocol.get("mode"),
+        "open_loop_admission_scripted": protocol.get(
+            "open_loop_admission_scripted",
+            False,
+        ),
         "warmup": protocol.get("warmup"),
         "repeats": protocol.get("repeats"),
         "ttft_slo_ms": protocol.get("ttft_slo_ms"),

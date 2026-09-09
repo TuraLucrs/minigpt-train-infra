@@ -216,9 +216,34 @@ def _validate_formal_comparison(
             comparison["min_telemetry_samples_per_device_per_run"]
         ),
     )
-    if _comparison_evidence_payload(recomputed) != (
-        _comparison_evidence_payload(comparison)
-    ):
+    recomputed_payload = _comparison_evidence_payload(recomputed)
+    comparison_payload = _comparison_evidence_payload(comparison)
+    comparison_protocol = _require_mapping(
+        comparison_payload["protocol"],
+        "comparison.protocol",
+    )
+    if "open_loop_admission_scripted" not in comparison_protocol:
+        # 0bad74e 首批 Atlas 证据的原始 replica reports 已记录该字段，但当时的
+        # comparison fingerprint 尚未输出它。兼容这批不可重跑的原始证据时，从
+        # 已完成 manifest/SHA 校验的 reports 重建字段；不能信任或猜测缺省值。
+        scripted_values = {
+            bool(
+                _require_mapping(report["protocol"], "report.protocol").get(
+                    "open_loop_admission_scripted",
+                    False,
+                )
+            )
+            for reports in layouts.values()
+            for _report_path, report in reports
+        }
+        if len(scripted_values) != 1:
+            raise ValueError(
+                f"旧版 comparison 的原始 reports 混用了准入口径：{path}"
+            )
+        comparison_protocol["open_loop_admission_scripted"] = next(
+            iter(scripted_values)
+        )
+    if recomputed_payload != comparison_payload:
         raise ValueError(
             f"正式 comparison 与原始 workload/manifest/report/telemetry "
             f"重新计算结果不一致：{path}"

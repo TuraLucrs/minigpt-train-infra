@@ -39,10 +39,11 @@
 
 `v0.1～v0.6` 已冻结。`v0.6-qwen3-tensor-parallel` 于 2026-09-04 在 Ascend Atlas A3
 完成真实 Gloo/HCCL 与 Qwen3-32B TP=2/4/8 验收；精选证据位于
-`artifacts/v0.6_qwen3_tp_acceptance/`。当前开发版本是 `v0.7`：A/B/C 的软件实现与证据链
-已经完成，包括 Continuous Batching、多副本布局、可重放 workload 和服务指标；D 将在真实
-Ascend 8 卡环境完成 TP8、2×TP4、4×TP2 验收。正式模型仍固定为 `Qwen/Qwen3-32B`，tiny
-模型只承担白盒正确性与快速 CI。
+`artifacts/v0.6_qwen3_tp_acceptance/`。`v0.7` 的 A/B/C/D 已经完成：Continuous
+Batching、请求/KV slot 生命周期、多副本布局、可重放 workload、服务指标，以及真实
+Ascend 8 卡上的 TP8、2×TP4、4×TP2 共 18 组正式验收。完整与精选证据分别位于
+`v0.7_ascend_evidence.tar.gz` 和 `artifacts/v0.7_qwen3_continuous_batching_acceptance/`。
+正式模型固定为 `Qwen/Qwen3-32B`，tiny 模型只承担白盒正确性与快速 CI。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 

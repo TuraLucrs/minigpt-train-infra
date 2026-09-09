@@ -305,11 +305,48 @@ def check_replay_benchmark_protocol() -> None:
         sleeper=clock.advance,
     )
     assert report["protocol"]["warmup"] == 1
+    assert report["protocol"]["open_loop_admission_scripted"] is False
     assert len(report["runs"]) == 2
     assert report["runs"][0]["output_sha256"] == report["runs"][1]["output_sha256"]
     assert report["summary"]["goodput_requests_per_second"]["median"] > 0.0
     assert report["summary"]["ttft_ms"]["p95"] >= 0.0
     assert report["summary"]["active_batch_size"]["p99"] >= 1.0
+
+    scripted_clock = ManualClock()
+    scripted_report = benchmark_trace_replay(
+        build_engine(scripted_clock, seed=31, max_slots=2),
+        tiny_trace(arrival_interval_ms=1.0),
+        mode="open_loop",
+        closed_loop_clients=None,
+        warmup=1,
+        repeats=2,
+        ttft_slo_ms=1_000.0,
+        tpot_slo_ms=1_000.0,
+        e2e_slo_ms=1_000.0,
+        clock=scripted_clock,
+        sleeper=scripted_clock.advance,
+        deterministic_open_loop=True,
+    )
+    assert scripted_report["protocol"]["open_loop_admission_scripted"] is True
+    assert (
+        scripted_report["runs"][0]["output_sha256"]
+        == scripted_report["runs"][1]["output_sha256"]
+    )
+
+    try:
+        benchmark_trace_replay(
+            build_engine(ManualClock(), seed=31, max_slots=2),
+            tiny_trace(),
+            mode="closed_loop",
+            closed_loop_clients=2,
+            warmup=1,
+            repeats=1,
+            deterministic_open_loop=True,
+        )
+    except ValueError as exc:
+        assert "仅支持 open_loop" in str(exc)
+    else:
+        raise AssertionError("closed_loop 不能启用 deterministic_open_loop")
 
 
 def fake_layout_report(
@@ -382,6 +419,7 @@ def fake_layout_report(
         "benchmark": "continuous_batching_trace_replay",
         "protocol": {
             "mode": mode,
+            "open_loop_admission_scripted": mode == "open_loop",
             "closed_loop_clients": (
                 None if mode == "open_loop" else 8 // replica_count
             ),
@@ -892,6 +930,23 @@ def check_layout_comparison() -> None:
         ):
             report["engine"]["runner"] = runner
 
+        layouts["2xtp4"][0][1]["protocol"][
+            "open_loop_admission_scripted"
+        ] = True
+        try:
+            summarize_serving_layouts(
+                layouts,
+                baseline_layout="tp8",
+                telemetry_by_layout=telemetry_by_layout,
+            )
+        except ValueError as exc:
+            assert "测量协议" in str(exc)
+        else:
+            raise AssertionError("脚本化与非脚本化准入报告不能混合比较")
+        layouts["2xtp4"][0][1]["protocol"][
+            "open_loop_admission_scripted"
+        ] = False
+
         for reports in layouts.values():
             for _path, report in reports:
                 report["model"]["full_parameter_count"] = 1
@@ -1031,6 +1086,20 @@ def check_layout_comparison() -> None:
         assert acceptance["evidence_class"] == (
             "formal_v0.7_qwen3_32b_ascend_continuous_batching_acceptance"
         )
+
+        legacy_path, current_comparison = comparisons[("mixed", "closed_loop")]
+        legacy_comparison = json.loads(json.dumps(current_comparison))
+        del legacy_comparison["protocol"]["open_loop_admission_scripted"]
+        legacy_path = legacy_path.parent / "legacy-comparison.json"
+        legacy_path.write_text(
+            json.dumps(legacy_comparison, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        legacy_acceptance = summarize_v07_acceptance(
+            {("mixed", "closed_loop"): (legacy_path, legacy_comparison)}
+        )
+        assert legacy_acceptance["complete_matrix"] is False
+
         partial = summarize_v07_acceptance(
             {("mixed", "closed_loop"): comparisons[("mixed", "closed_loop")]}
         )
