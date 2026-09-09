@@ -1,19 +1,19 @@
-outcome=failure
-bundle_sha256=95d942d487eaf520d335a692ffbace98819a7ae4d4acf2dc83ea8a6f7d26144b
-expected_target=116b7ee8db8d366c3d07b302b97176e6c676561d
+outcome=success
+bundle_sha256=d4b71c2e4ef30a37d5a065b76da04f317ca54c6b3ec1a8729b70f369954ed44f
+expected_target=e20cc34097a68dd4f7791d92d24ec9d095fc7f57
 log_tail:
 From https://github.com/TuraLucrs/minigpt-train-infra
  * [new branch]      upgrade/v0.7-continuous-batching -> refs/codex-prerequisite/v07
 /home/runner/work/_temp/minigpt-train.bundle is okay
 The bundle contains this ref:
-116b7ee8db8d366c3d07b302b97176e6c676561d refs/heads/upgrade/v0.7-continuous-batching
+e20cc34097a68dd4f7791d92d24ec9d095fc7f57 refs/heads/upgrade/v0.7-continuous-batching
 The bundle requires this ref:
 2f84c8ff9faf490b2dd8114010b57f8eccbe7de0 
 The bundle uses this hash algorithm: sha1
 From /home/runner/work/_temp/minigpt-train.bundle
- * [new branch]      upgrade/v0.7-continuous-batching -> refs/codex-import/34325230701/0
-Preparing worktree (detached HEAD 116b7ee)
-HEAD is now at 116b7ee release: finalize v0.7 Ascend acceptance evidence
+ * [new branch]      upgrade/v0.7-continuous-batching -> refs/codex-import/34325669108/0
+Preparing worktree (detached HEAD e20cc34)
+HEAD is now at e20cc34 release: finalize v0.7 Ascend acceptance evidence
 v0.7 continuous batching scheduler and KV slot tests passed.
 All core smoke tests passed.
 v0.3 inference and benchmark tests passed.
@@ -25,6 +25,167 @@ Reference-vs-optimized parity tests passed.
 Exact resume consistency test passed.
 v0.7 workload replay and multi-replica routing tests passed.
 v0.6 TP scaling summary tests passed.
+calibration/2xtp4_mixed/layout_manifest.json: OK
+calibration/2xtp4_mixed/layout_provenance.json: OK
+calibration/2xtp4_mixed/replica-00.json: OK
+calibration/2xtp4_mixed/replica-01.json: OK
+calibration/2xtp4_mixed/source_workload.json: OK
+calibration/4xtp2_mixed/layout_manifest.json: OK
+calibration/4xtp2_mixed/layout_provenance.json: OK
+calibration/4xtp2_mixed/replica-00.json: OK
+calibration/4xtp2_mixed/replica-01.json: OK
+calibration/4xtp2_mixed/replica-02.json: OK
+calibration/4xtp2_mixed/replica-03.json: OK
+calibration/4xtp2_mixed/source_workload.json: OK
+calibration/tp8_mixed/layout_manifest.json: OK
+calibration/tp8_mixed/layout_provenance.json: OK
+calibration/tp8_mixed/replica-00.json: OK
+calibration/tp8_mixed/source_workload.json: OK
+long_prefill_short_decode_closed_loop/2xtp4/layout_manifest.json: OK
+long_prefill_short_decode_closed_loop/2xtp4/layout_provenance.json: OK
+long_prefill_short_decode_closed_loop/2xtp4/replica-00.json: OK
+long_prefill_short_decode_closed_loop/2xtp4/replica-01.json: OK
+long_prefill_short_decode_closed_loop/2xtp4/source_workload.json: OK
+long_prefill_short_decode_closed_loop/2xtp4/telemetry.json: OK
+long_prefill_short_decode_closed_loop/4xtp2/layout_manifest.json: OK
+long_prefill_short_decode_closed_loop/4xtp2/layout_provenance.json: OK
+long_prefill_short_decode_closed_loop/4xtp2/replica-00.json: OK
+long_prefill_short_decode_closed_loop/4xtp2/replica-01.json: OK
+long_prefill_short_decode_closed_loop/4xtp2/replica-02.json: OK
+long_prefill_short_decode_closed_loop/4xtp2/replica-03.json: OK
+long_prefill_short_decode_closed_loop/4xtp2/source_workload.json: OK
+long_prefill_short_decode_closed_loop/4xtp2/telemetry.json: OK
+long_prefill_short_decode_closed_loop/layout_comparison.json: OK
+long_prefill_short_decode_closed_loop/tp8/layout_manifest.json: OK
+long_prefill_short_decode_closed_loop/tp8/layout_provenance.json: OK
+long_prefill_short_decode_closed_loop/tp8/replica-00.json: OK
+long_prefill_short_decode_closed_loop/tp8/source_workload.json: OK
+long_prefill_short_decode_closed_loop/tp8/telemetry.json: OK
+long_prefill_short_decode_open_loop/2xtp4/layout_manifest.json: OK
+long_prefill_short_decode_open_loop/2xtp4/layout_provenance.json: OK
+long_prefill_short_decode_open_loop/2xtp4/replica-00.json: OK
+long_prefill_short_decode_open_loop/2xtp4/replica-01.json: OK
+long_prefill_short_decode_open_loop/2xtp4/source_workload.json: OK
+long_prefill_short_decode_open_loop/2xtp4/telemetry.json: OK
+long_prefill_short_decode_open_loop/4xtp2/layout_manifest.json: OK
+long_prefill_short_decode_open_loop/4xtp2/layout_provenance.json: OK
+long_prefill_short_decode_open_loop/4xtp2/replica-00.json: OK
+long_prefill_short_decode_open_loop/4xtp2/replica-01.json: OK
+long_prefill_short_decode_open_loop/4xtp2/replica-02.json: OK
+long_prefill_short_decode_open_loop/4xtp2/replica-03.json: OK
+long_prefill_short_decode_open_loop/4xtp2/source_workload.json: OK
+long_prefill_short_decode_open_loop/4xtp2/telemetry.json: OK
+long_prefill_short_decode_open_loop/layout_comparison.json: OK
+long_prefill_short_decode_open_loop/tp8/layout_manifest.json: OK
+long_prefill_short_decode_open_loop/tp8/layout_provenance.json: OK
+long_prefill_short_decode_open_loop/tp8/replica-00.json: OK
+long_prefill_short_decode_open_loop/tp8/source_workload.json: OK
+long_prefill_short_decode_open_loop/tp8/telemetry.json: OK
+mixed_closed_loop/2xtp4/layout_manifest.json: OK
+mixed_closed_loop/2xtp4/layout_provenance.json: OK
+mixed_closed_loop/2xtp4/replica-00.json: OK
+mixed_closed_loop/2xtp4/replica-01.json: OK
+mixed_closed_loop/2xtp4/source_workload.json: OK
+mixed_closed_loop/2xtp4/telemetry.json: OK
+mixed_closed_loop/4xtp2/layout_manifest.json: OK
+mixed_closed_loop/4xtp2/layout_provenance.json: OK
+mixed_closed_loop/4xtp2/replica-00.json: OK
+mixed_closed_loop/4xtp2/replica-01.json: OK
+mixed_closed_loop/4xtp2/replica-02.json: OK
+mixed_closed_loop/4xtp2/replica-03.json: OK
+mixed_closed_loop/4xtp2/source_workload.json: OK
+mixed_closed_loop/4xtp2/telemetry.json: OK
+mixed_closed_loop/layout_comparison.json: OK
+mixed_closed_loop/tp8/layout_manifest.json: OK
+mixed_closed_loop/tp8/layout_provenance.json: OK
+mixed_closed_loop/tp8/replica-00.json: OK
+mixed_closed_loop/tp8/source_workload.json: OK
+mixed_closed_loop/tp8/telemetry.json: OK
+mixed_open_loop/2xtp4/layout_manifest.json: OK
+mixed_open_loop/2xtp4/layout_provenance.json: OK
+mixed_open_loop/2xtp4/replica-00.json: OK
+mixed_open_loop/2xtp4/replica-01.json: OK
+mixed_open_loop/2xtp4/source_workload.json: OK
+mixed_open_loop/2xtp4/telemetry.json: OK
+mixed_open_loop/4xtp2/layout_manifest.json: OK
+mixed_open_loop/4xtp2/layout_provenance.json: OK
+mixed_open_loop/4xtp2/replica-00.json: OK
+mixed_open_loop/4xtp2/replica-01.json: OK
+mixed_open_loop/4xtp2/replica-02.json: OK
+mixed_open_loop/4xtp2/replica-03.json: OK
+mixed_open_loop/4xtp2/source_workload.json: OK
+mixed_open_loop/4xtp2/telemetry.json: OK
+mixed_open_loop/layout_comparison.json: OK
+mixed_open_loop/tp8/layout_manifest.json: OK
+mixed_open_loop/tp8/layout_provenance.json: OK
+mixed_open_loop/tp8/replica-00.json: OK
+mixed_open_loop/tp8/source_workload.json: OK
+mixed_open_loop/tp8/telemetry.json: OK
+patch_sanity/layout_manifest.json: OK
+patch_sanity/layout_provenance.json: OK
+patch_sanity/replica-00.json: OK
+patch_sanity/source_workload.json: OK
+short_short_closed_loop/2xtp4/layout_manifest.json: OK
+short_short_closed_loop/2xtp4/layout_provenance.json: OK
+short_short_closed_loop/2xtp4/replica-00.json: OK
+short_short_closed_loop/2xtp4/replica-01.json: OK
+short_short_closed_loop/2xtp4/source_workload.json: OK
+short_short_closed_loop/2xtp4/telemetry.json: OK
+short_short_closed_loop/4xtp2/layout_manifest.json: OK
+short_short_closed_loop/4xtp2/layout_provenance.json: OK
+short_short_closed_loop/4xtp2/replica-00.json: OK
+short_short_closed_loop/4xtp2/replica-01.json: OK
+short_short_closed_loop/4xtp2/replica-02.json: OK
+short_short_closed_loop/4xtp2/replica-03.json: OK
+short_short_closed_loop/4xtp2/source_workload.json: OK
+short_short_closed_loop/4xtp2/telemetry.json: OK
+short_short_closed_loop/layout_comparison.json: OK
+short_short_closed_loop/tp8/layout_manifest.json: OK
+short_short_closed_loop/tp8/layout_provenance.json: OK
+short_short_closed_loop/tp8/replica-00.json: OK
+short_short_closed_loop/tp8/source_workload.json: OK
+short_short_closed_loop/tp8/telemetry.json: OK
+short_short_open_loop/2xtp4/layout_manifest.json: OK
+short_short_open_loop/2xtp4/layout_provenance.json: OK
+short_short_open_loop/2xtp4/replica-00.json: OK
+short_short_open_loop/2xtp4/replica-01.json: OK
+short_short_open_loop/2xtp4/source_workload.json: OK
+short_short_open_loop/2xtp4/telemetry.json: OK
+short_short_open_loop/4xtp2/layout_manifest.json: OK
+short_short_open_loop/4xtp2/layout_provenance.json: OK
+short_short_open_loop/4xtp2/replica-00.json: OK
+short_short_open_loop/4xtp2/replica-01.json: OK
+short_short_open_loop/4xtp2/replica-02.json: OK
+short_short_open_loop/4xtp2/replica-03.json: OK
+short_short_open_loop/4xtp2/source_workload.json: OK
+short_short_open_loop/4xtp2/telemetry.json: OK
+short_short_open_loop/layout_comparison.json: OK
+short_short_open_loop/tp8/layout_manifest.json: OK
+short_short_open_loop/tp8/layout_provenance.json: OK
+short_short_open_loop/tp8/replica-00.json: OK
+short_short_open_loop/tp8/source_workload.json: OK
+short_short_open_loop/tp8/telemetry.json: OK
+workloads/long_prefill_short_decode.json: OK
+workloads/mixed.json: OK
+workloads/short_short.json: OK
+evidence class : formal_v0.7_qwen3_32b_ascend_continuous_batching_acceptance
+short_short/open_loop: best=2xtp4 goodput=8.528 request/s
+short_short/closed_loop: best=2xtp4 goodput=10.044 request/s
+long_prefill_short_decode/open_loop: best=4xtp2 goodput=6.055 request/s
+long_prefill_short_decode/closed_loop: best=4xtp2 goodput=10.440 request/s
+mixed/open_loop: best=4xtp2 goodput=5.004 request/s
+mixed/closed_loop: best=4xtp2 goodput=3.491 request/s
+report         : /tmp/tmp.1KbywkCLhw/recomputed_v0.7_acceptance.json
+README.md: OK
+RUN_LOG.md: OK
+SLO_FREEZE.md: OK
+comparisons/long_prefill_short_decode_closed_loop.json: OK
+comparisons/long_prefill_short_decode_open_loop.json: OK
+comparisons/mixed_closed_loop.json: OK
+comparisons/mixed_open_loop.json: OK
+comparisons/short_short_closed_loop.json: OK
+comparisons/short_short_open_loop.json: OK
+v0.7_acceptance.json: OK
 To https://github.com/TuraLucrs/minigpt-train-infra
- ! [remote rejected] refs/codex-import/34325230701/0 -> upgrade/v0.7-continuous-batching (refusing to allow a GitHub App to create or update workflow `.github/workflows/v07-continuous-batching.yml` without `workflows` permission)
-error: failed to push some refs to 'https://github.com/TuraLucrs/minigpt-train-infra'
+   2f84c8f..e20cc34  refs/codex-import/34325669108/0 -> upgrade/v0.7-continuous-batching
+Tested and imported 1 verified refs from d4b71c2e4ef30a37d5a065b76da04f317ca54c6b3ec1a8729b70f369954ed44f
