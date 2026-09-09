@@ -116,6 +116,28 @@ jobs:
               for test_file in tests/test_*.py; do
                 python "$test_file"
               done
+              if [[ -f v0.7_ascend_evidence.tar.gz ]]; then
+                evidence_root="$(mktemp -d)"
+                test "$(sha256sum v0.7_ascend_evidence.tar.gz | cut -d' ' -f1)" = "0e26af133429bb3e02cb8738ab9495e6daa6ebc13b3bed4984608b5818389d94"
+                tar -xzf v0.7_ascend_evidence.tar.gz -C "$evidence_root"
+                (
+                  cd "$evidence_root/runs/v07"
+                  sha256sum -c SHA256SUMS
+                )
+                python benchmarks/summarize_v07_acceptance.py \
+                  --comparison "short_short/open_loop=$evidence_root/runs/v07/short_short_open_loop/layout_comparison.json" \
+                  --comparison "short_short/closed_loop=$evidence_root/runs/v07/short_short_closed_loop/layout_comparison.json" \
+                  --comparison "long_prefill_short_decode/open_loop=$evidence_root/runs/v07/long_prefill_short_decode_open_loop/layout_comparison.json" \
+                  --comparison "long_prefill_short_decode/closed_loop=$evidence_root/runs/v07/long_prefill_short_decode_closed_loop/layout_comparison.json" \
+                  --comparison "mixed/open_loop=$evidence_root/runs/v07/mixed_open_loop/layout_comparison.json" \
+                  --comparison "mixed/closed_loop=$evidence_root/runs/v07/mixed_closed_loop/layout_comparison.json" \
+                  --output "$evidence_root/recomputed_v0.7_acceptance.json"
+                test "$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["evidence_class"])' "$evidence_root/recomputed_v0.7_acceptance.json")" = "formal_v0.7_qwen3_32b_ascend_continuous_batching_acceptance"
+                (
+                  cd artifacts/v0.7_qwen3_continuous_batching_acceptance
+                  sha256sum -c SHA256SUMS.txt
+                )
+              fi
             )
             git worktree remove "$worktree_path"
 
@@ -147,7 +169,7 @@ jobs:
           {
             echo "outcome=${IMPORT_OUTCOME}"
             echo "bundle_sha256=$(tr -d '[:space:]' < codex-sync/minigpt-train.bundle.sha256)"
-            echo "expected_target=116b7ee8db8d366c3d07b302b97176e6c676561d"
+            echo "expected_target=e20cc34097a68dd4f7791d92d24ec9d095fc7f57"
             echo "log_tail:"
             tail -n 200 "$full_log" 2>/dev/null || true
           } > "$status_file"
