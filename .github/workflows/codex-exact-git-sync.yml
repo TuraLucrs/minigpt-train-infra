@@ -171,7 +171,7 @@ jobs:
           {
             echo "outcome=${IMPORT_OUTCOME}"
             echo "bundle_sha256=$(tr -d '[:space:]' < codex-sync/minigpt-train.bundle.sha256)"
-            echo "expected_target=e20cc34097a68dd4f7791d92d24ec9d095fc7f57"
+            echo "expected_target=904de7c2c3467ef4b537cb13361444a63ea38c2d"
             echo "log_tail:"
             tail -n 200 "$full_log" 2>/dev/null || true
           } > "$status_file"
