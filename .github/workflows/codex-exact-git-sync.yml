@@ -73,6 +73,8 @@ jobs:
             exit 1
           fi
 
+          git fetch --no-tags origin \\
+            refs/heads/upgrade/v0.7-continuous-batching:refs/codex-prerequisite/v07
           git bundle verify "$bundle_path"
           mapfile -t advertised_refs < <(git bundle list-heads "$bundle_path")
           if (( ${#advertised_refs[@]} == 0 || ${#advertised_refs[@]} > 32 )); then
@@ -145,7 +147,7 @@ jobs:
           {
             echo "outcome=${IMPORT_OUTCOME}"
             echo "bundle_sha256=$(tr -d '[:space:]' < codex-sync/minigpt-train.bundle.sha256)"
-            echo "expected_target=79025d70b6014527c6bfc1b35d48221db7956d46"
+            echo "expected_target=116b7ee8db8d366c3d07b302b97176e6c676561d"
             echo "log_tail:"
             tail -n 200 "$full_log" 2>/dev/null || true
           } > "$status_file"
