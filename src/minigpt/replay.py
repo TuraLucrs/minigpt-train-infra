@@ -107,9 +107,24 @@ class OfflineTraceReplayer:
             raise RuntimeError("收到非法 trace replay control action")
         return submitted, selected_action, wait_us
 
-    def run(self, *, max_steps: int = 1_000_000) -> ReplaySummary:
+    def run(
+        self,
+        *,
+        max_steps: int = 1_000_000,
+        script: list[tuple[int, int, int]] | None = None,
+    ) -> ReplaySummary:
+        """重放 trace。
+
+        script 不为 None 时，rank 0 逐迭代采用脚本中的 (submit_count, action,
+        wait_us)，用于让 open_loop 的各次 measured repeat 复现同一到达实现：
+        真实墙钟仍然计量 submit_at_ms 与总 wall time，但批组成不再受
+        wall-clock 抖动影响，保证逐位可复现输出。"""
         if max_steps <= 0:
             raise ValueError("max_steps 必须大于 0")
+        if script is not None and self._is_primary() and not script:
+            raise ValueError("重放脚本不能为空")
+        self.last_primary_actions: list[list[int]] = []
+        script_cursor = 0
         monotonic_start = self.clock()
         unix_start = time.time_ns()
         cursor = 0
@@ -119,35 +134,43 @@ class OfflineTraceReplayer:
 
         while True:
             if self._is_primary():
-                elapsed_ms = (self.clock() - monotonic_start) * 1000.0
-                if self.mode == "open_loop":
-                    due_cursor = cursor
-                    while (
-                        due_cursor < len(self.trace.requests)
-                        and self.trace.requests[due_cursor].arrival_time_ms <= elapsed_ms
-                    ):
-                        due_cursor += 1
-                    submit_count = due_cursor - cursor
+                if script is not None:
+                    if script_cursor >= len(script):
+                        raise RuntimeError("重放脚本在重放结束前耗尽")
+                    submit_count, action, wait_us = script[script_cursor]
+                    script_cursor += 1
                 else:
-                    active = sum(not request.is_terminal for request in submitted_requests)
-                    submit_count = min(
-                        int(self.closed_loop_clients) - active,
-                        len(self.trace.requests) - cursor,
-                    )
+                    elapsed_ms = (self.clock() - monotonic_start) * 1000.0
+                    if self.mode == "open_loop":
+                        due_cursor = cursor
+                        while (
+                            due_cursor < len(self.trace.requests)
+                            and self.trace.requests[due_cursor].arrival_time_ms
+                            <= elapsed_ms
+                        ):
+                            due_cursor += 1
+                        submit_count = due_cursor - cursor
+                    else:
+                        active = sum(
+                            not request.is_terminal for request in submitted_requests
+                        )
+                        submit_count = min(
+                            int(self.closed_loop_clients) - active,
+                            len(self.trace.requests) - cursor,
+                        )
 
-                will_have_work = not self.target.is_idle or submit_count > 0
-                if will_have_work:
-                    action = self.STEP
-                    wait_us = 0
-                elif cursor + submit_count >= len(self.trace.requests):
-                    action = self.DONE
-                    wait_us = 0
-                else:
-                    action = self.WAIT
-                    next_arrival = self.trace.requests[cursor].arrival_time_ms
-                    wait_us = max(int((next_arrival - elapsed_ms) * 1000.0), 1)
+                    will_have_work = not self.target.is_idle or submit_count > 0
+                    if will_have_work:
+                        action = self.STEP
+                        wait_us = 0
+                    elif cursor + submit_count >= len(self.trace.requests):
+                        action = self.DONE
+                        wait_us = 0
+                    else:
+                        action = self.WAIT
+                        next_arrival = self.trace.requests[cursor].arrival_time_ms
+                        wait_us = max(int((next_arrival - elapsed_ms) * 1000.0), 1)
             else:
-                elapsed_ms = 0.0
                 submit_count = 0
                 action = self.DONE
                 wait_us = 0
@@ -156,6 +179,9 @@ class OfflineTraceReplayer:
                 submit_count,
                 action,
                 wait_us,
+            )
+            self.last_primary_actions.append(
+                [int(submit_count), int(action), int(wait_us)]
             )
             if cursor + submit_count > len(self.trace.requests):
                 raise RuntimeError("rank 0 要求提交超过 trace 末尾的请求")

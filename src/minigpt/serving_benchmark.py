@@ -167,20 +167,31 @@ def benchmark_trace_replay(
     sleeper: Callable[[float], None] = time.sleep,
     before_replay: Callable[[], None] | None = None,
     after_replay: Callable[[], None] | None = None,
+    deterministic_open_loop: bool = False,
 ) -> dict[str, object]:
-    """重放同一 trace，保存每次原始请求/step，并验证输出可重复。"""
+    """重放同一 trace，保存每次原始请求/step，并验证输出可重复。
+
+    deterministic_open_loop=True 时（真机 open_loop）：open_loop 到达节奏依赖
+    wall clock，批组成在 repeats 间存在抖动；NPU bf16 kernel 数值随 batch 形状
+    变化，会让 greedy argmax 在近平局处翻转，无法通过逐位输出一致性校验。
+    因此由 warmup 轮记录逐迭代动作脚本，measured repeats 精确重放同一到达
+    实现：延迟与吞吐仍按真实墙钟计量，仅消除批组成的轮间抖动。"""
 
     if warmup < 0:
         raise ValueError("warmup 不能小于 0")
     if repeats <= 0:
         raise ValueError("repeats 必须大于 0")
+    if deterministic_open_loop and mode != "open_loop":
+        raise ValueError("deterministic_open_loop 仅支持 open_loop 模式")
     trace.validate()
 
-    def replay_once() -> tuple[dict[str, object], dict[str, object]]:
+    def replay_once(
+        script: list[tuple[int, int, int]] | None = None,
+    ) -> tuple[dict[str, object], dict[str, object], list[list[int]]]:
         if before_replay is not None:
             before_replay()
         engine.runner.runtime.reset_peak_memory()
-        replay = OfflineTraceReplayer(
+        replayer = OfflineTraceReplayer(
             engine,
             trace,
             mode=mode,
@@ -189,7 +200,9 @@ def benchmark_trace_replay(
             control_device=engine.runner.runtime.device,
             clock=clock,
             sleeper=sleeper,
-        ).run()
+        )
+        replay = replayer.run(script=script)
+        actions = list(replayer.last_primary_actions)
         engine.runner.runtime.synchronize()
         current_memory_mb, peak_memory_mb = engine.runner.runtime.memory_stats_mb()
         if after_replay is not None:
@@ -209,15 +222,26 @@ def benchmark_trace_replay(
             "output_sha256": serving_output_digest(serving),
             "serving": serving,
         }
-        return run, serving
+        return run, serving, actions
 
+    if deterministic_open_loop and warmup < 1:
+        raise ValueError("deterministic_open_loop 需要 warmup >= 1 以记录动作脚本")
+
+    admission_script: list[tuple[int, int, int]] | None = None
+    warmup_actions: list[list[int]] = []
     for _ in range(warmup):
-        replay_once()
+        _run, _serving, warmup_actions = replay_once()
         engine.reset()
+    if deterministic_open_loop:
+        admission_script = [tuple(action) for action in warmup_actions]
 
     runs: list[dict[str, object]] = []
     for repeat in range(repeats):
-        run, _serving = replay_once()
+        run, _serving, repeat_actions = replay_once(admission_script)
+        if admission_script is not None and repeat_actions != warmup_actions:
+            raise AssertionError(
+                "open_loop 动作脚本重放与 warmup 到达序列不一致"
+            )
         run["repeat"] = repeat
         runs.append(run)
         if repeat + 1 < repeats:
@@ -250,6 +274,9 @@ def benchmark_trace_replay(
             "ttft_slo_ms": ttft_slo_ms,
             "tpot_slo_ms": tpot_slo_ms,
             "e2e_slo_ms": e2e_slo_ms,
+            "open_loop_admission_scripted": bool(
+                deterministic_open_loop and mode == "open_loop"
+            ),
         },
         "environment": {
             "python": platform.python_version(),

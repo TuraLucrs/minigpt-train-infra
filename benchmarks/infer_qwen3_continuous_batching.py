@@ -56,6 +56,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--e2e-slo-ms", type=float, default=None)
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument(
+        "--deterministic-open-loop",
+        action="store_true",
+        help="open_loop 真机模式：measured repeats 重放 warmup 记录的到达动作脚本，"
+        "消除 wall-clock 抖动导致的批组成轮间差异（延迟仍按真实墙钟计量）",
+    )
     parser.add_argument("--system-prompt", default=None)
     parser.add_argument("--chat-template", action="store_true")
     parser.add_argument("--enable-thinking", action="store_true")
@@ -332,6 +338,7 @@ def main() -> None:
             distributed=distributed,
             before_replay=distributed.global_barrier,
             after_replay=distributed.global_barrier,
+            deterministic_open_loop=args.deterministic_open_loop,
         )
 
         local_peaks = [
