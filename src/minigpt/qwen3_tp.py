@@ -1045,3 +1045,38 @@ def load_tp_qwen3_engine(
     else:
         raise ValueError("decode_mode 必须是 kv_cache 或 recompute")
     return TensorParallelInferenceEngine(runner, tokenizer, distributed)
+
+
+def load_tp_qwen3_slot_runner(
+    model_dir: str | Path,
+    distributed: DistributedContext,
+    *,
+    max_slots: int,
+    max_seq_len: int,
+    use_chat_template: bool = False,
+    system_prompt: str | None = None,
+    enable_thinking: bool = False,
+) -> tuple[SlotCachedTensorParallelQwen3ModelRunner, Qwen3Tokenizer]:
+    """为当前 TP rank 加载真实 Qwen3 分片和固定 slot KV Cache。"""
+
+    runtime = distributed.runtime
+    dtype = runtime.amp_dtype or torch.float32
+    tokenizer = Qwen3Tokenizer(
+        model_dir,
+        use_chat_template=use_chat_template,
+        system_prompt=system_prompt,
+        enable_thinking=enable_thinking,
+    )
+    model = load_tp_qwen3_from_pretrained(
+        model_dir,
+        distributed,
+        dtype=dtype,
+    )
+    validate_qwen3_tokenizer_config(tokenizer, model.config)
+    runner = SlotCachedTensorParallelQwen3ModelRunner(
+        model,
+        runtime,
+        max_slots=max_slots,
+        max_seq_len=max_seq_len,
+    )
+    return runner, tokenizer

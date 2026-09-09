@@ -18,7 +18,10 @@ import torch.multiprocessing as mp
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from minigpt.distributed import DistributedContext  # noqa: E402
+from minigpt.distributed import (  # noqa: E402
+    DistributedContext,
+    TensorParallelReplicaContext,
+)
 from minigpt.inference import GenerationConfig, InferenceEngine  # noqa: E402
 from minigpt.qwen3 import (  # noqa: E402
     Qwen3Config,
@@ -29,9 +32,11 @@ from minigpt.qwen3_inference import CachedQwen3ModelRunner  # noqa: E402
 from minigpt.qwen3_tp import (  # noqa: E402
     CachedTensorParallelQwen3ModelRunner,
     Qwen3TensorParallelPlan,
+    SlotCachedTensorParallelQwen3ModelRunner,
     TensorParallelInferenceEngine,
     load_tp_qwen3_from_pretrained,
 )
+from minigpt.serving import ContinuousBatchEngine, RequestSpec, RequestState  # noqa: E402
 
 
 def tiny_config_dict() -> dict[str, object]:
@@ -172,6 +177,11 @@ def check_distributed_boundaries() -> None:
     assert single.all_reduce_sum(value) is value
     assert single.all_gather_last_dim(value) is value
     assert single.all_gather_floats([1.5]) == [[1.5]]
+    single_replica = TensorParallelReplicaContext.create(single, tp_size=1)
+    assert single_replica.rank == 0
+    assert single_replica.replica_count == 1
+    assert single_replica.group_ranks == (0,)
+    assert single_replica.all_gather_last_dim(value) is value
     try:
         single.broadcast(torch.tensor([1]), src=1)
     except ValueError:
@@ -228,7 +238,64 @@ def _tp_worker(
         distributed.broadcast(broadcast)
         assert broadcast.item() == 17
 
+        replica = TensorParallelReplicaContext.create(distributed, tp_size=1)
+        assert replica.rank == 0
+        assert replica.replica_count == world_size
+        assert replica.replica_index == rank
+        assert replica.group_ranks == (rank,)
+        local = torch.tensor([float(rank)])
+        assert replica.all_reduce_sum(local).item() == float(rank)
+        replica.global_barrier()
+
         _check_tp_model(distributed, model_dir)
+    finally:
+        if distributed is not None:
+            distributed.close()
+
+
+def _replica_group_worker(
+    rank: int,
+    world_size: int,
+    rendezvous_path: str,
+) -> None:
+    torch.set_num_threads(1)
+    distributed: DistributedContext | None = None
+    try:
+        distributed = DistributedContext.create(
+            "cpu",
+            "fp32",
+            rank=rank,
+            local_rank=rank,
+            world_size=world_size,
+            init_method=f"file://{rendezvous_path}",
+            timeout_seconds=60,
+        )
+        replica = TensorParallelReplicaContext.create(distributed, tp_size=2)
+        expected_replica = rank // 2
+        expected_group = (expected_replica * 2, expected_replica * 2 + 1)
+        assert replica.replica_index == expected_replica
+        assert replica.replica_count == 2
+        assert replica.rank == rank % 2
+        assert replica.group_ranks == expected_group
+
+        reduced = torch.tensor([float(rank + 1)])
+        replica.all_reduce_sum(reduced)
+        assert reduced.item() == (3.0 if expected_replica == 0 else 7.0)
+        gathered = replica.all_gather_last_dim(torch.tensor([[float(rank)]]))
+        assert gathered.tolist() == [[float(value) for value in expected_group]]
+        broadcast = torch.tensor(
+            [100 + expected_replica if replica.rank == 0 else -1],
+            dtype=torch.long,
+        )
+        replica.broadcast(broadcast, src=0)
+        assert broadcast.item() == 100 + expected_replica
+        measurements = replica.all_gather_floats([rank + 0.5])
+        assert measurements == [[value + 0.5] for value in expected_group]
+
+        replica.global_barrier()
+        global_value = torch.tensor([1.0])
+        distributed.all_reduce_sum(global_value)
+        assert global_value.item() == float(world_size)
     finally:
         if distributed is not None:
             distributed.close()
@@ -326,6 +393,50 @@ def _check_tp_model(distributed: object, model_dir: str) -> None:
     assert [item.generated_ids for item in actual_sample] == [
         item.generated_ids for item in expected_sample
     ]
+
+    slot_engine = ContinuousBatchEngine(
+        SlotCachedTensorParallelQwen3ModelRunner(
+            tp_model,
+            runtime,
+            max_slots=2,
+            max_seq_len=12,
+        ),
+        tokenizer,
+        distributed=distributed,  # type: ignore[arg-type]
+    )
+    dynamic_specs = [
+        RequestSpec("dynamic-a", "4 5 6", GenerationConfig(max_new_tokens=5)),
+        RequestSpec(
+            "dynamic-b",
+            "7 8",
+            GenerationConfig(
+                max_new_tokens=2,
+                strategy="sample",
+                top_k=1,
+                seed=17,
+            ),
+        ),
+        RequestSpec("dynamic-c", "9 10 11 12", GenerationConfig(max_new_tokens=3)),
+    ]
+    expected_dynamic = {
+        spec.request_id: reference_engine.generate(spec.prompt, spec.config).generated_ids
+        for spec in dynamic_specs
+    }
+    for spec in dynamic_specs:
+        slot_engine.submit(spec)
+    if rank != 0:
+        # 故意打乱 follower 的本地 deque；实际 admission 必须服从 rank 0
+        # 广播的 request sequence/slot plan，而不是各 rank 自行取队首。
+        slot_engine._waiting.rotate(1)
+    first_step = slot_engine.step()
+    assert first_step["prefill_batch_size"] == 2
+    slot_engine.run_until_idle()
+    for request_id, expected_ids in expected_dynamic.items():
+        request = slot_engine.requests[request_id]
+        assert request.state == RequestState.FINISHED
+        assert request.generated_ids == expected_ids
+    assert slot_engine.allocator.used == 0
+    assert slot_engine.runner.cache_lengths([0, 1]) == [0, 0]
 
 
 class _ThreadCollectives:
@@ -433,6 +544,68 @@ def check_threaded_tp(model_dir: str, world_size: int) -> None:
             future.result()
 
 
+def check_scheduler_mismatch_fails_all_ranks() -> None:
+    from minigpt.runtime import RuntimeContext
+
+    runtime = RuntimeContext.create("cpu", "fp32")
+    collectives = _ThreadCollectives(2)
+    contexts = [
+        _ThreadDistributedContext(rank, 2, runtime, collectives)
+        for rank in range(2)
+    ]
+
+    class NeverCalledRunner:
+        implementation_name = "never_called"
+        max_slots = 1
+        max_seq_len = 8
+
+        def __init__(self) -> None:
+            self.runtime = runtime
+            self.model_calls = 0
+
+        @staticmethod
+        def validate_request(prompt_length: int, max_new_tokens: int) -> None:
+            if prompt_length + max_new_tokens - 1 > 8:
+                raise ValueError("request 太长")
+
+        def prefill_slots(self, *_args: object) -> torch.Tensor:
+            self.model_calls += 1
+            raise AssertionError("control plan 不一致时不能进入模型")
+
+        def decode_slots(self, *_args: object) -> torch.Tensor:
+            self.model_calls += 1
+            raise AssertionError("control plan 不一致时不能进入模型")
+
+        @staticmethod
+        def release_slots(_slot_ids: Sequence[int]) -> None:
+            return None
+
+        @staticmethod
+        def cache_lengths(slot_ids: Sequence[int]) -> list[int]:
+            return [0 for _slot_id in slot_ids]
+
+    runners = [NeverCalledRunner(), NeverCalledRunner()]
+
+    def run_rank(rank: int) -> str:
+        engine = ContinuousBatchEngine(
+            runners[rank],
+            IntegerTokenizer(),
+            distributed=contexts[rank],
+        )
+        prompt = "4 5" if rank == 0 else "6 7"
+        engine.submit(RequestSpec("same-id", prompt, GenerationConfig(max_new_tokens=2)))
+        try:
+            engine.step()
+        except RuntimeError as exc:
+            return str(exc)
+        raise AssertionError("不同 rank 的请求内容不一致时必须共同失败")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        errors = list(executor.map(run_rank, range(2)))
+    assert all("control plan" in error for error in errors)
+    assert all(runner.model_calls == 0 for runner in runners)
+
+
 def main() -> None:
     check_plan_boundaries()
     check_distributed_boundaries()
@@ -444,6 +617,7 @@ def main() -> None:
         # TP=4 走 world_size > KV heads 的复制分支；确保 replicated KV 与 query
         # group 的对应关系仍能恢复完整模型结果。
         check_threaded_tp(str(model_dir), 4)
+        check_scheduler_mismatch_fails_all_ranks()
         if os.environ.get("MINIGPT_RUN_GLOO_TESTS") == "1":
             rendezvous_path = root / "gloo-rendezvous"
             mp.spawn(
@@ -453,9 +627,17 @@ def main() -> None:
                 join=True,
             )
             print("v0.6 Gloo process-group tests passed.")
+            replica_rendezvous = root / "gloo-replica-rendezvous"
+            mp.spawn(
+                _replica_group_worker,
+                args=(4, str(replica_rendezvous)),
+                nprocs=4,
+                join=True,
+            )
+            print("v0.7 Gloo TP subgroup tests passed.")
         else:
             print("v0.6 Gloo test skipped; set MINIGPT_RUN_GLOO_TESTS=1 to enable it.")
-    print("v0.6 Qwen3 Tensor Parallel simulation tests passed.")
+    print("Qwen3 TP and v0.7 replica-group simulation tests passed.")
 
 
 if __name__ == "__main__":

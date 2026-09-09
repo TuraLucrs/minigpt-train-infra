@@ -1,0 +1,267 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-09T07:23:05.688872+00:00",
+  "benchmark": "v0.7_continuous_batching_acceptance",
+  "evidence_class": "formal_v0.7_qwen3_32b_ascend_continuous_batching_acceptance",
+  "expected_workloads": [
+    "short_short",
+    "long_prefill_short_decode",
+    "mixed"
+  ],
+  "expected_modes": [
+    "open_loop",
+    "closed_loop"
+  ],
+  "complete_matrix": true,
+  "incomplete_reasons": [],
+  "execution": {
+    "python": "3.12.13",
+    "pytorch": "2.10.0+cpu",
+    "torch": "2.10.0+cpu",
+    "torch_npu": "2.10.0.post5.dev20260821",
+    "cann_version": "9.2.0-V100R001C12B080",
+    "device_type": "npu",
+    "device_name": "Ascend910_9382",
+    "precision": "bf16",
+    "total_memory_mb": 62732.0,
+    "backend": "hccl",
+    "hostname": "node-21-123",
+    "visible_device_count": 16,
+    "physical_card_count": 4,
+    "chips_per_card": 2,
+    "interconnect_topology": "Atlas A3 cards0-3, 2 chips/card, HCCS intra-card + cross-card board interconnect",
+    "global_logical_device_ids": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  "model": {
+    "type": "TensorParallelQwen3ForCausalLM",
+    "config": {
+      "vocab_size": 151936,
+      "hidden_size": 5120,
+      "intermediate_size": 25600,
+      "num_hidden_layers": 64,
+      "num_attention_heads": 64,
+      "num_key_value_heads": 8,
+      "head_dim": 128,
+      "max_position_embeddings": 40960,
+      "rms_norm_eps": 1e-06,
+      "rope_theta": 1000000.0,
+      "attention_bias": false,
+      "attention_dropout": 0.0,
+      "hidden_act": "silu",
+      "tie_word_embeddings": false,
+      "bos_token_id": 151643,
+      "eos_token_id": 151645,
+      "pad_token_id": null,
+      "torch_dtype": "bfloat16",
+      "initializer_range": 0.02,
+      "use_sliding_window": false,
+      "sliding_window": null,
+      "rope_scaling": null
+    },
+    "full_parameter_count": 32762123264,
+    "config_sha256": "97e295b63283935788fac5e4f8860862a56d4089538cafc93f0431f2ebe483bb",
+    "metadata_sha256": {
+      "generation_config.json": "2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2",
+      "tokenizer_config.json": "d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101",
+      "tokenizer.json": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+      "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+      "merges.txt": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+    },
+    "weights": [
+      {
+        "name": "model-00001-of-00017.safetensors",
+        "size_bytes": 3957109648,
+        "sha256": "52562b2ff97b61764260273e71bf5b4cf8a66f569399398f26dec0300fcf1316"
+      },
+      {
+        "name": "model-00002-of-00017.safetensors",
+        "size_bytes": 3900791760,
+        "sha256": "e26764b2c6878e3fb7198895fa833ec62838d84a19665e6abfbae43c6daf02b3"
+      },
+      {
+        "name": "model-00003-of-00017.safetensors",
+        "size_bytes": 3900791760,
+        "sha256": "6c5ba7bed9c52bc121e75cbe8a7be46936d0006cc80f42a6d5886ed40b4c2a62"
+      },
+      {
+        "name": "model-00004-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "f736f6ac4d8c30866107fb1185a05b3c3cfce9717720082f466fa44e691bcec8"
+      },
+      {
+        "name": "model-00005-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "a52ed375c083209c54d42ac510afeb1fbb5af4f193be2dc7d103f665a0f212d3"
+      },
+      {
+        "name": "model-00006-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "37fae28990b0e4a70228549d040c0393e87bee3820d59e58e47844974d8dff5b"
+      },
+      {
+        "name": "model-00007-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "37776006aeaba29eca8bc73b2b963fe3477e1c2e3f6a27cb9527be75b905e1bf"
+      },
+      {
+        "name": "model-00008-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "73e74e9129674fe330948005075d70ab4fa0b92b68fb220c5a693f9cea553730"
+      },
+      {
+        "name": "model-00009-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "a044b3602a01bd8ea62ff51badf9cc038ab1d73d97399480e6a55b4c86fa7fa6"
+      },
+      {
+        "name": "model-00010-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "9966612ba7ecfc2cd2e592fb95224b86d743271ff88e172cc272a4b26382aa75"
+      },
+      {
+        "name": "model-00011-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "e2a058a0ac7d4b992b731c29221ecfb4b76b8a48d9004d0e8a62ba44f699845c"
+      },
+      {
+        "name": "model-00012-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "58a1aa89093fea07325f787072a468e3482a470ff4b7fe5ead5f749683907c40"
+      },
+      {
+        "name": "model-00013-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "35f3381bab31a23370c37d922290aeecdf603418336058fb86fe42d8f51ac40c"
+      },
+      {
+        "name": "model-00014-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "8713b062ddc178acf5917610b7f4b64eede833b2ea4aa37bd562dcf2f3a3339d"
+      },
+      {
+        "name": "model-00015-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "bec439d23931821a236d8f62fa79deecf5551bd25602278aa2ae0ce432b378cf"
+      },
+      {
+        "name": "model-00016-of-00017.safetensors",
+        "size_bytes": 3900791800,
+        "sha256": "e569139fadd61fe7c8f9eb1c976d9a627cae48c57ddf228cfbd0593c59c64ff7"
+      },
+      {
+        "name": "model-00017-of-00017.safetensors",
+        "size_bytes": 3055341992,
+        "sha256": "1f47c318fcd7797c0f85b4233cb754438b10e795b8bc874889090c416a94bd38"
+      }
+    ],
+    "git_commit": "0bad74ef01e083b8e23d388ed145a80dc81dc309",
+    "git_dirty": false
+  },
+  "comparisons": [
+    {
+      "workload_class": "short_short",
+      "mode": "open_loop",
+      "source_workload_sha256": "380a9af8544252650e8464cf73b2a3f614170b1694c75d440abac3b43ec71fbf",
+      "source_workload_file_sha256": "aec029836323c65e98b8e9e0d87157e8f3c82fc2f27fef02829fdbfc09348439",
+      "path": "short_short_open_loop/layout_comparison.json",
+      "sha256": "28b6ca55ffd16605127721b68418440cd8e50fb6e22a667cd4fac3b160b1a848",
+      "size_bytes": 79705,
+      "evidence_class": "formal_qwen3_32b_tp8_vs_2xtp4_vs_4xtp2",
+      "best_layout": {
+        "layout_id": "2xtp4",
+        "goodput_requests_per_second": 8.527843130666726,
+        "completed_requests_per_second": 8.527843130666726,
+        "output_tokens_per_second": 136.44549009066762
+      }
+    },
+    {
+      "workload_class": "short_short",
+      "mode": "closed_loop",
+      "source_workload_sha256": "380a9af8544252650e8464cf73b2a3f614170b1694c75d440abac3b43ec71fbf",
+      "source_workload_file_sha256": "aec029836323c65e98b8e9e0d87157e8f3c82fc2f27fef02829fdbfc09348439",
+      "path": "short_short_closed_loop/layout_comparison.json",
+      "sha256": "c29fb2a13665c74ea2880956aca9e5cb3492ffb49729395161856368bdbdaa6a",
+      "size_bytes": 80203,
+      "evidence_class": "formal_qwen3_32b_tp8_vs_2xtp4_vs_4xtp2",
+      "best_layout": {
+        "layout_id": "2xtp4",
+        "goodput_requests_per_second": 10.044324757665677,
+        "completed_requests_per_second": 10.044324757665677,
+        "output_tokens_per_second": 160.70919612265084
+      }
+    },
+    {
+      "workload_class": "long_prefill_short_decode",
+      "mode": "open_loop",
+      "source_workload_sha256": "9d2882f03d7fe231966daf41c327236e7d6491ef5dfeb97228d521fd128e53e1",
+      "source_workload_file_sha256": "8348c001327559fe8b3e37f0ac7c8bf4ab7ed94084cc5f7ce61307c1acd235ba",
+      "path": "long_prefill_short_decode_open_loop/layout_comparison.json",
+      "sha256": "efeb234730e266d7b4d6ecc149ed0b96cb997f158158b5814919ac009a12d5b0",
+      "size_bytes": 79820,
+      "evidence_class": "formal_qwen3_32b_tp8_vs_2xtp4_vs_4xtp2",
+      "best_layout": {
+        "layout_id": "4xtp2",
+        "goodput_requests_per_second": 6.054617805983025,
+        "completed_requests_per_second": 6.352385894801862,
+        "output_tokens_per_second": 50.819087158414895
+      }
+    },
+    {
+      "workload_class": "long_prefill_short_decode",
+      "mode": "closed_loop",
+      "source_workload_sha256": "9d2882f03d7fe231966daf41c327236e7d6491ef5dfeb97228d521fd128e53e1",
+      "source_workload_file_sha256": "8348c001327559fe8b3e37f0ac7c8bf4ab7ed94084cc5f7ce61307c1acd235ba",
+      "path": "long_prefill_short_decode_closed_loop/layout_comparison.json",
+      "sha256": "6971e1ae398b83b81136a4ed0846c88324609c38a9dd836214088f1bccaa9241",
+      "size_bytes": 79614,
+      "evidence_class": "formal_qwen3_32b_tp8_vs_2xtp4_vs_4xtp2",
+      "best_layout": {
+        "layout_id": "4xtp2",
+        "goodput_requests_per_second": 10.439636091967968,
+        "completed_requests_per_second": 10.439636091967968,
+        "output_tokens_per_second": 83.51708873574374
+      }
+    },
+    {
+      "workload_class": "mixed",
+      "mode": "open_loop",
+      "source_workload_sha256": "f376a6dcbfc41c465c023864a8a676672c539e9ac1086a0dd76db51e3f5668f8",
+      "source_workload_file_sha256": "0024963d8a4697a7ad3039a2560beb2be8efae07140b77a147f83a9c42a0f50a",
+      "path": "mixed_open_loop/layout_comparison.json",
+      "sha256": "24c4cabb9421568d7bdf6a8cefac44f0e6efbfbabda16359e4e73bcbfd52fd57",
+      "size_bytes": 80064,
+      "evidence_class": "formal_qwen3_32b_tp8_vs_2xtp4_vs_4xtp2",
+      "best_layout": {
+        "layout_id": "4xtp2",
+        "goodput_requests_per_second": 5.00421127053748,
+        "completed_requests_per_second": 5.00421127053748,
+        "output_tokens_per_second": 97.34754737217442
+      }
+    },
+    {
+      "workload_class": "mixed",
+      "mode": "closed_loop",
+      "source_workload_sha256": "f376a6dcbfc41c465c023864a8a676672c539e9ac1086a0dd76db51e3f5668f8",
+      "source_workload_file_sha256": "0024963d8a4697a7ad3039a2560beb2be8efae07140b77a147f83a9c42a0f50a",
+      "path": "mixed_closed_loop/layout_comparison.json",
+      "sha256": "a4ca9aa09f4d55def35b8d1ec394e009503f04b666a8de8fb5131566ed8a6de1",
+      "size_bytes": 79884,
+      "evidence_class": "formal_qwen3_32b_tp8_vs_2xtp4_vs_4xtp2",
+      "best_layout": {
+        "layout_id": "4xtp2",
+        "goodput_requests_per_second": 3.4914985161663217,
+        "completed_requests_per_second": 3.4914985161663217,
+        "output_tokens_per_second": 67.92055707229798
+      }
+    }
+  ]
+}

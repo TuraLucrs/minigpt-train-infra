@@ -30,16 +30,20 @@
 - torchrun process group 与 CPU/Gloo、CUDA/NCCL、Ascend/HCCL 后端边界
 - Qwen3 attention/MLP/vocabulary Tensor Parallel 与 rank-local safetensors 加载
 - TP rank 0 token 广播、逐 rank HBM、collective 和 Scaling 报告
+- Continuous Batching、请求状态机与 fixed-slot KV 生命周期
+- open-loop/closed-loop 可重放 workload 与 least-loaded 多副本路由
+- 同一 8 devices 上 TP8、2×TP4、4×TP2 的真实并发吞吐比较
+- request/s、goodput、队列/TTFT/TPOT/E2E、动态 batch、KV/HBM/AICore 指标
 
 ## 当前阶段
 
-`v0.1～v0.2.2` 已经完成单设备训练基础。它们保留为知识基础和项目演进证据，但后续不再
-持续扩建完整训练平台。`v0.5` 已将同一套生成引擎接入 Qwen3，并完成 tokenizer、config、
-safetensors、full forward、KV Cache 和 Transformers 数值对齐。当前 `v0.6` 分支已完成
-Tensor Parallel 软件实现，并于 2026-09-04 在 Ascend Atlas A3 上通过真实 Gloo/HCCL 与
-Qwen3-32B TP=2/4/8 硬件验收；精选证据位于 `artifacts/v0.6_qwen3_tp_acceptance/`。最终 tag
-等待实机修复的自动回归、证据提交和冻结复核完成后创建。正式模型固定为
-`Qwen/Qwen3-32B`，tiny 模型仍只承担正确性与 CI。
+`v0.1～v0.6` 已冻结。`v0.6-qwen3-tensor-parallel` 于 2026-09-04 在 Ascend Atlas A3
+完成真实 Gloo/HCCL 与 Qwen3-32B TP=2/4/8 验收；精选证据位于
+`artifacts/v0.6_qwen3_tp_acceptance/`。`v0.7` 的 A/B/C/D 已经完成：Continuous
+Batching、请求/KV slot 生命周期、多副本布局、可重放 workload、服务指标，以及真实
+Ascend 8 卡上的 TP8、2×TP4、4×TP2 共 18 组正式验收。完整与精选证据分别位于
+`v0.7_ascend_evidence.tar.gz` 和 `artifacts/v0.7_qwen3_continuous_batching_acceptance/`。
+正式模型固定为 `Qwen/Qwen3-32B`，tiny 模型只承担白盒正确性与快速 CI。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 
@@ -146,6 +150,12 @@ minigpt-train/
     infer_qwen3_tp.py
     benchmark_tp_collectives.py
     summarize_tp_scaling.py
+    generate_serving_workload.py
+    partition_serving_workload.py
+    infer_qwen3_continuous_batching.py
+    sample_npu_telemetry.py
+    summarize_serving_layouts.py
+    summarize_v07_acceptance.py
   configs/
     tiny_cpu.json
     tiny_gpu.json
@@ -159,6 +169,7 @@ minigpt-train/
     V0_4_KV_CACHE_STATIC_BATCHING.md
     V0_5_QWEN3_REAL_MODEL.md
     V0_6_QWEN3_TENSOR_PARALLEL.md
+    V0_7_CONTINUOUS_BATCHING.md
     PROJECT_WORKING_AGREEMENT.md
     V0_2_1_SINGLE_DEVICE_CLOSEOUT.md
     PLAN_REVIEW.md
@@ -187,6 +198,14 @@ minigpt-train/
       distributed.py
       qwen3_tp.py
       memory_planner.py
+      serving.py
+      workload.py
+      replay.py
+      replica.py
+      serving_benchmark.py
+      serving_acceptance.py
+      serving_layout.py
+      serving_telemetry.py
   tests/
     test_core.py
     test_reference_parity.py
@@ -196,6 +215,8 @@ minigpt-train/
     test_qwen3.py
     test_qwen3_tp.py
     test_tp_scaling.py
+    test_continuous_batching.py
+    test_serving_workloads.py
 ```
 
 ## 环境准备
@@ -223,6 +244,8 @@ python tests/test_kv_cache.py
 python tests/test_qwen3.py
 python tests/test_qwen3_tp.py
 python tests/test_tp_scaling.py
+python tests/test_continuous_batching.py
+python tests/test_serving_workloads.py
 ```
 
 看到：
@@ -236,6 +259,8 @@ v0.4 KV Cache and static batching tests passed.
 Qwen3 parity, cache, loading and memory planning tests passed.
 v0.6 Qwen3 Tensor Parallel simulation tests passed.
 v0.6 TP scaling summary tests passed.
+v0.7 continuous batching scheduler tests passed.
+v0.7 workload replay and multi-replica routing tests passed.
 ```
 
 第一项检查 tokenizer、model、optimizer 参数组、checkpoint 原子保存和旧版本迁移；
@@ -249,6 +274,8 @@ EOS 和静态 batch Benchmark。
 第七项用多个 rank-local 模型和确定性线程 collective 检查 TP=2/4 的参数分片、full/cached
 logits、KV-head 复制和生成一致性；设置 `MINIGPT_RUN_GLOO_TESTS=1` 后额外执行真实 Gloo
 process group。第八项检查报告可比性、speedup 与 Scaling Efficiency 公式。
+第九项检查请求状态、动态加入/退出、fixed-slot KV、EOS、取消、背压、失败清理和逐请求 RNG。
+第十项检查可重放 workload、open/closed loop、路由、真实并发布局汇总、遥测与证据降级门禁。
 
 ## Qwen3 v0.5 快速验收
 
@@ -312,6 +339,28 @@ torchrun --standalone --nproc-per-node=2 benchmarks/tp_hardware_smoke.py \
 真实 32B 使用 `torchrun` 启动 TP=2/4/8，先过对应规模的 hardware smoke 和 collective，
 再跑相同 workload 的推理报告，最后合并 Scaling。完整命令、拓扑字段和证据等级见
 [`docs/V0_6_QWEN3_TENSOR_PARALLEL.md`](docs/V0_6_QWEN3_TENSOR_PARALLEL.md)。
+
+## v0.7 Continuous Batching 与多副本吞吐
+
+软件正确性先执行：
+
+```bash
+python tests/test_continuous_batching.py
+python tests/test_serving_workloads.py
+```
+
+v0.7 在 v0.6 TP runner 上增加请求状态机、动态 admission、fixed-slot KV 分配/释放、
+rank 0 调度计划、可重放 open/closed-loop workload 和 least-loaded 多副本路由。真实 8 卡
+比较始终使用一个 8 进程作业，通过 TP subgroup 形成 TP8、2×TP4 或 4×TP2，布局吞吐取各
+replica 的真实并发墙钟区间，不把单副本吞吐乘副本数。正式对比还固定相同的全局 slot、
+waiting queue 和 `max_seq_len`，避免把额外调度容量误算成多副本布局收益。
+
+正式汇总同时检查原始 workload、报告 manifest、模型/权重/提交、硬件/软件、SLO、请求集合、
+完整输出 token digest、启动偏差和每卡 AICore 遥测，并重新判定 replica 候选资格、重算逐请求
+`slo_met`；最终验收会从这些原始 artifacts 重算整份三布局 comparison，不能靠修改标签或
+布尔门禁伪造正式结果。未提供遥测或任一证据不完整
+时仍输出开发报告，但不会标为正式性能结论。架构、指标、完整测试和 Ascend 运行命令见
+[`docs/V0_7_CONTINUOUS_BATCHING.md`](docs/V0_7_CONTINUOUS_BATCHING.md)。
 
 ## 独立运行一次推理
 
@@ -486,6 +535,14 @@ python train.py --config configs/tiny_cpu.json --resume runs/tiny_cpu/latest.pt 
 13. `infer_qwen3_tp.py` 与 `benchmarks/infer_qwen3_tp.py`
 14. `benchmarks/benchmark_tp_collectives.py` 与 `summarize_tp_scaling.py`
 15. `tests/test_qwen3_tp.py` 与 `tests/test_tp_scaling.py`
+16. `src/minigpt/serving.py`
+17. `tests/test_continuous_batching.py`
+18. `src/minigpt/workload.py` 与 `src/minigpt/replay.py`
+19. `src/minigpt/replica.py`
+20. `src/minigpt/distributed.py` 的 `TensorParallelReplicaContext`
+21. `benchmarks/infer_qwen3_continuous_batching.py`
+22. `src/minigpt/serving_layout.py` 与 `serving_telemetry.py`
+23. `tests/test_serving_workloads.py`
 
 核心顺序是先看真实模型怎样得到正确 logits 和 cache，再看通用生成与测量；不要先从 CLI
 参数或模型目录路径等工程胶水开始。当前机器窗口优先实现与实测，完整逐段讲解暂时后移，
