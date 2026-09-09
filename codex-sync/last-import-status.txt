@@ -2,4 +2,29 @@ outcome=failure
 bundle_sha256=95d942d487eaf520d335a692ffbace98819a7ae4d4acf2dc83ea8a6f7d26144b
 expected_target=116b7ee8db8d366c3d07b302b97176e6c676561d
 log_tail:
-fatal: invalid refspec '\'
+From https://github.com/TuraLucrs/minigpt-train-infra
+ * [new branch]      upgrade/v0.7-continuous-batching -> refs/codex-prerequisite/v07
+/home/runner/work/_temp/minigpt-train.bundle is okay
+The bundle contains this ref:
+116b7ee8db8d366c3d07b302b97176e6c676561d refs/heads/upgrade/v0.7-continuous-batching
+The bundle requires this ref:
+2f84c8ff9faf490b2dd8114010b57f8eccbe7de0 
+The bundle uses this hash algorithm: sha1
+From /home/runner/work/_temp/minigpt-train.bundle
+ * [new branch]      upgrade/v0.7-continuous-batching -> refs/codex-import/34325230701/0
+Preparing worktree (detached HEAD 116b7ee)
+HEAD is now at 116b7ee release: finalize v0.7 Ascend acceptance evidence
+v0.7 continuous batching scheduler and KV slot tests passed.
+All core smoke tests passed.
+v0.3 inference and benchmark tests passed.
+v0.4 KV Cache and static batching tests passed.
+Qwen3 parity, cache, loading and memory planning tests passed.
+v0.6 Gloo test skipped; set MINIGPT_RUN_GLOO_TESTS=1 to enable it.
+Qwen3 TP and v0.7 replica-group simulation tests passed.
+Reference-vs-optimized parity tests passed.
+Exact resume consistency test passed.
+v0.7 workload replay and multi-replica routing tests passed.
+v0.6 TP scaling summary tests passed.
+To https://github.com/TuraLucrs/minigpt-train-infra
+ ! [remote rejected] refs/codex-import/34325230701/0 -> upgrade/v0.7-continuous-batching (refusing to allow a GitHub App to create or update workflow `.github/workflows/v07-continuous-batching.yml` without `workflows` permission)
+error: failed to push some refs to 'https://github.com/TuraLucrs/minigpt-train-infra'
