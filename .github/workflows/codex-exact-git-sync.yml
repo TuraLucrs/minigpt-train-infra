@@ -113,6 +113,8 @@ jobs:
               cd "$worktree_path"
               python -m compileall -q src tests benchmarks
               git diff --check
+              export GLOO_SOCKET_IFNAME=lo
+              export MINIGPT_RUN_GLOO_TESTS=1
               for test_file in tests/test_*.py; do
                 python "$test_file"
               done
