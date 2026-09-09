@@ -73,7 +73,7 @@ jobs:
             exit 1
           fi
 
-          git fetch --no-tags origin \\
+          git fetch --no-tags origin \
             refs/heads/upgrade/v0.7-continuous-batching:refs/codex-prerequisite/v07
           git bundle verify "$bundle_path"
           mapfile -t advertised_refs < <(git bundle list-heads "$bundle_path")
