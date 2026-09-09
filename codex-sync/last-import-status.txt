@@ -11,7 +11,7 @@ The bundle requires this ref:
 2f84c8ff9faf490b2dd8114010b57f8eccbe7de0 
 The bundle uses this hash algorithm: sha1
 From /home/runner/work/_temp/minigpt-train.bundle
- * [new branch]      upgrade/v0.7-continuous-batching -> refs/codex-import/34325669108/0
+ * [new branch]      upgrade/v0.7-continuous-batching -> refs/codex-import/34326089810/0
 Preparing worktree (detached HEAD e20cc34)
 HEAD is now at e20cc34 release: finalize v0.7 Ascend acceptance evidence
 v0.7 continuous batching scheduler and KV slot tests passed.
@@ -19,7 +19,20 @@ All core smoke tests passed.
 v0.3 inference and benchmark tests passed.
 v0.4 KV Cache and static batching tests passed.
 Qwen3 parity, cache, loading and memory planning tests passed.
-v0.6 Gloo test skipped; set MINIGPT_RUN_GLOO_TESTS=1 to enable it.
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+v0.6 Gloo process-group tests passed.
+[Gloo] Rank 2 is connected to 3 peer ranks. Expected number of connected peer ranks is : 3
+[Gloo] Rank 0 is connected to 3 peer ranks. Expected number of connected peer ranks is : 3
+[Gloo] Rank 1 is connected to 3 peer ranks. Expected number of connected peer ranks is : 3
+[Gloo] Rank 3 is connected to 3 peer ranks. Expected number of connected peer ranks is : 3
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+v0.7 Gloo TP subgroup tests passed.
 Qwen3 TP and v0.7 replica-group simulation tests passed.
 Reference-vs-optimized parity tests passed.
 Exact resume consistency test passed.
@@ -175,7 +188,7 @@ long_prefill_short_decode/open_loop: best=4xtp2 goodput=6.055 request/s
 long_prefill_short_decode/closed_loop: best=4xtp2 goodput=10.440 request/s
 mixed/open_loop: best=4xtp2 goodput=5.004 request/s
 mixed/closed_loop: best=4xtp2 goodput=3.491 request/s
-report         : /tmp/tmp.1KbywkCLhw/recomputed_v0.7_acceptance.json
+report         : /tmp/tmp.xj6IgNdw9C/recomputed_v0.7_acceptance.json
 README.md: OK
 RUN_LOG.md: OK
 SLO_FREEZE.md: OK
@@ -186,6 +199,5 @@ comparisons/mixed_open_loop.json: OK
 comparisons/short_short_closed_loop.json: OK
 comparisons/short_short_open_loop.json: OK
 v0.7_acceptance.json: OK
-To https://github.com/TuraLucrs/minigpt-train-infra
-   2f84c8f..e20cc34  refs/codex-import/34325669108/0 -> upgrade/v0.7-continuous-batching
+Already synchronized: refs/heads/upgrade/v0.7-continuous-batching
 Tested and imported 1 verified refs from d4b71c2e4ef30a37d5a065b76da04f317ca54c6b3ec1a8729b70f369954ed44f
