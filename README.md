@@ -51,6 +51,8 @@ TP8 慢态受到同设备并发负载污染，干净环境下 mixed workload 的
 交付真实后端/Profiler 适配、统一测量入口及可恢复 A3/A5/CUDA 矩阵。两版当前为软件就绪、
 真实硬件验证待执行，尚不声称 Decode 加速或新的跨硬件性能结果。软件状态、完整命令与
 边界见 [`docs/V0_9_BACKENDS_PROFILER_MATRIX.md`](docs/V0_9_BACKENDS_PROFILER_MATRIX.md)。
+精确提交、已通过的 Linux CPU/Gloo CI、恢复材料和真机待跑清单见
+[`v0.8 / v0.9 软件交接`](docs/MINIGPT_HANDOFF_2026-09-11_V08_V09_SOFTWARE_READY.md)。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 

@@ -221,4 +221,5 @@ python tests/test_experiment_matrix.py
 
 Linux CI 设置 `MINIGPT_RUN_GLOO_TESTS=1`，同时运行全部历史训练/推理/服务/v0.8 回归和这些
 新增测试。CPU Profiler、CLI 和矩阵测试都执行真实 tiny 推理；GPU/NPU SDK 契约与管理命令
-解析测试不能替代实际硬件采集。最终提交、CI 链接、恢复材料和待跑项见新交接文档。
+解析测试不能替代实际硬件采集。最终提交、CI 链接、恢复材料和待跑项见
+[v0.8 / v0.9 软件交接](MINIGPT_HANDOFF_2026-09-11_V08_V09_SOFTWARE_READY.md)。
