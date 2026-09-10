@@ -382,10 +382,11 @@ v0.7.1 不实现某个性能优化，而是先补上 v0.8 的选题证据。普�
 结束后，runner reset 并复用同一 admission script 做一次独立 profile replay；后者不进入
 TTFT、TPOT、E2E、吞吐或 goodput 聚合，并必须生成与 measured replay 相同的完整输出 digest。
 
-正式 Atlas gate 固定 8 个 rank、Level1、PipeUtilization 和 8/2/4 的 skip/warmup/active
-窗口，要求每个 rank 的 operator、kernel、step trace、timeline 和 communication artifact
-都存在且通过 manifest 哈希校验。三组问题各比较两个 layout，共六个 8 进程作业；只有六点
-全部完整时才允许据此选择一个 v0.8 A/B 研究方向。协议、命令和冻结标准见
+正式 Atlas gate 固定 8 个 rank、Level1 和 PipeUtilization，并使用按问题定向的有界窗口：
+short 为 8/2/4，long-prefill 为 6/1/4，mixed 为 14/1/4。门禁不仅要求每个 rank 的 operator、kernel、
+step trace、timeline 和 communication artifact 通过哈希校验，还验证窗口实际覆盖目标阶段。
+三组问题各比较两个 layout，共六个 8 进程作业；只有六点全部完整时才允许据此选择一个
+v0.8 A/B 研究方向。协议、命令和冻结标准见
 [`docs/V0_7_1_ASCEND_PROFILING_GATE.md`](docs/V0_7_1_ASCEND_PROFILING_GATE.md)。
 
 ## 独立运行一次推理

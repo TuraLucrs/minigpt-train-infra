@@ -28,13 +28,18 @@ selection 增加 `record_function` 范围。普通 measured replay 额外记录�
 ### B. Ascend 原始证据
 
 `AscendStepProfiler` 延迟导入 `torch_npu`，只在真实 NPU 运行。一个 scheduler step 对应一个
-Profiler step。正式协议固定为：
+Profiler step。正式窗口按问题定向，避免统一跳过前几步后把长 Prefill 一并跳过：
+
+| workload | skip / warmup / active | 窗口目的 |
+|---|---:|---|
+| `short_short` | 8 / 2 / 4 | 避开初始 Prefill，采稳定 Decode |
+| `long_prefill_short_decode` | 6 / 1 / 4 | warmup 后从冻结 workload 的第二轮 Prefill 开始，连续采 Prefill+Decode |
+| `mixed` | 14 / 1 / 4 | 对齐四个副本后，在第 15–18 步共同采 Prefill 与 Decode |
+
+其余正式协议固定为：
 
 | 字段 | 值 |
 |---|---:|
-| skip | 8 steps |
-| warmup | 2 steps |
-| active | 4 steps |
 | profiler level | Level1 |
 | AiCore metrics | PipeUtilization |
 | record shapes | true |
@@ -81,9 +86,10 @@ layout，共六个独立的 8 进程作业：
 3. serving layout manifest、workload 内容/文件哈希、设备映射与 profile manifest 一致；
 4. measured repeats 和额外 profile replay 的完整输出 digest 一致；
 5. profile replay 明确标记为 `measurement_excluded=true`；
-6. 8 个 rank 都按固定协议采集，关键 artifact 全部存在且哈希正确；
-7. 同一比较中的两个 layout 使用相同 workload 文件和相同 Git commit；
-8. 六个 point 全部完整。
+6. 8 个 rank 都按对应 workload 的固定协议采集，关键 artifact 全部存在且哈希正确；
+7. short 窗口实际覆盖 Decode；long-prefill 与 mixed 窗口实际同时覆盖 Prefill 和 Decode；
+8. 同一比较中的两个 layout 使用相同 workload 文件和相同 Git commit；
+9. 六个 point 全部完整。
 
 任一条件失败仍可以输出开发摘要，但 `selection_ready=false`，不得据此冻结 v0.8 选题。
 
@@ -123,19 +129,20 @@ Profiler 会增加 CPU 调度、trace、shape 记录和落盘开销。把它直�
 ## 5. Atlas 运行
 
 先检出待验收 commit，确认 8 个 logical devices 可见，并复用 v0.7 冻结的三个 workload
-文件。正式执行：
+文件。脚本默认从仓库跟踪的 `v0.7_ascend_evidence.tar.gz` 提取这三个文件；只有需要使用外部
+副本时才设置 `WORKLOAD_DIR`。正式执行：
 
 ```bash
 export MODEL_DIR=/path/to/Qwen3-32B
-export WORKLOAD_DIR=/path/to/v0.7/frozen-workloads
 export CANN_VERSION='完整版本字符串'
 export INTERCONNECT_TOPOLOGY='4 physical cards, 2 logical devices per card'
 
 bash scripts/run_v071_ascend_profiling_gate.sh
 ```
 
-可用 `PROFILE_OUTPUT_ROOT` 改输出目录，用 `MASTER_PORT_BASE` 改六个作业的起始端口。脚本拒绝
-已有输出目录和 dirty tracked worktree，避免旧 trace 混入新证据。
+可用 `WORKLOAD_DIR` 指定另一份冻结 workload 目录，用 `PROFILE_OUTPUT_ROOT` 改输出目录，
+用 `MASTER_PORT_BASE` 改六个作业的起始端口。脚本拒绝已有输出目录和 dirty tracked
+worktree，避免旧 trace 混入新证据。
 
 预期目录：
 
@@ -166,9 +173,9 @@ selection_ready = true
 
 ## 7. 上游接口依据
 
-- [torch_npu.profiler.profile API](https://www.hiascend.com/document/detail/en/Pytorch/2600/apiref/torchnpuCustomapi/docs/en/custom_APIs/torch_npu-profiler/torch_npu-profiler-profile.md)
-- [Ascend PyTorch Profiler 用户指南](https://github.com/Ascend/pytorch/blob/master/docs/en/developer_notes/ascend_pytorch_profiler_user_guide.md)
-- [tensorboard_trace_handler API](https://www.hiascend.com/document/detail/en/Pytorch/2600/apiref/torchnpuCustomapi/docs/en/custom_APIs/torch_npu-profiler/torch_npu-profiler-tensorboard_trace_handler.md)
+- [torch_npu 2.10 / Ascend 26.1 profiler 实现](https://github.com/Ascend/pytorch/blob/v26.1.0-pytorch2.10.0/torch_npu/profiler/profiler.py)
+- [torch_npu 2.10 / Ascend 26.1 schedule 实现](https://github.com/Ascend/pytorch/blob/v26.1.0-pytorch2.10.0/torch_npu/profiler/scheduler.py)
+- [torch_npu 2.10 / Ascend 26.1 文本导出格式](https://github.com/Ascend/pytorch/tree/v26.1.0-pytorch2.10.0/torch_npu/profiler/analysis/prof_view)
 
 本版本只依赖这些窄接口；更长时间的多机 trace、后端抽象扩展、通信微基准和跨平台对比仍
 属于后续 Ascend 专项阶段。

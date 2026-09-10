@@ -586,26 +586,51 @@ def fake_layout_report(
         "evidence_class": "qwen3_32b_ascend_continuous_batching_candidate",
         "runs": runs,
     }
+    profile_windows = {
+        "short_short": (8, 2, 4),
+        "long_prefill_short_decode": (6, 1, 4),
+        "mixed": (14, 1, 4),
+    }
+    profile_skip, profile_warmup, profile_active = profile_windows[workload_class]
+    profile_protocol = {
+        "skip_steps": profile_skip,
+        "warmup_steps": profile_warmup,
+        "active_steps": profile_active,
+        "profiler_level": "level1",
+        "aic_metrics": "pipe_utilization",
+        "record_shapes": True,
+        "profile_memory": False,
+        "with_stack": False,
+        "sys_interconnection": True,
+    }
+    observed_scheduler_steps = sum(
+        int(profile_protocol[field])
+        for field in ("skip_steps", "warmup_steps", "active_steps")
+    )
     report["profiling"] = {
         "collector": "torch_npu.profiler",
         "selected": True,
         "global_rank": replica_index * tp_size,
         "logical_device_id": local_devices[0],
-        "observed_scheduler_steps": 16,
+        "observed_scheduler_steps": observed_scheduler_steps,
         "measurement_excluded": True,
-        "protocol": {
-            "skip_steps": 8,
-            "warmup_steps": 2,
-            "active_steps": 4,
-            "profiler_level": "level1",
-            "aic_metrics": "pipe_utilization",
-            "record_shapes": True,
-            "profile_memory": False,
-            "with_stack": False,
-            "sys_interconnection": True,
+        "protocol": profile_protocol,
+        "captured_scheduler_window": {
+            "start_step": (
+                int(profile_protocol["skip_steps"])
+                + int(profile_protocol["warmup_steps"])
+            ),
+            "end_step_exclusive": observed_scheduler_steps,
+            "observed_active_steps": 4,
+            "step_indices": list(
+                range(observed_scheduler_steps - 4, observed_scheduler_steps)
+            ),
+            "prefill_steps": 0 if workload_class == "short_short" else 1,
+            "decode_steps": 4,
+            "mixed_steps": 0 if workload_class == "short_short" else 1,
         },
         "replay": {
-            "scheduler_steps": 16,
+            "scheduler_steps": observed_scheduler_steps,
             "wall_time_ms": duration_ms,
             "output_sha256": runs[0]["output_sha256"],
         },

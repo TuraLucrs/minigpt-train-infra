@@ -46,16 +46,40 @@ TRIAGE_THRESHOLDS = {
     "host_or_runtime_free_ratio": 0.15,
 }
 
-FORMAL_PROFILE_PROTOCOL = {
-    "skip_steps": 8,
-    "warmup_steps": 2,
-    "active_steps": 4,
+_FORMAL_PROFILE_COMMON = {
     "profiler_level": "level1",
     "aic_metrics": "pipe_utilization",
     "record_shapes": True,
     "profile_memory": False,
     "with_stack": False,
     "sys_interconnection": True,
+}
+
+FORMAL_PROFILE_PROTOCOLS = {
+    "short_short": {
+        **_FORMAL_PROFILE_COMMON,
+        "skip_steps": 8,
+        "warmup_steps": 2,
+        "active_steps": 4,
+    },
+    "long_prefill_short_decode": {
+        **_FORMAL_PROFILE_COMMON,
+        "skip_steps": 6,
+        "warmup_steps": 1,
+        "active_steps": 4,
+    },
+    "mixed": {
+        **_FORMAL_PROFILE_COMMON,
+        "skip_steps": 14,
+        "warmup_steps": 1,
+        "active_steps": 4,
+    },
+}
+
+FORMAL_PHASE_COVERAGE = {
+    "short_short": {"decode_steps": 1},
+    "long_prefill_short_decode": {"prefill_steps": 1, "decode_steps": 1},
+    "mixed": {"prefill_steps": 1, "decode_steps": 1},
 }
 
 
@@ -121,10 +145,14 @@ def summarize_profile_point(
     if profile.get("selected_ranks") != expected_ranks:
         incomplete_reasons.append("正式 profile point 必须覆盖全部 global ranks")
     profile_protocol = profile.get("protocol")
+    workload_class = str(workload["workload_class"])
+    expected_profile_protocol = FORMAL_PROFILE_PROTOCOLS.get(workload_class)
+    if expected_profile_protocol is None:
+        incomplete_reasons.append("没有为 workload 定义正式 profiling protocol")
     if not isinstance(profile_protocol, dict):
         incomplete_reasons.append("profile manifest 缺少 protocol")
-    else:
-        for field, expected in FORMAL_PROFILE_PROTOCOL.items():
+    elif expected_profile_protocol is not None:
+        for field, expected in expected_profile_protocol.items():
             if profile_protocol.get(field) != expected:
                 incomplete_reasons.append(
                     f"正式 profile protocol 的 {field} 必须为 {expected!r}"
@@ -145,19 +173,63 @@ def summarize_profile_point(
             incomplete_reasons.append(f"{path.name} 未绑定当前 profile manifest")
         replay = metadata.get("replay")
         measured_digests = {str(run["output_sha256"]) for run in report["runs"]}
-        if not isinstance(replay, dict) or str(replay.get("output_sha256")) not in measured_digests:
+        if (
+            not isinstance(replay, dict)
+            or str(replay.get("output_sha256")) not in measured_digests
+        ):
             incomplete_reasons.append(f"{path.name} profiling replay 输出不一致")
+        captured_window = metadata.get("captured_scheduler_window")
+        if not isinstance(captured_window, dict):
+            incomplete_reasons.append(f"{path.name} 缺少实际采集阶段统计")
+        else:
+            if expected_profile_protocol is not None:
+                expected_start = int(expected_profile_protocol["skip_steps"]) + int(
+                    expected_profile_protocol["warmup_steps"]
+                )
+                expected_end = expected_start + int(
+                    expected_profile_protocol["active_steps"]
+                )
+                expected_window = {
+                    "start_step": expected_start,
+                    "end_step_exclusive": expected_end,
+                    "observed_active_steps": int(
+                        expected_profile_protocol["active_steps"]
+                    ),
+                    "step_indices": list(range(expected_start, expected_end)),
+                }
+                for field, expected in expected_window.items():
+                    if captured_window.get(field) != expected:
+                        incomplete_reasons.append(
+                            f"{path.name} 采集窗口的 {field} 不匹配"
+                        )
+            expected_coverage = FORMAL_PHASE_COVERAGE.get(workload_class, {})
+            for field, minimum in expected_coverage.items():
+                try:
+                    observed = int(captured_window[field])
+                except (KeyError, TypeError, ValueError):
+                    observed = -1
+                if observed < minimum:
+                    incomplete_reasons.append(
+                        f"{path.name} 采集窗口未覆盖 {field}"
+                    )
         profile_protocols.add(
             json.dumps(metadata.get("protocol"), sort_keys=True, separators=(",", ":"))
         )
-    expected_protocol_json = json.dumps(
-        FORMAL_PROFILE_PROTOCOL,
-        sort_keys=True,
-        separators=(",", ":"),
+    expected_protocol_json = (
+        json.dumps(
+            expected_profile_protocol,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if expected_profile_protocol is not None
+        else None
     )
     if len(profile_protocols) != 1:
         incomplete_reasons.append("各 replica 的 profiling protocol 不一致")
-    elif next(iter(profile_protocols)) != expected_protocol_json:
+    elif (
+        expected_protocol_json is None
+        or next(iter(profile_protocols)) != expected_protocol_json
+    ):
         incomplete_reasons.append("serving reports 未使用正式 profiling protocol")
     if row["scheduler_phases"].get("available") is not True:
         incomplete_reasons.append("serving report 缺少 scheduler phase wall-time")

@@ -82,6 +82,10 @@ class AscendStepProfiler:
         self.selected = selected
         self.protocol = protocol
         self.observed_steps = 0
+        self._captured_step_indices: list[int] = []
+        self._captured_prefill_steps = 0
+        self._captured_decode_steps = 0
+        self._captured_mixed_steps = 0
         self._profile: object | None = None
         self._started = False
         self._finished = False
@@ -145,10 +149,30 @@ class AscendStepProfiler:
         self._profile.__enter__()
         return self
 
-    def step(self, _record: dict[str, object]) -> None:
+    def step(self, record: dict[str, object]) -> None:
         if not self._started or self._finished:
             raise RuntimeError("profiler step 必须位于活动 session 内")
+        step_index = self.observed_steps
         self.observed_steps += 1
+        active_start = self.protocol.skip_steps + self.protocol.warmup_steps
+        active_end = active_start + self.protocol.active_steps
+        if active_start <= step_index < active_end:
+            try:
+                prefill_batch_size = int(record["prefill_batch_size"])
+                decode_batch_size = int(record["decode_batch_size"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    "profiler step record 缺少有效 batch size"
+                ) from exc
+            if prefill_batch_size < 0 or decode_batch_size < 0:
+                raise ValueError("profiler step batch size 不能小于 0")
+            self._captured_step_indices.append(step_index)
+            if prefill_batch_size > 0:
+                self._captured_prefill_steps += 1
+            if decode_batch_size > 0:
+                self._captured_decode_steps += 1
+            if prefill_batch_size > 0 and decode_batch_size > 0:
+                self._captured_mixed_steps += 1
         if self.selected:
             assert self._profile is not None
             self._profile.step()
@@ -181,6 +205,17 @@ class AscendStepProfiler:
             "logical_device_id": self.logical_device_id,
             "observed_scheduler_steps": self.observed_steps,
             "protocol": asdict(self.protocol),
+            "captured_scheduler_window": {
+                "start_step": (
+                    self.protocol.skip_steps + self.protocol.warmup_steps
+                ),
+                "end_step_exclusive": self.protocol.required_scheduler_steps,
+                "observed_active_steps": len(self._captured_step_indices),
+                "step_indices": list(self._captured_step_indices),
+                "prefill_steps": self._captured_prefill_steps,
+                "decode_steps": self._captured_decode_steps,
+                "mixed_steps": self._captured_mixed_steps,
+            },
             "rank_output_dir": (
                 str(self.rank_dir) if self.selected else None
             ),

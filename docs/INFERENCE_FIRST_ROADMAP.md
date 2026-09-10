@@ -171,7 +171,8 @@ MiniGPT 的 tiny shape 不足以代表真实 kernel、显存、通信和吞吐�
 - 保持 v0.7 冻结 tag 和正式 18 点结果不变；
 - 为 Decode、Prefill、control、model 和 token selection 增加可解释范围；
 - 在 measured repeats 之外做一次输出等价的有界 profile replay，避免自污染性能指标；
-- 固定 Level1、PipeUtilization、8/2/4 step 窗口并采集全部 8 个 ranks；
+- 固定 Level1、PipeUtilization 与全 8 ranks；short 使用 8/2/4 step 窗口，
+  long-prefill 使用 6/1/4，mixed 使用 14/1/4 定向窗口；
 - 对三组 v0.7 现象运行六点诊断矩阵，校验 operator、kernel、step trace、timeline 和通信证据；
 - 只有完整 gate 才能进入 v0.8 选题，阈值只生成诊断信号，不自动替代工程判断。
 

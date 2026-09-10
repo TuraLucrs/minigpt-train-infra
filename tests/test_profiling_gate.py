@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from minigpt.ascend_profiling import (  # noqa: E402
     AscendProfileProtocol,
+    AscendStepProfiler,
     analyze_profile_manifest,
     build_profile_manifest,
     load_profile_manifest,
@@ -22,6 +23,7 @@ from minigpt.ascend_profiling import (  # noqa: E402
 )
 from minigpt.profiling_gate import (  # noqa: E402
     EXPECTED_CASES,
+    FORMAL_PROFILE_PROTOCOLS,
     summarize_profile_point,
     summarize_profiling_gate,
 )
@@ -67,10 +69,11 @@ def write_profile_manifest_for_layout(layout_root: Path) -> Path:
     layout_manifest = json.loads(layout_manifest_path.read_text(encoding="utf-8"))
     profile_root = layout_root / "profiler"
     write_fake_profile_outputs(profile_root)
+    workload_class = str(layout_manifest["workload_class"])
     manifest = build_profile_manifest(
         profile_root,
         layout_id=str(layout_manifest["layout_id"]),
-        workload_class=str(layout_manifest["workload_class"]),
+        workload_class=workload_class,
         mode=json.loads(
             (layout_root / "replica-00.json").read_text(encoding="utf-8")
         )["protocol"]["mode"],
@@ -81,7 +84,9 @@ def write_profile_manifest_for_layout(layout_root: Path) -> Path:
         git_commit="c" * 40,
         selected_ranks=range(8),
         logical_device_ids=range(8),
-        protocol=AscendProfileProtocol(),
+        protocol=AscendProfileProtocol(
+            **FORMAL_PROFILE_PROTOCOLS[workload_class]
+        ),
     )
     path = layout_root / "profile_manifest.json"
     write_profile_manifest(path, manifest)
@@ -220,8 +225,42 @@ def check_profile_rank_parser() -> None:
             raise AssertionError(f"非法 profile ranks 未被拒绝：{invalid!r}")
 
 
+def check_captured_scheduler_window() -> None:
+    profiler = AscendStepProfiler(
+        "unused",
+        global_rank=0,
+        logical_device_id=0,
+        selected=False,
+        protocol=AscendProfileProtocol(
+            skip_steps=1,
+            warmup_steps=1,
+            active_steps=2,
+        ),
+    )
+    records = [
+        {"prefill_batch_size": 4, "decode_batch_size": 0},
+        {"prefill_batch_size": 0, "decode_batch_size": 4},
+        {"prefill_batch_size": 2, "decode_batch_size": 4},
+        {"prefill_batch_size": 0, "decode_batch_size": 4},
+    ]
+    with profiler:
+        for record in records:
+            profiler.step(record)
+    window = profiler.metadata()["captured_scheduler_window"]
+    assert window == {
+        "start_step": 2,
+        "end_step_exclusive": 4,
+        "observed_active_steps": 2,
+        "step_indices": [2, 3],
+        "prefill_steps": 1,
+        "decode_steps": 2,
+        "mixed_steps": 1,
+    }
+
+
 def main() -> None:
     check_profile_rank_parser()
+    check_captured_scheduler_window()
     with tempfile.TemporaryDirectory() as directory:
         check_profile_manifest_and_parser(Path(directory))
     with tempfile.TemporaryDirectory() as directory:
