@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import statistics
 from typing import Mapping, Sequence
 
 from .replica import partition_workload_by_projected_load
@@ -805,6 +806,40 @@ def _summarize_layout(
             "prefill_batch_size",
         )
     }
+    step_records = [
+        step
+        for serving in serving_runs
+        for step in serving["steps"]
+    ]
+    phase_fields = (
+        "decode_phase_ms",
+        "prefill_phase_ms",
+        "scheduler_bookkeeping_ms",
+    )
+    phase_available = bool(step_records) and all(
+        all(field in step for field in phase_fields) for step in step_records
+    )
+    if phase_available:
+        phase_totals = {
+            field: sum(float(step[field]) for step in step_records)
+            for field in phase_fields
+        }
+        total_step_time = sum(float(step["duration_ms"]) for step in step_records)
+        scheduler_phases = {
+            "available": True,
+            "sample_count": len(step_records),
+            "totals_ms": phase_totals,
+            "fractions": {
+                field: value / total_step_time if total_step_time > 0.0 else 0.0
+                for field, value in phase_totals.items()
+            },
+        }
+    else:
+        scheduler_phases = {
+            "available": False,
+            "sample_count": len(step_records),
+            "reason": "报告早于 v0.7.1，没有 scheduler phase wall-time 字段",
+        }
     kv_runs = [serving["kv_cache"] for serving in serving_runs]
     kv_cache = {
         "total_slot_capacity": sum(
@@ -819,6 +854,14 @@ def _summarize_layout(
         ),
         "max_replica_internal_waste_tokens": max(
             int(kv["peak_internal_waste_tokens"]) for kv in kv_runs
+        ),
+        "max_replica_peak_internal_waste_capacity_ratio": max(
+            float(kv.get("peak_internal_waste_capacity_ratio", 0.0))
+            for kv in kv_runs
+        ),
+        "mean_active_internal_waste_ratio": statistics.fmean(
+            float(kv.get("mean_active_internal_waste_ratio", 0.0))
+            for kv in kv_runs
         ),
         "external_fragmentation_tokens": max(
             int(kv["external_fragmentation_tokens"]) for kv in kv_runs
@@ -939,12 +982,32 @@ def _summarize_layout(
         "telemetry_formal": telemetry_formal,
         "telemetry": telemetry_summary,
         "batching": batching,
+        "scheduler_phases": scheduler_phases,
         "scheduler_capacity": scheduler_capacity,
         "kv_cache": kv_cache,
         "summary": summary,
         "runs": layout_runs,
         "reports": [str(path) for path, _report in reports],
     }
+
+
+def summarize_serving_layout(
+    layout_id: str,
+    reports: Sequence[tuple[Path, dict[str, object]]],
+    *,
+    max_start_skew_ms: float = 100.0,
+) -> dict[str, object]:
+    """重算单个 layout；供 profile point 绑定服务指标使用。"""
+
+    if max_start_skew_ms < 0.0:
+        raise ValueError("max_start_skew_ms 不能小于 0")
+    return _summarize_layout(
+        layout_id,
+        reports,
+        max_start_skew_ms=max_start_skew_ms,
+        telemetry=None,
+        min_telemetry_samples_per_device_per_run=2,
+    )
 
 
 def summarize_serving_layouts(

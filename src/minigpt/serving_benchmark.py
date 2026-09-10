@@ -9,7 +9,7 @@ import json
 import platform
 import statistics
 import time
-from typing import Callable, Sequence
+from typing import Callable, Protocol, Sequence
 
 import torch
 
@@ -17,6 +17,18 @@ from .benchmark import percentile
 from .replay import OfflineTraceReplayer, ReplayCollectives
 from .serving import ContinuousBatchEngine
 from .workload import WorkloadTrace
+
+
+class StepProfiler(Protocol):
+    """额外 profiling replay 使用的最小接口。"""
+
+    def __enter__(self) -> "StepProfiler": ...
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None: ...
+
+    def step(self, record: dict[str, object]) -> None: ...
+
+    def metadata(self) -> dict[str, object]: ...
 
 
 def summarize_samples(values: Sequence[float]) -> dict[str, float | int] | None:
@@ -147,6 +159,34 @@ def _aggregate_runs(runs: Sequence[dict[str, object]]) -> dict[str, object]:
     summary["state_counts_per_run"] = [
         dict(run["serving"]["summary"]["state_counts"]) for run in runs
     ]
+    phase_fields = (
+        "decode_phase_ms",
+        "prefill_phase_ms",
+        "scheduler_bookkeeping_ms",
+    )
+    phase_totals = {
+        field: [
+            sum(float(step[field]) for step in run["serving"]["steps"])
+            for run in runs
+        ]
+        for field in phase_fields
+    }
+    total_step_times = [
+        sum(float(step["duration_ms"]) for step in run["serving"]["steps"])
+        for run in runs
+    ]
+    summary["scheduler_phase_ms_per_run"] = {
+        field: summarize_samples(values) for field, values in phase_totals.items()
+    }
+    summary["scheduler_phase_fraction"] = {
+        field: summarize_samples(
+            [
+                value / total if total > 0.0 else 0.0
+                for value, total in zip(values, total_step_times)
+            ]
+        )
+        for field, values in phase_totals.items()
+    }
     return summary
 
 
@@ -168,6 +208,7 @@ def benchmark_trace_replay(
     before_replay: Callable[[], None] | None = None,
     after_replay: Callable[[], None] | None = None,
     deterministic_open_loop: bool = False,
+    profiling_session: StepProfiler | None = None,
 ) -> dict[str, object]:
     """重放同一 trace，保存每次原始请求/step，并验证输出可重复。
 
@@ -187,6 +228,7 @@ def benchmark_trace_replay(
 
     def replay_once(
         script: list[tuple[int, int, int]] | None = None,
+        after_step: Callable[[dict[str, object]], None] | None = None,
     ) -> tuple[dict[str, object], dict[str, object], list[list[int]]]:
         if before_replay is not None:
             before_replay()
@@ -201,7 +243,7 @@ def benchmark_trace_replay(
             clock=clock,
             sleeper=sleeper,
         )
-        replay = replayer.run(script=script)
+        replay = replayer.run(script=script, after_step=after_step)
         actions = list(replayer.last_primary_actions)
         engine.runner.runtime.synchronize()
         current_memory_mb, peak_memory_mb = engine.runner.runtime.memory_stats_mb()
@@ -251,7 +293,27 @@ def benchmark_trace_replay(
     if len(output_digests) != 1:
         raise AssertionError("相同 trace 的重复运行产生了不同请求输出")
 
-    return {
+    profiling: dict[str, object] | None = None
+    if profiling_session is not None:
+        engine.reset()
+        with profiling_session:
+            profile_run, _profile_serving, _profile_actions = replay_once(
+                admission_script,
+                after_step=profiling_session.step,
+            )
+        if str(profile_run["output_sha256"]) not in output_digests:
+            raise AssertionError("profiling replay 与 measured replay 输出不一致")
+        profiling = {
+            **profiling_session.metadata(),
+            "measurement_excluded": True,
+            "replay": {
+                "scheduler_steps": profile_run["replay"]["scheduler_steps"],
+                "wall_time_ms": profile_run["replay"]["wall_time_ms"],
+                "output_sha256": profile_run["output_sha256"],
+            },
+        }
+
+    report = {
         "schema_version": 1,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "benchmark": "continuous_batching_trace_replay",
@@ -301,3 +363,6 @@ def benchmark_trace_replay(
         "summary": _aggregate_runs(runs),
         "runs": runs,
     }
+    if profiling is not None:
+        report["profiling"] = profiling
+    return report

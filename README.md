@@ -37,13 +37,18 @@
 
 ## 当前阶段
 
-`v0.1～v0.6` 已冻结。`v0.6-qwen3-tensor-parallel` 于 2026-09-04 在 Ascend Atlas A3
+`v0.1～v0.7` 已冻结。`v0.6-qwen3-tensor-parallel` 于 2026-09-04 在 Ascend Atlas A3
 完成真实 Gloo/HCCL 与 Qwen3-32B TP=2/4/8 验收；精选证据位于
 `artifacts/v0.6_qwen3_tp_acceptance/`。`v0.7` 的 A/B/C/D 已经完成：Continuous
 Batching、请求/KV slot 生命周期、多副本布局、可重放 workload、服务指标，以及真实
 Ascend 8 卡上的 TP8、2×TP4、4×TP2 共 18 组正式验收。完整与精选证据分别位于
 `v0.7_ascend_evidence.tar.gz` 和 `artifacts/v0.7_qwen3_continuous_batching_acceptance/`。
 正式模型固定为 `Qwen/Qwen3-32B`，tiny 模型只承担白盒正确性与快速 CI。
+
+当前开发分支是 `v0.7.1` Ascend Profiling Gate：在不改写 v0.7 正式结果的前提下，增加
+有界的全 rank Profiler 采集、服务阶段范围、关键 artifact 哈希和六点诊断矩阵，为 v0.8
+只选择一个有真实瓶颈证据的专项。软件实现与 Atlas 证据是两个门禁；六点真机结果完整前
+不冻结 `v0.7.1`。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 
@@ -156,6 +161,8 @@ minigpt-train/
     sample_npu_telemetry.py
     summarize_serving_layouts.py
     summarize_v07_acceptance.py
+    summarize_v071_profile.py
+    summarize_v071_profiling_gate.py
   configs/
     tiny_cpu.json
     tiny_gpu.json
@@ -170,6 +177,7 @@ minigpt-train/
     V0_5_QWEN3_REAL_MODEL.md
     V0_6_QWEN3_TENSOR_PARALLEL.md
     V0_7_CONTINUOUS_BATCHING.md
+    V0_7_1_ASCEND_PROFILING_GATE.md
     PROJECT_WORKING_AGREEMENT.md
     V0_2_1_SINGLE_DEVICE_CLOSEOUT.md
     PLAN_REVIEW.md
@@ -180,6 +188,7 @@ minigpt-train/
     run_tiny_gpu.ps1
     resume_latest_cpu.ps1
     create_tiny_qwen3_fixture.py
+    run_v071_ascend_profiling_gate.sh
   src/
     minigpt/
       tokenizer.py
@@ -206,6 +215,8 @@ minigpt-train/
       serving_acceptance.py
       serving_layout.py
       serving_telemetry.py
+      ascend_profiling.py
+      profiling_gate.py
   tests/
     test_core.py
     test_reference_parity.py
@@ -217,6 +228,7 @@ minigpt-train/
     test_tp_scaling.py
     test_continuous_batching.py
     test_serving_workloads.py
+    test_profiling_gate.py
 ```
 
 ## 环境准备
@@ -246,6 +258,7 @@ python tests/test_qwen3_tp.py
 python tests/test_tp_scaling.py
 python tests/test_continuous_batching.py
 python tests/test_serving_workloads.py
+python tests/test_profiling_gate.py
 ```
 
 看到：
@@ -261,6 +274,7 @@ v0.6 Qwen3 Tensor Parallel simulation tests passed.
 v0.6 TP scaling summary tests passed.
 v0.7 continuous batching scheduler tests passed.
 v0.7 workload replay and multi-replica routing tests passed.
+v0.7.1 profiling manifest and decision-gate tests passed.
 ```
 
 第一项检查 tokenizer、model、optimizer 参数组、checkpoint 原子保存和旧版本迁移；
@@ -361,6 +375,18 @@ waiting queue 和 `max_seq_len`，避免把额外调度容量误算成多副本�
 布尔门禁伪造正式结果。未提供遥测或任一证据不完整
 时仍输出开发报告，但不会标为正式性能结论。架构、指标、完整测试和 Ascend 运行命令见
 [`docs/V0_7_CONTINUOUS_BATCHING.md`](docs/V0_7_CONTINUOUS_BATCHING.md)。
+
+## v0.7.1 Ascend Profiling Gate
+
+v0.7.1 不实现某个性能优化，而是先补上 v0.8 的选题证据。普通 warmup/三次 measured replay
+结束后，runner reset 并复用同一 admission script 做一次独立 profile replay；后者不进入
+TTFT、TPOT、E2E、吞吐或 goodput 聚合，并必须生成与 measured replay 相同的完整输出 digest。
+
+正式 Atlas gate 固定 8 个 rank、Level1、PipeUtilization 和 8/2/4 的 skip/warmup/active
+窗口，要求每个 rank 的 operator、kernel、step trace、timeline 和 communication artifact
+都存在且通过 manifest 哈希校验。三组问题各比较两个 layout，共六个 8 进程作业；只有六点
+全部完整时才允许据此选择一个 v0.8 A/B 研究方向。协议、命令和冻结标准见
+[`docs/V0_7_1_ASCEND_PROFILING_GATE.md`](docs/V0_7_1_ASCEND_PROFILING_GATE.md)。
 
 ## 独立运行一次推理
 
@@ -543,6 +569,9 @@ python train.py --config configs/tiny_cpu.json --resume runs/tiny_cpu/latest.pt 
 21. `benchmarks/infer_qwen3_continuous_batching.py`
 22. `src/minigpt/serving_layout.py` 与 `serving_telemetry.py`
 23. `tests/test_serving_workloads.py`
+24. `src/minigpt/ascend_profiling.py` 与 `profiling_gate.py`
+25. `benchmarks/summarize_v071_profile.py` 与 `summarize_v071_profiling_gate.py`
+26. `tests/test_profiling_gate.py`
 
 核心顺序是先看真实模型怎样得到正确 logits 和 cache，再看通用生成与测量；不要先从 CLI
 参数或模型目录路径等工程胶水开始。当前机器窗口优先实现与实测，完整逐段讲解暂时后移，
@@ -612,8 +641,9 @@ v0.4              KV Cache、Prefill/Decode 独立路径与静态 Batching
 v0.5              Qwen3 真实模型接入、KV Cache 与数值门禁
 v0.6              分布式基础短实验与 Tensor Parallel 推理
 v0.7              Continuous Batching、调度与 KV 生命周期
-v0.8              推理专项研究
-v0.9              Ascend 适配、Profiler 与真实单机 Scaling
+v0.7.1            Ascend Profiling Gate 与 v0.8 选题证据
+v0.8              基于 Profiling Gate 只选择一个推理专项研究
+v0.9              扩展 Ascend 适配、Profiler 后端化与真实多机/多卡 Scaling
 v1.0              完整推理 Infra 交付
 ```
 

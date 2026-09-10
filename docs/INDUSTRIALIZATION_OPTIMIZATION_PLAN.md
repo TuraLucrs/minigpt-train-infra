@@ -1272,6 +1272,7 @@ FSDP 和大量其他改动同时引入，否则无法判断收益来自哪里。
 
 ### 阶段 H：Ascend 专项适配、Profiler 与单机 Scaling
 
+- [ ] v0.7.1 先完成最小 Profiling Gate：全 rank 有界采集、artifact 哈希、六点诊断矩阵；
 - [ ] 将 `torch_npu`、CANN、HCCL 和 Ascend profiler 限制在后端适配目录；
 - [ ] 采集实际物理卡、可见芯片、HBM、软件版本和互联拓扑；
 - [ ] A3 跑 `2/4/8/16 logical devices`，同时记录 `1/2/4/8 physical cards`；
@@ -1304,8 +1305,9 @@ v0.4    KV Cache、Prefill/Decode 独立路径与静态 Batching
 v0.5    Qwen3 真实模型接入、KV Cache 与数值门禁
 v0.6    分布式基础短实验与 Tensor Parallel 推理
 v0.7    Continuous Batching、调度与 KV 生命周期
-v0.8    推理专项研究（依据真实瓶颈选题）
-v0.9    Ascend 适配、Profiler 和真实单机 Scaling
+v0.7.1  Ascend Profiling Gate 与 v0.8 选题证据
+v0.8    推理专项研究（依据完整 Profiling Gate 只选一个方向）
+v0.9    扩展 Ascend 适配、Profiler 后端化和真实多机/多卡 Scaling
 v1.0    完整推理 Infra 交付
 ```
 
