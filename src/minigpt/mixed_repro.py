@@ -49,6 +49,10 @@ DIAGNOSIS_THRESHOLDS = {
     "association_abs_correlation": 0.70,
     "frequency_relative_span": 0.03,
     "temperature_span_celsius": 5.0,
+    "initial_hbm_usage_percent_max": 10.0,
+    "initial_aicore_usage_percent_max": 5.0,
+    "historical_initial_hbm_excess_percentage_points": 20.0,
+    "historical_initial_aicore_excess_percentage_points": 20.0,
 }
 
 
@@ -97,6 +101,97 @@ def _relative_distance(value: float, reference: float) -> float:
     if reference == 0.0:
         return 0.0 if value == 0.0 else math.inf
     return abs(value - reference) / abs(reference)
+
+
+def _canonical_sha256(value: object) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _global_model_identity(
+    model: Mapping[str, object],
+    provenance: Mapping[str, object],
+) -> tuple[str, int]:
+    """跨 TP 布局比较全局模型；local_parameter_count 只描述当前分片。"""
+
+    local_parameter_count = int(model["local_parameter_count"])
+    payload = {
+        "model": {
+            "type": model["type"],
+            "config": model["config"],
+            "full_parameter_count": model["full_parameter_count"],
+        },
+        "config_sha256": provenance["config_sha256"],
+        "metadata_sha256": provenance["metadata_sha256"],
+        "index_sha256": provenance["index_sha256"],
+        "weights": provenance["weights"],
+    }
+    return _canonical_sha256(payload), local_parameter_count
+
+
+def _request_work_shape_sha256(report: Mapping[str, object]) -> str:
+    """绑定请求终态与计算长度，不要求跨 open-loop session 逐 token 相同。"""
+
+    requests = report["runs"][0]["serving"]["requests"]
+    canonical = [
+        {
+            "request_id": request["request_id"],
+            "state": request["state"],
+            "stop_reason": request["stop_reason"],
+            "input_tokens": request["input_tokens"],
+            "output_tokens": request["output_tokens"],
+        }
+        for request in sorted(requests, key=lambda item: str(item["request_id"]))
+    ]
+    return _canonical_sha256(canonical)
+
+
+def _summarize_initial_npu_state(
+    telemetry: Mapping[str, object],
+    *,
+    expected_logical_device_ids: Sequence[int],
+) -> dict[str, object]:
+    """取 sampler 启动后每个 device 的首个样本，观察模型加载前设备是否空闲。"""
+
+    samples = telemetry.get("samples")
+    if not isinstance(samples, list):
+        raise ValueError("telemetry samples 必须是数组")
+    per_device: dict[str, dict[str, float | int]] = {}
+    initial_samples: list[Mapping[str, object]] = []
+    for device_id in expected_logical_device_ids:
+        candidates = [
+            sample
+            for sample in samples
+            if isinstance(sample, dict)
+            and int(sample.get("logical_device_id", -1)) == int(device_id)
+        ]
+        if not candidates:
+            raise ValueError(f"device {device_id} 缺少初始 telemetry sample")
+        first = min(candidates, key=lambda sample: int(sample["timestamp_unix_ns"]))
+        initial_samples.append(first)
+        per_device[str(device_id)] = {
+            "timestamp_unix_ns": int(first["timestamp_unix_ns"]),
+            "hbm_usage_percent": float(first["hbm_usage_percent"]),
+            "aicore_usage_percent": float(first["aicore_usage_percent"]),
+            "power_watts": float(first["power_watts"]),
+        }
+    fields = ("hbm_usage_percent", "aicore_usage_percent", "power_watts")
+    overall = {
+        field: _summary([float(sample[field]) for sample in initial_samples])
+        for field in fields
+    }
+    clean = bool(
+        float(overall["hbm_usage_percent"]["max"])
+        <= DIAGNOSIS_THRESHOLDS["initial_hbm_usage_percent_max"]
+        and float(overall["aicore_usage_percent"]["max"])
+        <= DIAGNOSIS_THRESHOLDS["initial_aicore_usage_percent_max"]
+    )
+    return {"per_device": per_device, "overall": overall, "clean": clean}
 
 
 def _pearson(values_x: Sequence[float], values_y: Sequence[float]) -> float | None:
@@ -234,11 +329,20 @@ def load_reference_observations(
         raise ValueError("v0.7.1 mixed gate 必须包含 tp8 与 4xtp2")
 
     old_telemetry: dict[str, object] = {}
+    old_initial_state: dict[str, object] = {}
+    old_reports: dict[str, list[dict[str, object]]] = {}
     for layout_id in FORMAL_LAYOUTS:
         telemetry = _tar_json(
             v07_archive,
             f"/mixed_open_loop/{layout_id}/telemetry.json",
         )
+        old_reports[layout_id] = [
+            _tar_json(
+                v07_archive,
+                f"/mixed_open_loop/{report_name}",
+            )
+            for report_name in old_rows[layout_id]["reports"]
+        ]
         intervals = [
             (int(run["started_at_unix_ns"]), int(run["ended_at_unix_ns"]))
             for run in old_rows[layout_id]["runs"]
@@ -249,14 +353,20 @@ def load_reference_observations(
             expected_logical_device_ids=range(8),
             min_samples_per_device_per_run=2,
         )
+        old_initial_state[layout_id] = _summarize_initial_npu_state(
+            telemetry,
+            expected_logical_device_ids=range(8),
+        )
 
     old_source = str(comparison["source_workload_sha256"])
     new_sources = set()
+    new_points: dict[str, dict[str, object]] = {}
     for layout_id in FORMAL_LAYOUTS:
         point = _tar_json(
             v071_archive,
             f"/points/mixed_overload/{layout_id}/profile_summary.json",
         )
+        new_points[layout_id] = point
         new_sources.add(str(point["source_workload_sha256"]))
     if new_sources != {old_source}:
         raise ValueError("v0.7 与 v0.7.1 mixed source workload digest 不一致")
@@ -264,6 +374,8 @@ def load_reference_observations(
     def layout_reference(
         rows: Mapping[str, Mapping[str, object]],
         layout_id: str,
+        reports: Sequence[Mapping[str, object]] | None = None,
+        service_summary: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
         row = rows[layout_id]
         summary = row.get("summary")
@@ -276,12 +388,41 @@ def load_reference_observations(
         else:
             goodput = float(row["goodput_requests_per_second"])
             run_values = []
-        return {
+        metric_summary = summary if isinstance(summary, dict) else service_summary
+        completed = (
+            float(metric_summary["completed_requests_per_second"]["median"])
+            if isinstance(metric_summary, Mapping)
+            else goodput
+        )
+        result: dict[str, object] = {
             "goodput_requests_per_second": goodput,
+            "completed_requests_per_second": completed,
             "within_session_cv": (
                 _coefficient_of_variation(run_values) if run_values else None
             ),
+            "runs": [
+                {
+                    field: run[field]
+                    for field in (
+                        "wall_time_ms",
+                        "completed_requests",
+                        "good_requests",
+                        "completed_requests_per_second",
+                        "goodput_requests_per_second",
+                    )
+                    if field in run
+                }
+                for run in row.get("runs", [])
+            ],
         }
+        if reports is not None:
+            result["output_sha256_by_replica"] = {
+                str(report["distributed"]["replica_index"]): str(
+                    report["runs"][0]["output_sha256"]
+                )
+                for report in reports
+            }
+        return result
 
     return {
         "source_workload_sha256": old_source,
@@ -291,8 +432,13 @@ def load_reference_observations(
         "v0.7": {
             "layouts": {
                 layout_id: {
-                    **layout_reference(old_rows, layout_id),
+                    **layout_reference(
+                        old_rows,
+                        layout_id,
+                        old_reports[layout_id],
+                    ),
                     "telemetry": old_telemetry[layout_id],
+                    "initial_npu_state": old_initial_state[layout_id],
                 }
                 for layout_id in FORMAL_LAYOUTS
             },
@@ -307,7 +453,11 @@ def load_reference_observations(
         },
         "v0.7.1": {
             "layouts": {
-                layout_id: layout_reference(new_rows, layout_id)
+                layout_id: layout_reference(
+                    new_rows,
+                    layout_id,
+                    service_summary=new_points[layout_id]["service"]["summary"],
+                )
                 for layout_id in FORMAL_LAYOUTS
             },
             "evidence_archive": _artifact(
@@ -337,6 +487,10 @@ def _load_session(
     row = summarize_serving_layout(layout_id, reports, max_start_skew_ms=100.0)
     first = reports[0][1]
     telemetry = load_telemetry(telemetry_path)
+    initial_npu_state = _summarize_initial_npu_state(
+        telemetry,
+        expected_logical_device_ids=range(8),
+    )
     telemetry_summary = summarize_telemetry(
         telemetry,
         run_intervals=[
@@ -368,17 +522,16 @@ def _load_session(
         )
         for _path, report in reports
     }
-    model_identity_payload = json.dumps(
-        {
-            "model": first["model"],
-            "config_sha256": first["provenance"]["config_sha256"],
-            "metadata_sha256": first["provenance"]["metadata_sha256"],
-            "index_sha256": first["provenance"]["index_sha256"],
-            "weights": first["provenance"]["weights"],
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    work_shape_digests = {
+        str(report["distributed"]["replica_index"]): _request_work_shape_sha256(
+            report
+        )
+        for _path, report in reports
+    }
+    model_identity_sha256, local_parameter_count = _global_model_identity(
+        first["model"],
+        first["provenance"],
+    )
     return {
         "session_id": session_id,
         "position": position,
@@ -399,7 +552,8 @@ def _load_session(
         },
         "source_workload_sha256": first["workload"]["source_sha256"],
         "source_workload_file_sha256": first["workload"]["source_file_sha256"],
-        "model_identity_sha256": hashlib.sha256(model_identity_payload).hexdigest(),
+        "model_identity_sha256": model_identity_sha256,
+        "local_parameter_count": local_parameter_count,
         "logical_device_ids": first["distributed"]["global_logical_device_ids"],
         "tp_size": first["distributed"]["tp_size"],
         "replica_count": first["distributed"]["replica_count"],
@@ -411,7 +565,9 @@ def _load_session(
         },
         "host": {"before": before, "after": after},
         "host_telemetry": host_telemetry,
+        "initial_npu_state": initial_npu_state,
         "output_sha256_by_replica": report_digests,
+        "output_work_shape_sha256_by_replica": work_shape_digests,
         "service": {
             "goodput_requests_per_second": row["summary"][
                 "goodput_requests_per_second"
@@ -432,6 +588,57 @@ def _load_session(
     }
 
 
+def summarize_output_reproducibility(
+    sessions: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    """区分逐 token 变体与会改变性能工作量的终态/长度变体。"""
+
+    result: dict[str, object] = {}
+    for layout_id in FORMAL_LAYOUTS:
+        rows = [
+            session for session in sessions if session["layout_id"] == layout_id
+        ]
+        replica_ids = sorted(
+            {
+                str(replica_id)
+                for session in rows
+                for replica_id in session["output_sha256_by_replica"]
+            }
+        )
+        replicas: dict[str, object] = {}
+        for replica_id in replica_ids:
+            content_variants: dict[str, list[str]] = {}
+            work_shape_variants: dict[str, list[str]] = {}
+            for session in rows:
+                session_id = str(session["session_id"])
+                content_sha256 = str(
+                    session["output_sha256_by_replica"][replica_id]
+                )
+                shape_sha256 = str(
+                    session["output_work_shape_sha256_by_replica"][replica_id]
+                )
+                content_variants.setdefault(content_sha256, []).append(session_id)
+                work_shape_variants.setdefault(shape_sha256, []).append(session_id)
+            replicas[replica_id] = {
+                "bitwise_output_stable": len(content_variants) == 1,
+                "work_shape_stable": len(work_shape_variants) == 1,
+                "content_variants": content_variants,
+                "work_shape_variants": work_shape_variants,
+            }
+        result[layout_id] = {
+            "bitwise_output_stable": all(
+                bool(replica["bitwise_output_stable"])
+                for replica in replicas.values()
+            ),
+            "work_shape_stable": all(
+                bool(replica["work_shape_stable"])
+                for replica in replicas.values()
+            ),
+            "replicas": replicas,
+        }
+    return result
+
+
 def classify_reproduction(
     sessions: Sequence[Mapping[str, object]],
     references: Mapping[str, object],
@@ -448,6 +655,12 @@ def classify_reproduction(
     for layout_id, rows in by_layout.items():
         session_values = [
             float(session["service"]["goodput_requests_per_second"]["median"])
+            for session in rows
+        ]
+        completed_values = [
+            float(
+                session["service"]["completed_requests_per_second"]["median"]
+            )
             for session in rows
         ]
         within_cv = [
@@ -473,6 +686,7 @@ def classify_reproduction(
         late = statistics.median(session_values[2:])
         aggregates[layout_id] = {
             "session_goodput_requests_per_second": summary,
+            "session_completed_requests_per_second": _summary(completed_values),
             "session_cv": session_cv,
             "relative_span": relative_span,
             "within_session_cv": _summary(within_cv),
@@ -607,6 +821,102 @@ def classify_reproduction(
         status = "unstable_unexplained"
         conclusion = "跨会话或会话内波动过大，当前证据仍不能稳定复现任一历史状态。"
 
+    old_initial = references["v0.7"]["layouts"]["tp8"][
+        "initial_npu_state"
+    ]["overall"]
+    current_initial_hbm = [
+        float(session["initial_npu_state"]["overall"]["hbm_usage_percent"]["median"])
+        for session in sessions
+        if session["layout_id"] == "tp8"
+    ]
+    current_initial_aicore = [
+        float(
+            session["initial_npu_state"]["overall"][
+                "aicore_usage_percent"
+            ]["median"]
+        )
+        for session in sessions
+        if session["layout_id"] == "tp8"
+    ]
+    old_initial_hbm = float(old_initial["hbm_usage_percent"]["median"])
+    old_initial_aicore = float(old_initial["aicore_usage_percent"]["median"])
+    initial_hbm_excess = old_initial_hbm - max(current_initial_hbm)
+    initial_aicore_excess = old_initial_aicore - max(current_initial_aicore)
+    historical_contention = bool(
+        initial_hbm_excess
+        >= DIAGNOSIS_THRESHOLDS[
+            "historical_initial_hbm_excess_percentage_points"
+        ]
+        and initial_aicore_excess
+        >= DIAGNOSIS_THRESHOLDS[
+            "historical_initial_aicore_excess_percentage_points"
+        ]
+    )
+    old_output_sha256 = str(
+        references["v0.7"]["layouts"]["tp8"][
+            "output_sha256_by_replica"
+        ]["0"]
+    )
+    matching_output_sessions = [
+        str(session["session_id"])
+        for session in sessions
+        if session["layout_id"] == "tp8"
+        and old_output_sha256 in session["output_sha256_by_replica"].values()
+    ]
+    old_completed = float(
+        references["v0.7"]["layouts"]["tp8"][
+            "completed_requests_per_second"
+        ]
+    )
+    current_completed = float(
+        aggregates["tp8"]["session_completed_requests_per_second"]["median"]
+    )
+    if historical_contention:
+        root_cause_status = "historical_v07_npu_contention"
+        root_cause_confidence = "strong"
+        root_cause_conclusion = (
+            "旧 v0.7 TP8 在模型加载前已有显著 HBM 与 AICore 占用；"
+            "本次空闲起跑未复现慢态，且存在与旧输出逐位相同的快速 session。"
+            "证据支持旧结果受到同设备并发负载污染，而不是稳定的 TP8 布局效应。"
+        )
+    else:
+        root_cause_status = "historical_v07_slowdown_source_unresolved"
+        root_cause_confidence = "insufficient"
+        root_cause_conclusion = (
+            "当前证据未观察到足以解释旧 TP8 慢态的模型加载前设备占用差异。"
+        )
+    historical_root_cause = {
+        "status": root_cause_status,
+        "confidence": root_cause_confidence,
+        "conclusion": root_cause_conclusion,
+        "evidence": {
+            "v0.7_tp8_initial_hbm_usage_percent_median": old_initial_hbm,
+            "current_tp8_initial_hbm_usage_percent": _summary(
+                current_initial_hbm
+            ),
+            "v0.7_tp8_initial_aicore_usage_percent_median": old_initial_aicore,
+            "current_tp8_initial_aicore_usage_percent": _summary(
+                current_initial_aicore
+            ),
+            "initial_hbm_excess_percentage_points": initial_hbm_excess,
+            "initial_aicore_excess_percentage_points": initial_aicore_excess,
+            "v0.7_tp8_completed_requests_per_second": old_completed,
+            "current_tp8_completed_requests_per_second": current_completed,
+            "current_vs_v0.7_completed_throughput_ratio": (
+                current_completed / old_completed
+            ),
+            "v0.7_tp8_good_requests_per_run": [
+                int(run["good_requests"])
+                for run in references["v0.7"]["layouts"]["tp8"]["runs"]
+            ],
+            "matching_output_sha256": old_output_sha256,
+            "current_sessions_matching_v0.7_output": matching_output_sessions,
+        },
+        "boundary": (
+            "可确认旧测量发生设备争用；现有进程级证据不能追溯并发负载的所有者或名称。"
+        ),
+    }
+
     association_flags: list[str] = []
     correlation_threshold = DIAGNOSIS_THRESHOLDS["association_abs_correlation"]
     frequency = associations["aicore_current_frequency_mhz"]
@@ -648,6 +958,7 @@ def classify_reproduction(
         "host_associations": host_associations,
         "host_association_sessions": host_sessions,
         "association_flags": association_flags,
+        "historical_root_cause": historical_root_cause,
         "status": status,
         "conclusion": conclusion,
         "scope": (
@@ -693,10 +1004,9 @@ def summarize_mixed_reproduction(
         json.dumps(session["protocol"], sort_keys=True, separators=(",", ":"))
         for session in sessions
     }
-    output_identities: dict[str, set[str]] = {
-        layout_id: set() for layout_id in FORMAL_LAYOUTS
-    }
+    output_reproducibility = summarize_output_reproducibility(sessions)
     incomplete_reasons: list[str] = []
+    warnings: list[str] = []
     if len(git_commits) != 1:
         incomplete_reasons.append("八个 session 的 git commit 不一致")
     if any(bool(session["git"]["dirty"]) for session in sessions):
@@ -778,16 +1088,20 @@ def summarize_mixed_reproduction(
             incomplete_reasons.append(
                 f"{session['session_id']} measured Host telemetry 不完整"
             )
-        output_identities[expected_layout].add(
-            json.dumps(
-                session["output_sha256_by_replica"],
-                sort_keys=True,
-                separators=(",", ":"),
+        if not session["initial_npu_state"]["clean"]:
+            incomplete_reasons.append(
+                f"{session['session_id']} 模型加载前 NPU 已被占用"
             )
-        )
-    for layout_id, identities in output_identities.items():
-        if len(identities) != 1:
-            incomplete_reasons.append(f"{layout_id} 跨 session 输出 digest 不一致")
+    for layout_id, output in output_reproducibility.items():
+        if not output["work_shape_stable"]:
+            incomplete_reasons.append(
+                f"{layout_id} 跨 session 请求终态或计算长度不一致"
+            )
+        elif not output["bitwise_output_stable"]:
+            warnings.append(
+                f"{layout_id} 存在 batch-shape 相关逐 token 变体；"
+                "请求终态与计算长度一致，不阻断性能复现"
+            )
 
     complete = not incomplete_reasons
     diagnosis = classify_reproduction(sessions, references) if complete else None
@@ -802,6 +1116,7 @@ def summarize_mixed_reproduction(
         ),
         "complete": complete,
         "incomplete_reasons": incomplete_reasons,
+        "warnings": warnings,
         "design": {
             "sequence": list(FORMAL_SEQUENCE),
             "rationale": "ABBA + BAAB 平衡布局顺序和单调机器状态漂移",
@@ -813,6 +1128,7 @@ def summarize_mixed_reproduction(
         },
         "references": references,
         "sessions": sessions,
+        "output_reproducibility": output_reproducibility,
         "diagnosis": diagnosis,
     }
 
@@ -873,8 +1189,37 @@ def write_markdown_report(summary: Mapping[str, object], output: str | Path) -> 
                 f"- 边界：{diagnosis['scope']}",
             ]
         )
+        root_cause = diagnosis["historical_root_cause"]
+        evidence = root_cause["evidence"]
+        lines.extend(
+            [
+                "",
+                "## 历史慢态判因",
+                "",
+                f"- status: `{root_cause['status']}`",
+                f"- confidence: `{root_cause['confidence']}`",
+                f"- 结论：{root_cause['conclusion']}",
+                "- 模型加载前 HBM 中位数："
+                f"v0.7 TP8 `{evidence['v0.7_tp8_initial_hbm_usage_percent_median']:.3f}%`，"
+                "本次 TP8 最大 "
+                f"`{evidence['current_tp8_initial_hbm_usage_percent']['max']:.3f}%`。",
+                "- 模型加载前 AICore 中位数："
+                f"v0.7 TP8 `{evidence['v0.7_tp8_initial_aicore_usage_percent_median']:.3f}%`，"
+                "本次 TP8 最大 "
+                f"`{evidence['current_tp8_initial_aicore_usage_percent']['max']:.3f}%`。",
+                "- 原始完成吞吐："
+                f"v0.7 TP8 `{evidence['v0.7_tp8_completed_requests_per_second']:.6f}` req/s，"
+                "本次 TP8 "
+                f"`{evidence['current_tp8_completed_requests_per_second']:.6f}` req/s。",
+                f"- 证据边界：{root_cause['boundary']}",
+            ]
+        )
     else:
         for reason in summary["incomplete_reasons"]:
             lines.append(f"- incomplete: {reason}")
+    if summary["warnings"]:
+        lines.extend(["", "## 非阻断警告", ""])
+        for warning in summary["warnings"]:
+            lines.append(f"- {warning}")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

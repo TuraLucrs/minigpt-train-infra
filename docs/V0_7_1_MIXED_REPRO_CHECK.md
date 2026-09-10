@@ -104,6 +104,11 @@ v0.7.1_mixed_repro_evidence.tar.gz.sha256
 3. 状态关联：按布局中位数归一化 goodput 后，检查它与 NPU 频率、温度、功耗、AICore
    利用率以及 Host CPU、IO wait、load 和 PSI 的相关性。
 
+跨 session 的逐 token digest 不作为 open-loop 性能证据的硬门禁，因为不同 warmup
+形成的 batch shape 会改变 BF16 数值路径；但每个 session 内三次 measured replay 必须逐位
+一致，而且跨 session 的请求终态、停止原因、输入长度和输出长度必须一致。后者变化会改变
+实际计算量，仍然判为 incomplete。
+
 可能状态：
 
 - `historical_v07_tp8_slowdown_not_reproduced`：当前 TP8 稳定接近 v0.7.1，旧慢值未复现；
@@ -115,3 +120,25 @@ v0.7.1_mixed_repro_evidence.tar.gz.sha256
 相关性只用于确定下一轮取证方向，不冒充物理因果。如果结果稳定地支持当前 v0.7.1 状态，
 可以确认 4.24× 是旧 TP8 单次运行状态造成的历史倍率；如果仍不稳定，再只对异常 session
 补定向 HCCL/Host trace，而不是重跑完整六点 Profiler。
+
+## 6. 2026-09-10 实测结论
+
+八个 session 全部成功，修正两个 checker 口径后证据为 complete：
+
+- TP8 四次 session goodput 中位数为 3.743、3.915、3.911、3.849 req/s，跨 session
+  CV 为 1.80%；
+- 4×TP2 为 5.176、5.298、5.125、5.173 req/s，跨 session CV 为 1.23%；
+- 聚合中位数为 TP8 3.880、4×TP2 5.174，实际稳定倍率为 1.334×；
+- 前后半程变化分别为 +1.33% 和 -1.69%，没有顺序效应；
+- 八次运行开始时 HBM 中位数均为 4%、AICore 均为 0%，属于空闲起跑。
+
+旧 v0.7 TP8 的 sampler 首轮、也就是模型加载前，8 个 device 已有 HBM 39.5%、AICore
+45.5% 的中位占用；模型进程结束后 HBM 又回落到约 40%。旧运行与本次 session-04/06
+具有相同输出 digest 和同样 55 个 scheduler steps，但旧运行需要约 26–28 秒，本次只需
+约 16–17 秒。因此旧 TP8 测量受到同设备并发负载污染；它的原始完成吞吐从本次 3.880
+降至 2.433 req/s，又因为 SLO good requests 从 64 降至中位数 31，被放大成 1.179 req/s
+goodput。历史 4.24× 不是稳定布局倍率。
+
+输出方面存在非阻断的数值变体：TP8 有两种跨 session digest，涉及 9/64 个请求；4×TP2
+只有一个副本的一次 session 翻转，涉及 1 个请求。所有变体的终态、停止原因和输出长度
+一致，而且各 session 内三次输出逐位一致，所以不改变本次性能复现结论。

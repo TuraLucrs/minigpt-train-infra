@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sys
+import tarfile
 import tempfile
 
 
@@ -16,6 +18,8 @@ from minigpt.mixed_repro import (  # noqa: E402
     _summarize_host_telemetry,
     classify_reproduction,
     load_reference_observations,
+    summarize_mixed_reproduction,
+    summarize_output_reproducibility,
 )
 
 
@@ -26,6 +30,7 @@ def fake_session(
     *,
     frequency_mhz: float = 1800.0,
     temperature_celsius: float = 40.0,
+    output_variant: str = "a",
 ) -> dict[str, object]:
     runs = [
         {"goodput_requests_per_second": goodput * multiplier}
@@ -37,8 +42,22 @@ def fake_session(
         "layout_id": layout_id,
         "service": {
             "goodput_requests_per_second": {"median": goodput},
+            "completed_requests_per_second": {"median": goodput},
             "runs": runs,
         },
+        "initial_npu_state": {
+            "clean": True,
+            "overall": {
+                "hbm_usage_percent": {"min": 4.0, "median": 4.0, "max": 4.0},
+                "aicore_usage_percent": {
+                    "min": 0.0,
+                    "median": 0.0,
+                    "max": 0.0,
+                },
+            },
+        },
+        "output_sha256_by_replica": {"0": f"{layout_id}-{output_variant}"},
+        "output_work_shape_sha256_by_replica": {"0": f"{layout_id}-shape"},
         "telemetry": {
             "overall": {
                 "aicore_current_frequency_mhz": {
@@ -91,7 +110,22 @@ def fake_references() -> dict[str, object]:
     return {
         "v0.7": {
             "layouts": {
-                "tp8": {"goodput_requests_per_second": 1.179},
+                "tp8": {
+                    "goodput_requests_per_second": 1.179,
+                    "completed_requests_per_second": 2.433,
+                    "initial_npu_state": {
+                        "overall": {
+                            "hbm_usage_percent": {"median": 39.5},
+                            "aicore_usage_percent": {"median": 45.5},
+                        }
+                    },
+                    "output_sha256_by_replica": {"0": "tp8-b"},
+                    "runs": [
+                        {"good_requests": 33},
+                        {"good_requests": 31},
+                        {"good_requests": 15},
+                    ],
+                },
                 "4xtp2": {"goodput_requests_per_second": 5.004},
             }
         },
@@ -125,6 +159,9 @@ def check_reference_loader() -> None:
     assert references["v0.7"]["layouts"]["tp8"]["telemetry"]["overall"][
         "aicore_current_frequency_mhz"
     ]["median"] == 1800.0
+    assert references["v0.7"]["layouts"]["tp8"]["initial_npu_state"][
+        "overall"
+    ]["hbm_usage_percent"]["median"] == 39.5
 
 
 def check_current_regime_classification() -> None:
@@ -141,6 +178,25 @@ def check_current_regime_classification() -> None:
     assert 1.15 < diagnosis["goodput_ratio_4xtp2_over_tp8"] < 1.25
     assert diagnosis["order_effect"] is False
     assert len(diagnosis["host_association_sessions"]) == len(FORMAL_SEQUENCE)
+    assert diagnosis["historical_root_cause"]["status"] == (
+        "historical_v07_npu_contention"
+    )
+
+
+def check_output_reproducibility_warning() -> None:
+    sessions = [
+        fake_session(
+            position,
+            layout_id,
+            4.0,
+            output_variant="b" if position == 4 else "a",
+        )
+        for position, layout_id in enumerate(FORMAL_SEQUENCE, start=1)
+    ]
+    output = summarize_output_reproducibility(sessions)
+    assert output["tp8"]["bitwise_output_stable"] is False
+    assert output["tp8"]["work_shape_stable"] is True
+    assert output["4xtp2"]["bitwise_output_stable"] is True
 
 
 def check_host_telemetry_summary() -> None:
@@ -201,11 +257,45 @@ def check_order_effect_classification() -> None:
     assert diagnosis["order_effect"] is True
 
 
+def check_real_mixed_reproduction_package() -> None:
+    archive = ROOT / "v0.7.1_mixed_repro_evidence.tar.gz"
+    with tempfile.TemporaryDirectory() as temporary:
+        with tarfile.open(archive, "r:gz") as handle:
+            handle.extractall(temporary, filter="data")
+        root = Path(temporary) / "v071_mixed_repro_check"
+        summary = summarize_mixed_reproduction(
+            root,
+            v07_comparison_path=(
+                ROOT
+                / "artifacts/v0.7_qwen3_continuous_batching_acceptance/"
+                "comparisons/mixed_open_loop.json"
+            ),
+            v07_evidence_archive=ROOT / "v0.7_ascend_evidence.tar.gz",
+            v071_evidence_archive=(
+                ROOT / "v0.7.1_ascend_profiling_gate_evidence.tar.gz"
+            ),
+        )
+    assert summary["complete"] is True
+    assert summary["diagnosis"]["status"] == (
+        "historical_v07_tp8_slowdown_not_reproduced"
+    )
+    assert summary["diagnosis"]["historical_root_cause"]["status"] == (
+        "historical_v07_npu_contention"
+    )
+    assert summary["output_reproducibility"]["tp8"][
+        "bitwise_output_stable"
+    ] is False
+    assert summary["output_reproducibility"]["tp8"]["work_shape_stable"] is True
+
+
 def main() -> None:
     check_reference_loader()
     check_host_telemetry_summary()
+    check_output_reproducibility_warning()
     check_current_regime_classification()
     check_order_effect_classification()
+    if os.environ.get("MINIGPT_SKIP_FULL_MIXED_PACKAGE") != "1":
+        check_real_mixed_reproduction_package()
     print("v0.7.1 mixed reproduction tests passed.")
 
 
