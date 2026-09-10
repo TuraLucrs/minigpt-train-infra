@@ -296,6 +296,58 @@ except RuntimeError as exc:
     assert after_release.returncode == 0 and after_release.stdout.strip() == "acquired", after_release.stdout + after_release.stderr
 
 
+def check_interrupt_immediately_after_spawn(directory: Path) -> None:
+    """Interrupt the first Python line with a live Popen, before on_started runs."""
+    directory.mkdir(parents=True, exist_ok=True)
+    spawned: list[subprocess.Popen] = []
+    callbacks: list[int] = []
+    previous_trace = sys.gettrace()
+    original_signal_mask = (signal.pthread_sigmask(signal.SIG_BLOCK, set())
+                            if sys.platform.startswith("linux") else None)
+
+    def interrupt_after_spawn(frame, event, _argument):
+        if event == "line" and frame.f_code is matrix._execute.__code__ and not spawned:
+            process = frame.f_locals.get("process")
+            if isinstance(process, subprocess.Popen):
+                spawned.append(process)
+                raise KeyboardInterrupt("injected interruption immediately after Popen")
+        return interrupt_after_spawn
+
+    try:
+        with matrix._matrix_lock(directory) as lock_fd:
+            try:
+                sys.settrace(interrupt_after_spawn)
+                matrix._execute([sys.executable, "-u", "-c", "import time; time.sleep(60)"],
+                                env=os.environ, project_root=PROJECT_ROOT,
+                                log_path=directory / "interrupted-start.log", timeout_seconds=60,
+                                lock_fd=lock_fd, on_started=callbacks.append)
+            except KeyboardInterrupt as exc:
+                assert str(exc) == "injected interruption immediately after Popen"
+            else:
+                raise AssertionError("the deterministic post-Popen interrupt was not propagated")
+            finally:
+                sys.settrace(previous_trace)
+        if original_signal_mask is not None:
+            assert signal.pthread_sigmask(signal.SIG_BLOCK, set()) == original_signal_mask, \
+                "post-Popen interruption changed the controller's signal mask"
+        assert len(spawned) == 1, "the post-Popen interruption was not exercised"
+        assert callbacks == [], "the interrupt arrived after the startup callback"
+        assert spawned[0].poll() is not None, "an interruption immediately after Popen leaked its child"
+        assert matrix._process_birth(spawned[0].pid) is None
+        with matrix._matrix_lock(directory):
+            pass
+    finally:
+        sys.settrace(previous_trace)
+        try:
+            for process in spawned:
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=15)
+        finally:
+            if original_signal_mask is not None:
+                signal.pthread_sigmask(signal.SIG_SETMASK, original_signal_mask)
+
+
 def check_artifact_rejection(directory: Path) -> None:
     config = load_config()
     point = points(config)[0]
@@ -386,6 +438,197 @@ raise SystemExit('controller was not interrupted by the test')
                 os.killpg(child["pid"], signal.SIGKILL)
             except ProcessLookupError:
                 pass
+
+
+_OWNED_WORKER_HELPER = """
+import json, os, signal, subprocess, sys, time
+from pathlib import Path
+
+role, root, source, mode = sys.argv[1], Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+
+def identity(pid):
+    stat = Path(f'/proc/{pid}/stat').read_text(encoding='utf-8')
+    fields = stat[stat.rfind(')') + 2:].split()
+    return {'pid': pid, 'birth_marker': fields[19],
+            'pgid': os.getpgid(pid), 'session_id': os.getsid(pid)}
+
+def publish(name, value):
+    path = root / (name + '.json')
+    pending = path.with_suffix('.pending')
+    pending.write_text(json.dumps(value), encoding='utf-8')
+    pending.replace(path)
+
+if role in ('worker', 'unrelated'):
+    if role == 'worker':
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    publish(role, identity(os.getpid()))
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        time.sleep(0.05)
+elif role == 'launcher':
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt('launcher received TERM')
+    signal.signal(signal.SIGTERM, interrupted)
+    worker = subprocess.Popen([sys.executable, '-u', __file__, 'worker', str(root), source, mode],
+                              start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        deadline = time.monotonic() + 30
+        while not (root / 'worker.json').is_file():
+            if worker.poll() is not None or time.monotonic() >= deadline:
+                raise RuntimeError('detached worker did not become ready')
+            time.sleep(0.01)
+        publish('launcher', identity(os.getpid()))
+        worker.wait(timeout=120)
+    except KeyboardInterrupt:
+        # Match torchrun: a worker gets its own session and a 30-second TERM grace.
+        worker.terminate()
+        try:
+            worker.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            worker.kill()
+            worker.wait(timeout=10)
+        raise SystemExit(128 + signal.SIGTERM)
+elif role == 'controller':
+    sys.path.insert(0, source)
+    from minigpt.experiment_matrix import _execute, _handle_termination, _matrix_lock
+    try:
+        with _matrix_lock(root) as lock_fd, _handle_termination():
+            result = _execute([sys.executable, '-u', __file__, 'launcher', str(root), source, mode],
+                              env=os.environ, project_root=Path(source).parent,
+                              log_path=root / 'launcher.log',
+                              timeout_seconds=8 if mode == 'timeout' else 60,
+                              lock_fd=lock_fd, on_started=lambda pid: publish('guard', identity(pid)))
+            publish('outcome', result)
+    except KeyboardInterrupt:
+        print('controller cancellation completed', flush=True)
+        raise SystemExit(128 + signal.SIGTERM)
+else:
+    raise ValueError(role)
+"""
+
+
+def _wait_helper_identity(path: Path, owner: subprocess.Popen) -> dict:
+    deadline = time.monotonic() + 30
+    while not path.is_file():
+        if owner.poll() is not None:
+            stdout, stderr = owner.communicate(timeout=5)
+            raise AssertionError(f"helper exited before publishing {path.name}: {stdout}\n{stderr}")
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"helper did not publish {path.name} within 30 seconds")
+        time.sleep(0.02)
+    identity = read_json(path)
+    assert identity["birth_marker"] is not None
+    assert matrix._process_birth(identity["pid"]) == identity["birth_marker"], identity
+    return identity
+
+
+def _wait_owned_helper_exit(identity: dict, *, timeout: float = 30) -> None:
+    deadline = time.monotonic() + timeout
+    while matrix._process_birth(identity["pid"]) == identity["birth_marker"]:
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"owned helper remained alive after {timeout} seconds: {identity}")
+        time.sleep(0.02)
+
+
+def _kill_known_helper(identity: dict) -> None:
+    if matrix._process_birth(identity["pid"]) != identity["birth_marker"]:
+        return
+    try:
+        assert os.getpgid(identity["pid"]) == identity["pgid"]
+        if matrix._process_birth(identity["pid"]) != identity["birth_marker"]:
+            return
+        # Every signaled group was created by this test and is still led by its recorded PID.
+        if identity["pgid"] == identity["pid"]:
+            os.killpg(identity["pid"], signal.SIGKILL)
+        else:
+            os.kill(identity["pid"], signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def _assert_matrix_lock_rejected(directory: Path) -> None:
+    try:
+        with matrix._matrix_lock(directory):
+            pass
+    except RuntimeError:
+        return
+    raise AssertionError("matrix lock admitted another controller while an owned worker was alive")
+
+
+def check_real_owned_worker_lifecycle(directory: Path) -> None:
+    """Use real detached workers; successful launcher cleanup alone is insufficient."""
+    directory.mkdir(parents=True, exist_ok=True)
+    helper = directory / "owned_worker_helper.py"
+    helper.write_text(_OWNED_WORKER_HELPER, encoding="utf-8")
+    for mode in ("timeout", "sigterm", "orphan"):
+        root = directory / mode
+        root.mkdir()
+        base = [sys.executable, "-u", str(helper)]
+        suffix = [str(root), str(PROJECT_ROOT / "src"), mode]
+        unrelated = subprocess.Popen([*base, "unrelated", *suffix], cwd=PROJECT_ROOT,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
+        controller: subprocess.Popen | None = None
+        identities: dict[str, dict] = {}
+        try:
+            identities["unrelated"] = _wait_helper_identity(root / "unrelated.json", unrelated)
+            controller = subprocess.Popen([*base, "controller", *suffix], cwd=PROJECT_ROOT,
+                                          env=dict(os.environ), stdout=subprocess.PIPE,
+                                          stderr=subprocess.PIPE, text=True, start_new_session=True)
+            for role in ("guard", "launcher", "worker"):
+                identities[role] = _wait_helper_identity(root / f"{role}.json", controller)
+            worker = identities["worker"]
+            launcher = identities["launcher"]
+            assert worker["pgid"] == worker["session_id"] == worker["pid"]
+            assert worker["session_id"] != launcher["session_id"]
+            _assert_matrix_lock_rejected(root)
+            if mode == "sigterm":
+                controller.send_signal(signal.SIGTERM)
+            elif mode == "orphan":
+                # The guard must retain ownership even after both ancestor processes disappear.
+                controller.kill()
+                controller.communicate(timeout=5)
+                assert controller.returncode == -signal.SIGKILL
+                _kill_known_helper(launcher)
+                _wait_owned_helper_exit(launcher, timeout=5)
+                assert matrix._process_birth(worker["pid"]) == worker["birth_marker"]
+                _assert_matrix_lock_rejected(root)
+                expect_error(
+                    lambda: matrix.run_matrix(PROJECT_ROOT / "configs" / "v09_cpu_correctness.json",
+                                              root / "model-must-not-be-read", root,
+                                              project_root=PROJECT_ROOT, resume=True),
+                    errors=(RuntimeError,),
+                )
+            if mode != "orphan":
+                stdout, stderr = controller.communicate(timeout=45)
+                if mode == "sigterm":
+                    assert controller.returncode == 128 + signal.SIGTERM, stdout + stderr
+                    assert "controller cancellation completed" in stdout
+                else:
+                    assert controller.returncode == 0, stdout + stderr
+                    result = read_json(root / "outcome.json")
+                    assert result["status"] == "timed_out" and result["exit_code"] != 0
+            for role in ("worker", "launcher", "guard"):
+                _wait_owned_helper_exit(identities[role])
+            with matrix._matrix_lock(root):
+                pass
+            assert unrelated.poll() is None, f"{mode} cleanup killed an unrelated process"
+            assert matrix._process_birth(unrelated.pid) == identities["unrelated"]["birth_marker"]
+            print(f"Real detached-worker {mode} cleanup, lock, and unrelated-process checks passed.", flush=True)
+        finally:
+            if controller is not None:
+                if controller.poll() is None:
+                    controller.kill()
+                controller.communicate(timeout=10)
+            for role in ("worker", "launcher", "guard"):
+                marker = root / f"{role}.json"
+                identity = identities.get(role) or (read_json(marker) if marker.is_file() else None)
+                if identity is not None:
+                    _kill_known_helper(identity)
+                    _wait_owned_helper_exit(identity, timeout=10)
+            if unrelated.poll() is None:
+                unrelated.kill()
+            unrelated.wait(timeout=10)
 
 
 def _tree_snapshot(directory: Path) -> dict[str, tuple[str, int]]:
@@ -585,10 +828,12 @@ def main() -> None:
         check_invalid_configurations()
         check_mapping_environment_and_commands(directory / "maps")
         check_real_subprocess_outcomes_and_lock(directory / "processes")
+        check_interrupt_immediately_after_spawn(directory / "interrupted-start")
         if sys.platform.startswith("linux"):
             check_real_sigterm_cleanup(directory / "sigterm")
+            check_real_owned_worker_lifecycle(directory / "owned-workers")
         else:
-            print("Skipped real SIGTERM controller cleanup: this integration requires Linux.", flush=True)
+            print("Skipped real SIGTERM/detached-worker cleanup: this integration requires Linux.", flush=True)
         check_artifact_rejection(directory / "artifacts")
         print("Matrix plan, mapping, command, real subprocess/lock, and artifact unit checks passed.", flush=True)
         if not args.unit_only:

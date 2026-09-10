@@ -194,6 +194,15 @@ python benchmarks/summarize_v09_matrix.py \
 保留为历史 attempt；恢复不能覆盖此前证据。
 汇总重新读取 hash-bound 原始产物，不能只信 journal 中写着 succeeded 或保存的指标。
 
+Linux 每个子进程命令由持有矩阵锁的 subreaper supervisor 管理；它跟踪 launcher 及独立
+session 中的后代，用 PID/进程创建标记核验身份。控制器被 SIGTERM 或 SIGKILL 结束后，
+supervisor 继续清理并收养孤儿 worker；只有确认全部结束才释放锁。若无法完成回收，
+状态为 `cleanup_blocked`，整个矩阵停止启动后续点。supervisor 本身异常退出且没有清理完成
+记录时，持久登记也会阻断 resume。现场应检查 `.process_guards/` 和 attempt 内的
+`*.process_tree.json`，确认原进程状态；删除锁或登记文件不构成清理完成的证据。
+Windows 保留进程树终止逻辑和创建后的异常保护，Linux 的 subreaper/控制器 SIGKILL 保护
+不属于 Windows 已验证能力。
+
 运行结束后保留 `matrix_summary.json` 与 `MATRIX_REPORT.md`。代码没有把 tiny、CPU 或缺点
 矩阵升级为真实性能结论；`complete`、`formal_performance_evidence` 和每个可比指标应一起
 阅读。跨后端比值要求模型、workload、计算工作量、源码内容、精度、warmup/repeats、SLO、

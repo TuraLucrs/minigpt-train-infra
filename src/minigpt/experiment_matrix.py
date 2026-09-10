@@ -25,6 +25,7 @@ import subprocess
 import sys
 import time
 import threading
+import uuid
 from typing import Any, Callable, Mapping, Sequence
 
 from .experiment import build_model_directory_provenance, git_snapshot, sha256_file
@@ -43,7 +44,7 @@ FAMILY_COUNTS = {
     "cuda": (1, 2, 4, 8),
     "cpu": (1, 2, 4),
 }
-TERMINAL_FAILURES = {"failed", "timed_out", "interrupted"}
+TERMINAL_FAILURES = {"failed", "timed_out", "interrupted", "cleanup_blocked"}
 _VISIBILITY_VARIABLES = {"cuda": "CUDA_VISIBLE_DEVICES", "npu": "ASCEND_RT_VISIBLE_DEVICES"}
 _METRICS = ("prefill_ms", "decode_ms", "ttft_ms", "tpot_ms", "e2e_latency_ms", "makespan_ms",
             "output_tokens_per_second", "goodput_requests_per_second", "peak_device_memory_mb")
@@ -397,7 +398,318 @@ def build_command(config: Mapping[str, Any], point: MatrixPoint, *, project_root
     return command
 
 
-def _terminate_tree(process: subprocess.Popen[Any]) -> None:
+class ProcessCleanupBlocked(RuntimeError):
+    """The Linux supervisor remains alive and owns the lock until cleanup finishes."""
+
+
+def _linux_process_identity(pid: int) -> dict[str, Any] | None:
+    try:
+        data = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+    except (FileNotFoundError, ProcessLookupError):
+        return None
+    fields = data[data.rfind(")") + 2:].split()
+    return {"pid": pid, "birth_marker": fields[19], "parent_pid": int(fields[1]),
+            "process_group_id": int(fields[2]), "session_id": int(fields[3]), "state": fields[0]}
+
+
+def _linux_owned_children(pid: int, *, required: bool = False) -> set[int]:
+    """Read only this already-owned process's task children, never a global PID scan."""
+    try:
+        tasks = list(Path(f"/proc/{pid}/task").iterdir())
+    except (FileNotFoundError, ProcessLookupError):
+        if required:
+            raise RuntimeError("cannot observe the live Linux supervisor's task children")
+        return set()
+    children: set[int] = set()
+    observed_main_task = False
+    for task in tasks:
+        try:
+            children.update(int(value) for value in (task / "children").read_text(encoding="utf-8").split())
+            observed_main_task |= task.name == str(pid)
+        except (FileNotFoundError, ProcessLookupError):
+            if required and task.name == str(pid):
+                raise RuntimeError("cannot read the live Linux supervisor's main-task children")
+            continue
+    if required and not observed_main_task:
+        raise RuntimeError("the Linux supervisor's main task is not observable")
+    return children
+
+
+class _OwnedLinuxProcesses:
+    """A subreaper's descendants, including children adopted after a launcher exits."""
+
+    def __init__(self) -> None:
+        self.guard_pid = os.getpid()
+        self.guard_birth = _process_birth(self.guard_pid)
+        if self.guard_birth is None:
+            raise RuntimeError("Linux supervision requires a positive supervisor process identity")
+        _linux_owned_children(self.guard_pid, required=True)
+        self.identities: dict[tuple[int, str], dict[str, Any]] = {}
+        self.pidfds: dict[tuple[int, str], int] = {}
+
+    def refresh(self, launcher: subprocess.Popen[Any] | None) -> list[dict[str, Any]]:
+        guard = _linux_process_identity(self.guard_pid)
+        if guard is None or guard["birth_marker"] != self.guard_birth:
+            raise RuntimeError("cannot verify the live Linux supervisor process identity")
+        if launcher is not None:
+            launcher.poll()  # Reap the direct Popen child through its own API.
+        parents = [(self.guard_pid, self.guard_birth)]
+        parents.extend((pid, birth) for (pid, birth) in self.identities
+                       if (current := _linux_process_identity(pid)) is not None and current["birth_marker"] == birth)
+        visited: set[tuple[int, str]] = set()
+        while parents:
+            parent, parent_birth = parents.pop()
+            current_parent = _linux_process_identity(parent)
+            if current_parent is None or current_parent["birth_marker"] != parent_birth or (parent, parent_birth) in visited:
+                continue
+            visited.add((parent, parent_birth))
+            for pid in _linux_owned_children(parent, required=parent == self.guard_pid):
+                current = _linux_process_identity(pid)
+                parent_after = _linux_process_identity(parent)
+                if (current is None or current["parent_pid"] != parent or parent_after is None
+                        or parent_after["birth_marker"] != parent_birth):
+                    continue  # A concurrent orphan will be rediscovered under this subreaper.
+                key = (pid, current["birth_marker"])
+                if key not in self.identities:
+                    self.identities[key] = {name: value for name, value in current.items() if name != "state"}
+                    if hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal"):
+                        try:
+                            self.pidfds[key] = os.pidfd_open(pid)
+                        except (OSError, ProcessLookupError):
+                            pass  # Older vendor kernels use the verified birth-marker path below.
+                parents.append(key)
+        live: list[dict[str, Any]] = []
+        for key, identity in self.identities.items():
+            pid, birth = key
+            current = _linux_process_identity(pid)
+            if current is None or current["birth_marker"] != birth:
+                continue
+            if current["state"] in {"Z", "X"}:
+                if current["parent_pid"] == self.guard_pid and (launcher is None or pid != launcher.pid):
+                    try:
+                        os.waitpid(pid, os.WNOHANG)
+                    except (ChildProcessError, ProcessLookupError):
+                        pass
+                continue
+            live.append(identity)
+        return live
+
+    def send(self, identity: Mapping[str, Any], signum: int) -> None:
+        pid, birth = identity["pid"], identity["birth_marker"]
+        current = _linux_process_identity(pid)
+        if current is None or current["birth_marker"] != birth or current["state"] in {"Z", "X"}:
+            return
+        try:
+            descriptor = self.pidfds.get((pid, birth))
+            if descriptor is not None:
+                signal.pidfd_send_signal(descriptor, signum)
+            else:
+                os.kill(pid, signum)
+        except ProcessLookupError:
+            pass
+
+    def close(self) -> None:
+        for descriptor in self.pidfds.values():
+            os.close(descriptor)
+
+
+def _linux_guard_main(request_path: str) -> None:
+    """Own one launcher tree until every process exits, regardless of worker sessions.
+
+    This helper is deliberately separate from the matrix controller. It inherits
+    the matrix lock and receives SIGTERM when its controller dies, including a
+    controller SIGKILL. A killed launcher reparents its workers to this subreaper.
+    The controller must never SIGKILL this helper during incomplete cleanup.
+    """
+    request = json.loads(Path(request_path).read_text(encoding="utf-8"))
+    state_path = Path(request["state_path"])
+    state: dict[str, Any] = {"schema_version": 1, "kind": "linux_child_subreaper",
+                             "guard": _linux_process_identity(os.getpid()), "controller": request["controller"],
+                             "command": request["command"], "status": "starting", "cleanup_complete": False,
+                             "launcher": None, "processes": [], "live_processes": [], "errors": []}
+    _save(state_path, state)  # No child may be created before this durable registration.
+    requested_stop: list[int] = []
+
+    def stop(signum, frame):
+        requested_stop.append(signum)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    try:
+        if state["guard"] is None or not state["guard"].get("birth_marker") or not request["controller"].get("birth_marker"):
+            raise RuntimeError("Linux supervision requires positive guard and controller process identities")
+        _linux_owned_children(os.getpid(), required=True)
+        import ctypes
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.prctl.argtypes = (ctypes.c_int,) + (ctypes.c_ulong,) * 4
+        libc.prctl.restype = ctypes.c_int
+        for option, value in ((36, 1), (1, int(signal.SIGTERM))):  # CHILD_SUBREAPER / PDEATHSIG
+            if libc.prctl(option, value, 0, 0, 0) != 0:
+                raise OSError(ctypes.get_errno(), "cannot establish Linux child supervision")
+        # The controller blocks these signals only across Popen ownership transfer.
+        # Neither the actual launcher nor its workers may inherit that block.
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM, signal.SIGINT})
+        controller = request["controller"]
+        if os.getppid() != controller["pid"] or _process_birth(controller["pid"]) != controller["birth_marker"]:
+            requested_stop.append(int(signal.SIGTERM))
+    except BaseException as exc:
+        state.update(status="setup_failed", cleanup_complete=True, errors=[f"{type(exc).__name__}: {exc}"])
+        _save(state_path, state)
+        raise SystemExit(125)
+
+    owned = _OwnedLinuxProcesses()
+    launcher: subprocess.Popen[Any] | None = None
+    cleanup_started: float | None = None
+    launcher_exited: float | None = None
+    orphaned = False
+    failure = False
+    last_saved: str | None = None
+    signaled: set[tuple[int, str, int]] = set()
+
+    def persist() -> None:
+        nonlocal failure
+        try:
+            _save(state_path, state)
+        except OSError as exc:
+            # Keep supervising and cleaning even when the evidence volume fails.
+            # The durable pre-launch registration remains incomplete, so reuse
+            # fails closed if the final complete record cannot be written.
+            failure = True
+            requested_stop.append(int(signal.SIGTERM))
+            message = f"supervisor journal write failed: {exc}"
+            if message not in state["errors"]:
+                state["errors"].append(message)
+
+    try:
+        if not requested_stop:
+            state["status"] = "launching"
+            _save(state_path, state)
+            try:
+                launcher = subprocess.Popen(request["command"], cwd=request["cwd"], stdin=subprocess.DEVNULL,
+                                            start_new_session=True)
+                state["launcher"] = _linux_process_identity(launcher.pid)
+            except BaseException as exc:
+                state["errors"].append(f"launcher creation failed: {type(exc).__name__}: {exc}")
+                failure = True
+                requested_stop.append(int(signal.SIGTERM))
+        while True:
+            now = time.monotonic()
+            try:
+                live = owned.refresh(launcher)
+            except BaseException as exc:
+                # Inability to establish ownership is never permission to release
+                # the lock or fall back to signaling a guessed/global process set.
+                state.update(status="cleanup_blocked", cleanup_complete=False)
+                message = f"process ownership unavailable: {type(exc).__name__}: {exc}"
+                if message not in state["errors"]:
+                    state["errors"].append(message)
+                    persist()
+                requested_stop.append(int(signal.SIGTERM))
+                time.sleep(0.2)
+                continue
+            if launcher is not None and launcher.returncode is not None and launcher_exited is None:
+                launcher_exited = now
+            if launcher_exited is not None and live and now - launcher_exited >= 0.2:
+                orphaned = True
+                requested_stop.append(int(signal.SIGTERM))
+            if requested_stop and cleanup_started is None:
+                cleanup_started = now
+            state.update(processes=list(owned.identities.values()), live_processes=live,
+                         launcher_exit_code=None if launcher is None else launcher.returncode,
+                         orphaned_workers=orphaned, stop_requested=bool(requested_stop))
+            # A launcher that exits early cannot make its adopted workers vanish
+            # from this check: they remain direct children of the subreaper.
+            if not live and (launcher is None or launcher.returncode is not None):
+                # A parent may have died after the breadth-first pass visited
+                # this guard, adopting a previously unseen grandchild. Check
+                # the kernel child list again before declaring the tree empty.
+                # ECHILD is the kernel's proof that no adopted child remains;
+                # an empty /proc observation alone is insufficient.
+                children_remain = False
+                while True:
+                    try:
+                        child_pid, _ = os.waitpid(-1, os.WNOHANG)
+                    except ChildProcessError:
+                        break
+                    if child_pid == 0:
+                        children_remain = True
+                        break
+                if children_remain:
+                    requested_stop.append(int(signal.SIGTERM))
+                    state["status"] = "cleanup_blocked"
+                    persist()
+                    time.sleep(0.05)
+                    continue
+                state.update(status="complete", cleanup_complete=True, completed_at_utc=_utc())
+                persist()
+                break
+            if cleanup_started is not None:
+                signum = signal.SIGKILL if now - cleanup_started >= 5.0 else signal.SIGTERM
+                state["status"] = "cleanup_blocked" if now - cleanup_started >= 15.0 else "stopping"
+                for identity in reversed(live):
+                    key = (identity["pid"], identity["birth_marker"], int(signum))
+                    if key not in signaled:
+                        try:
+                            owned.send(identity, signum)
+                            signaled.add(key)
+                        except OSError as exc:
+                            message = f"owned process signal failed: {identity['pid']}: {exc}"
+                            if message not in state["errors"]:
+                                state["errors"].append(message)
+            else:
+                state["status"] = "running"
+            encoded = canonical_sha256(state)
+            if encoded != last_saved:
+                persist()
+                last_saved = encoded
+            time.sleep(0.05 if cleanup_started is not None else 0.2)
+    finally:
+        owned.close()
+    # Preserve actual launcher failures (for example 7 or 23) instead of turning
+    # every child failure into a generic supervisor exit 1.
+    code = launcher.returncode if launcher is not None and not (requested_stop or orphaned or failure) else 1
+    if code is None or code < 0:
+        code = 1
+    raise SystemExit(code)
+
+
+def _guard_registration(log_path: Path, lock_fd: int | None, command: Sequence[str],
+                         project_root: Path) -> tuple[Path, Path]:
+    matrix_root = Path(os.readlink(f"/proc/self/fd/{lock_fd}")).parent if lock_fd is not None else log_path.parent
+    directory = matrix_root / ".process_guards"
+    directory.mkdir(parents=True, exist_ok=True)
+    key = uuid.uuid4().hex
+    request_path, state_path = directory / f"{key}.request.json", directory / f"{key}.state.json"
+    controller_birth = _process_birth(os.getpid())
+    if controller_birth is None:
+        raise RuntimeError("Linux supervision requires an observable controller process identity")
+    _save(request_path, {"schema_version": 1, "command": list(command), "cwd": str(project_root),
+                         "controller": {"pid": os.getpid(), "birth_marker": controller_birth},
+                         "state_path": str(state_path)})
+    return request_path, state_path
+
+
+def _guard_snapshot(state_path: Path, log_path: Path) -> dict[str, Any] | None:
+    if not state_path.is_file():
+        return None  # The guard has not yet registered, and cannot have launched a child.
+    snapshot = json.loads(state_path.read_text(encoding="utf-8"))
+    _save(log_path.with_suffix(".process_tree.json"), snapshot)
+    return snapshot
+
+
+def _terminate_tree(process: subprocess.Popen[Any], *, guard_state: Path | None = None) -> None:
+    if guard_state is not None:
+        if process.poll() is None:
+            process.send_signal(signal.SIGTERM)
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired as exc:
+                # The guard must keep its inherited lock while any worker remains.
+                raise ProcessCleanupBlocked("Linux process cleanup is still active; its supervisor retains the matrix lock") from exc
+        snapshot = json.loads(guard_state.read_text(encoding="utf-8")) if guard_state.exists() else None
+        if snapshot is not None and snapshot.get("cleanup_complete") is not True:
+            raise ProcessCleanupBlocked("Linux supervisor exited without proving all owned workers stopped; resume remains blocked")
+        return
     if process.poll() is not None:
         return
     if os.name == "nt":
@@ -425,29 +737,63 @@ def _execute(command: Sequence[str], *, env: Mapping[str, str], project_root: Pa
     started = time.monotonic()
     started_unix_ns = time.time_ns()
     options: dict[str, Any] = {"cwd": project_root, "env": dict(env), "stdin": subprocess.DEVNULL}
+    guard_state: Path | None = None
+    launched_command = list(command)
     if os.name == "nt":
         options["creationflags"] = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
     else:
         options["start_new_session"] = True
         if lock_fd is not None:
-            # An orphaned torchrun keeps the matrix lock until it exits. A new
-            # controller cannot reuse its devices after an abrupt parent kill.
             options["pass_fds"] = (lock_fd,)
+        if sys.platform.startswith("linux"):
+            request_path, guard_state = _guard_registration(log_path, lock_fd, command, project_root)
+            launched_command = [sys.executable, "-c",
+                                "import sys; sys.path.insert(0, sys.argv[1]); from minigpt.experiment_matrix import _linux_guard_main; _linux_guard_main(sys.argv[2])",
+                                str(Path(__file__).resolve().parents[1]), str(request_path)]
     with log_path.open("wb") as log:
-        process = subprocess.Popen(list(command), stdout=log, stderr=subprocess.STDOUT, **options)
+        process: subprocess.Popen[Any] | None = None
+        old_mask = None
         status = "succeeded"
         try:
+            # Ownership must be assigned inside the exception boundary. On Linux
+            # also defer INT/TERM while Popen itself transfers that ownership.
+            old_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT}) if guard_state is not None else None
+            try:
+                process = subprocess.Popen(launched_command, stdout=log, stderr=subprocess.STDOUT, **options)
+            finally:
+                if old_mask is not None:
+                    restore_mask, old_mask = old_mask, None
+                    signal.pthread_sigmask(signal.SIG_SETMASK, restore_mask)
             if on_started is not None:
                 on_started(process.pid)
             returncode = process.wait(timeout=timeout_seconds)
+            if guard_state is not None:
+                snapshot = _guard_snapshot(guard_state, log_path)
+                if snapshot is not None and snapshot.get("cleanup_complete") is not True:
+                    raise ProcessCleanupBlocked("Linux supervisor stopped with unconfirmed worker cleanup; resume remains blocked")
+                if (snapshot is not None and snapshot.get("launcher_exit_code") is not None
+                        and not snapshot.get("stop_requested") and not snapshot.get("orphaned_workers")):
+                    returncode = snapshot["launcher_exit_code"]
             if returncode != 0:
                 status = "failed"
         except subprocess.TimeoutExpired:
-            _terminate_tree(process)
+            assert process is not None
+            _terminate_tree(process, guard_state=guard_state)
             status, returncode = "timed_out", process.returncode
         except BaseException:
-            _terminate_tree(process)
+            if process is not None:
+                _terminate_tree(process, guard_state=guard_state)
             raise
+        finally:
+            try:
+                if guard_state is not None:
+                    _guard_snapshot(guard_state, log_path)
+            finally:
+                # A Python exception can occur at the first line after Popen,
+                # even before the inner finally restores its deferred signals.
+                if old_mask is not None:
+                    restore_mask, old_mask = old_mask, None
+                    signal.pthread_sigmask(signal.SIG_SETMASK, restore_mask)
     return {"status": status, "exit_code": returncode, "elapsed_seconds": time.monotonic() - started,
             "process_started_at_unix_ns": started_unix_ns, "process_ended_at_unix_ns": time.time_ns()}
 
@@ -472,6 +818,13 @@ def _matrix_lock(root: Path):
             locked = True
         except OSError as exc:
             raise RuntimeError("another matrix controller or its benchmark process still owns this output directory") from exc
+        # A guard unexpectedly killed by an external actor cannot certify that
+        # its last snapshot included every just-forked worker. Refuse reuse even
+        # if the OS lock itself was released; never guess that the tree is empty.
+        for path in (root / ".process_guards").glob("*.state.json"):
+            registration = json.loads(path.read_text(encoding="utf-8"))
+            if registration.get("cleanup_complete") is not True:
+                raise RuntimeError("previous Linux supervisor has not confirmed worker cleanup; matrix resume is blocked")
         yield stream.fileno()
     finally:
         if locked:
@@ -1053,6 +1406,9 @@ def _run_matrix(config_path: str | Path, model_dir: str | Path, output_dir: str 
                     attempt["result"] = inspect_point_output(point, config, benchmark_output, workload_path, model_identity, identity=identity)
                 else:
                     attempt["reason"] = "benchmark did not complete successfully; see benchmark.log"
+        except ProcessCleanupBlocked as exc:
+            attempt.update(status="cleanup_blocked", reason=str(exc))
+            raise  # Do not start another point while a supervisor still owns workers.
         except KeyboardInterrupt:
             attempt.update(status="interrupted", reason="matrix run interrupted")
             raise
