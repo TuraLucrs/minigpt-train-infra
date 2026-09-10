@@ -27,8 +27,14 @@ from .qwen3_inference import (
     Qwen3Tokenizer,
     RecomputeQwen3ModelRunner,
     SlotCachedQwen3ModelRunner,
+    _last_valid_positions,
+    _validate_prefill_inputs,
     validate_qwen3_tokenizer_config,
 )
+from .runtime import RuntimeContext
+
+
+GREEDY_TOKEN_PATHS = ("full_gather", "distributed_argmax")
 
 
 @dataclass(frozen=True)
@@ -662,10 +668,61 @@ class TensorParallelQwen3ForCausalLM(nn.Module):
         elif isinstance(module, VocabParallelEmbedding):
             nn.init.normal_(module.weight, mean=0.0, std=self.config.initializer_range)
 
-    def _gather_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        local_logits = self.lm_head(hidden_states)
-        logits = self.distributed.all_gather_last_dim(local_logits)
+    def _local_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        with torch.profiler.record_function("minigpt::vocab_projection"):
+            return self.lm_head(hidden_states)
+
+    def _gather_local_logits(self, local_logits: torch.Tensor) -> torch.Tensor:
+        with torch.profiler.record_function("minigpt::vocab_full_all_gather"):
+            logits = self.distributed.all_gather_last_dim(local_logits)
         return logits[..., : self.config.vocab_size]
+
+    def _gather_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        return self._gather_local_logits(self._local_logits(hidden_states))
+
+    def distributed_greedy_argmax(
+        self,
+        local_logits: torch.Tensor,
+    ) -> torch.Tensor:
+        """用每个 TP rank 的局部最大值恢复全局 greedy token。
+
+        候选 collective 每行只发送一个 FP32 score 和一个可被 FP32 精确表示的
+        global token id。rank 与 vocab shard 顺序一致，因此 ``argmax`` 的首项规则
+        与对完整词表执行 ``torch.argmax`` 的最小 token id tie-break 相同。
+        """
+
+        if local_logits.ndim != 2 or local_logits.shape[1] != self.plan.vocab_size:
+            raise ValueError(
+                "distributed greedy argmax 需要 [B, local_vocab_size] logits"
+            )
+        if self.config.vocab_size >= 2**24:
+            raise ValueError("global token id 超出 FP32 连续整数精确表示范围")
+        with torch.profiler.record_function("minigpt::vocab_local_argmax"):
+            local_scores, local_ids = torch.max(local_logits, dim=-1)
+            global_ids = local_ids + self.plan.vocab_start
+            candidates = torch.stack(
+                (local_scores.to(torch.float32), global_ids.to(torch.float32)),
+                dim=-1,
+            )
+        with torch.profiler.record_function("minigpt::vocab_candidate_all_gather"):
+            gathered = self.distributed.all_gather_last_dim(candidates)
+        gathered = gathered.view(local_logits.shape[0], self.plan.world_size, 2)
+        if self.distributed.is_primary:
+            with torch.profiler.record_function("minigpt::vocab_global_argmax"):
+                winning_ranks = torch.argmax(gathered[..., 0], dim=-1, keepdim=True)
+                next_ids = torch.gather(
+                    gathered[..., 1],
+                    dim=1,
+                    index=winning_ranks,
+                ).to(torch.long)
+        else:
+            next_ids = torch.zeros(
+                (local_logits.shape[0], 1),
+                dtype=torch.long,
+                device=local_logits.device,
+            )
+        with torch.profiler.record_function("minigpt::vocab_token_broadcast"):
+            return self.distributed.broadcast(next_ids, src=0)
 
     def forward(
         self,
@@ -719,6 +776,7 @@ class TensorParallelQwen3ForCausalLM(nn.Module):
         logit_positions: torch.Tensor | None = None,
         *,
         cache_rows: torch.Tensor | None = None,
+        gather_logits: bool = True,
     ) -> torch.Tensor:
         hidden_states = self.model.prefill_with_cache(
             input_ids,
@@ -731,7 +789,8 @@ class TensorParallelQwen3ForCausalLM(nn.Module):
                 raise ValueError("logit_positions 必须是 [B]")
             batch_indices = torch.arange(input_ids.shape[0], device=input_ids.device)
             hidden_states = hidden_states[batch_indices, logit_positions]
-        return self._gather_logits(hidden_states)
+        local_logits = self._local_logits(hidden_states)
+        return self._gather_local_logits(local_logits) if gather_logits else local_logits
 
     def decode_with_cache(
         self,
@@ -740,6 +799,7 @@ class TensorParallelQwen3ForCausalLM(nn.Module):
         cache: Qwen3KVCache,
         *,
         cache_rows: torch.Tensor | None = None,
+        gather_logits: bool = True,
     ) -> torch.Tensor:
         hidden_states = self.model.decode_with_cache(
             input_ids,
@@ -747,7 +807,8 @@ class TensorParallelQwen3ForCausalLM(nn.Module):
             cache,
             cache_rows=cache_rows,
         )
-        return self._gather_logits(hidden_states)
+        local_logits = self._local_logits(hidden_states)
+        return self._gather_local_logits(local_logits) if gather_logits else local_logits
 
     def reset_non_persistent_buffers(self, device: torch.device) -> None:
         self.model.rotary_emb.reset_inv_freq(device)
@@ -979,6 +1040,85 @@ class SlotCachedTensorParallelQwen3ModelRunner(SlotCachedQwen3ModelRunner):
 
     implementation_name = "qwen3_tp_slot_kv_cache"
 
+    def __init__(
+        self,
+        model: TensorParallelQwen3ForCausalLM,
+        runtime: RuntimeContext,
+        *,
+        max_slots: int,
+        max_seq_len: int,
+        greedy_token_path: str = "full_gather",
+    ) -> None:
+        if greedy_token_path not in GREEDY_TOKEN_PATHS:
+            raise ValueError(
+                f"greedy_token_path 必须是 {GREEDY_TOKEN_PATHS}，"
+                f"收到 {greedy_token_path!r}"
+            )
+        super().__init__(
+            model,
+            runtime,
+            max_slots=max_slots,
+            max_seq_len=max_seq_len,
+        )
+        self.greedy_token_path = greedy_token_path
+
+    def prefill_slots_local_logits(
+        self,
+        slot_ids: Sequence[int],
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        _validate_prefill_inputs(input_ids, attention_mask)
+        if input_ids.shape[0] != len(slot_ids):
+            raise ValueError("slot_ids 必须与 Qwen3 Prefill batch 一一对应")
+        last_positions = _last_valid_positions(attention_mask)
+        with self.runtime.autocast():
+            return self.model.prefill_with_cache(
+                input_ids,
+                attention_mask,
+                self._cache,
+                logit_positions=last_positions,
+                cache_rows=self._rows(slot_ids),
+                gather_logits=False,
+            )
+
+    def decode_slots_local_logits(
+        self,
+        slot_ids: Sequence[int],
+        input_ids: torch.Tensor,
+    ) -> torch.Tensor:
+        if input_ids.shape != (len(slot_ids), 1):
+            raise ValueError("Qwen3 slot Decode 需要与 slot_ids 等长的 [B,1] input_ids")
+        active = torch.ones(len(slot_ids), dtype=torch.bool, device=input_ids.device)
+        with self.runtime.autocast():
+            return self.model.decode_with_cache(
+                input_ids,
+                active,
+                self._cache,
+                cache_rows=self._rows(slot_ids),
+                gather_logits=False,
+            )[:, 0]
+
+    def select_greedy_tokens(self, local_logits: torch.Tensor) -> torch.Tensor:
+        if self.greedy_token_path != "distributed_argmax":
+            raise RuntimeError("当前 runner 未启用 distributed_argmax")
+        return self.model.distributed_greedy_argmax(local_logits)
+
+    def token_selection_metadata(self) -> dict[str, int | float | str]:
+        local_logit_bytes = self.model.lm_head.weight.element_size()
+        full_gather_bytes = self.model.plan.vocab_size * local_logit_bytes
+        candidate_bytes = 2 * torch.tensor([], dtype=torch.float32).element_size()
+        return {
+            "configured_greedy_path": self.greedy_token_path,
+            "global_vocab_size": self.model.config.vocab_size,
+            "local_vocab_size": self.model.plan.vocab_size,
+            "tp_size": self.model.plan.world_size,
+            "logit_element_size_bytes": local_logit_bytes,
+            "full_gather_input_bytes_per_rank_per_row": full_gather_bytes,
+            "distributed_argmax_input_bytes_per_rank_per_row": candidate_bytes,
+            "collective_input_reduction": full_gather_bytes / candidate_bytes,
+        }
+
 
 class TensorParallelInferenceEngine(InferenceEngine):
     """只让 rank 0 选择 token，再广播给所有 rank，防止采样路径发生分叉。"""
@@ -1056,6 +1196,7 @@ def load_tp_qwen3_slot_runner(
     use_chat_template: bool = False,
     system_prompt: str | None = None,
     enable_thinking: bool = False,
+    greedy_token_path: str = "full_gather",
 ) -> tuple[SlotCachedTensorParallelQwen3ModelRunner, Qwen3Tokenizer]:
     """为当前 TP rank 加载真实 Qwen3 分片和固定 slot KV Cache。"""
 
@@ -1078,5 +1219,6 @@ def load_tp_qwen3_slot_runner(
         runtime,
         max_slots=max_slots,
         max_seq_len=max_seq_len,
+        greedy_token_path=greedy_token_path,
     )
     return runner, tokenizer

@@ -181,9 +181,16 @@ MiniGPT 的 tiny shape 不足以代表真实 kernel、显存、通信和吞吐�
 
 ### v0.8——推理专项研究
 
-候选方向包括 Paged KV Cache、量化、Speculative Decoding、CUDA Graph、算子融合、
-Prefix Cache、调度优化和长上下文显存优化。到该阶段根据 v0.7.1 Profiling Gate 的真实
-瓶颈只选择一个有证据、有对照实验的研究问题，不提前凭空锁题。
+第一阶段选择 Decode 词表通信关键路径作为可证伪假设：保留完整 vocab logits AllGather
+基线，实现只交换各 TP rank 局部最大 score/token 的 distributed greedy argmax，并用
+short、mixed 两种真实 workload 做 TP8 ABBA 对照。只有非重叠通信下降同时转化为原始完成
+吞吐或 TPOT 收益，才扩展到更多 layout/workload；否则终止这条优化，转向 Profiler 已暴露
+的计算、Host launch 或同步空洞。
+
+TP/Replica/SLO 联合决策继续作为 v1.0 后的长期研究候选，但当前数据尚未补齐同一 workload
+下 TP8、2×TP4、4×TP2 的干净共同对照，也没有形成相对已有工作的明确研究空白，因此不在
+本版本直接实现在线控制器。Paged KV、Chunked Prefill、Speculative Decoding 等方向保留为
+候选，不与当前单变量 A/B 并行施工。
 
 专项研究只属于推理方向。训练最多用于构造测试模型或验证数值，不构成研究主题。
 

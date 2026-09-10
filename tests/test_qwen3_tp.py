@@ -354,15 +354,57 @@ def _check_tp_model(distributed: object, model_dir: str) -> None:
     assert_close(actual_prefill, expected_prefill, "TP=2 cached Prefill")
 
     next_ids = torch.argmax(expected_prefill, dim=-1, keepdim=True)
+    distributed_cache = tp_model.allocate_kv_cache(
+        2,
+        8,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+    )
+    with torch.inference_mode():
+        local_prefill = tp_model.prefill_with_cache(
+            input_ids,
+            attention_mask,
+            distributed_cache,
+            logit_positions=last_positions,
+            gather_logits=False,
+        )
+        distributed_next_ids = tp_model.distributed_greedy_argmax(local_prefill)
+    assert torch.equal(distributed_next_ids, next_ids)
+
+    tie_logits = torch.full(
+        (2, tp_model.plan.vocab_size),
+        -10.0,
+        dtype=torch.float32,
+    )
+    tie_logits[0, 3 if rank == 0 else 0] = 7.0
+    tie_logits[1, 1] = float(rank)
+    with torch.inference_mode():
+        tie_ids = tp_model.distributed_greedy_argmax(tie_logits)
+    assert tie_ids[0, 0].item() == 3
+    assert tie_ids[1, 0].item() == (
+        (distributed.world_size - 1) * tp_model.plan.vocab_size + 1
+    )
+
     active_mask = torch.tensor([True, True])
     with torch.inference_mode():
         actual_decode = tp_model.decode_with_cache(next_ids, active_mask, cache)[:, 0]
+        local_decode = tp_model.decode_with_cache(
+            next_ids,
+            active_mask,
+            distributed_cache,
+            gather_logits=False,
+        )[:, 0]
+        distributed_decode_ids = tp_model.distributed_greedy_argmax(local_decode)
         row0 = torch.cat((input_ids[0, :4], next_ids[0])).unsqueeze(0)
         row1 = torch.cat((input_ids[1, :2], next_ids[1])).unsqueeze(0)
         expected_row0 = reference(row0)[:, -1]
         expected_row1 = reference(row1)[:, -1]
     assert_close(actual_decode[0:1], expected_row0, "TP=2 cached Decode row 0")
     assert_close(actual_decode[1:2], expected_row1, "TP=2 cached Decode row 1")
+    assert torch.equal(
+        distributed_decode_ids,
+        torch.argmax(actual_decode, dim=-1, keepdim=True),
+    )
 
     tokenizer = IntegerTokenizer()
     reference_engine = InferenceEngine(
@@ -400,6 +442,7 @@ def _check_tp_model(distributed: object, model_dir: str) -> None:
             runtime,
             max_slots=2,
             max_seq_len=12,
+            greedy_token_path="distributed_argmax",
         ),
         tokenizer,
         distributed=distributed,  # type: ignore[arg-type]
@@ -431,6 +474,9 @@ def _check_tp_model(distributed: object, model_dir: str) -> None:
     first_step = slot_engine.step()
     assert first_step["prefill_batch_size"] == 2
     slot_engine.run_until_idle()
+    selection_rows = slot_engine.report()["token_selection"]["actual_rows_by_path"]
+    assert selection_rows["distributed_argmax"] > 0
+    assert selection_rows["full_gather_sampling_fallback"] > 0
     for request_id, expected_ids in expected_dynamic.items():
         request = slot_engine.requests[request_id]
         assert request.state == RequestState.FINISHED

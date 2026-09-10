@@ -1,0 +1,86 @@
+name: v0.8 decode critical-path regression
+
+on:
+  push:
+    branches:
+      - upgrade/v0.8-decode-critical-path
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v0.8-decode-critical-path-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cpu-and-gloo-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GLOO_SOCKET_IFNAME: lo
+      MINIGPT_RUN_GLOO_TESTS: "1"
+    steps:
+      - name: Check out v0.8
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install pinned CPU dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            --index-url https://download.pytorch.org/whl/cpu \
+            "torch==2.10.0"
+          python -m pip install \
+            "numpy==2.5.3" \
+            "safetensors==0.8.0" \
+            "transformers==5.16.1"
+          python -m pip install --no-deps -e .
+
+      - name: Static validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(python -c 'import importlib.metadata; print(importlib.metadata.version("minigpt-train"))')" = "0.8.0"
+          git diff --check
+          bash -n scripts/run_v08_decode_vocab_ab.sh
+          python -m compileall -q src tests benchmarks scripts
+          python - <<'PY'
+          import ast
+          import json
+          from pathlib import Path
+
+          for path in sorted(Path(".").rglob("*.py")):
+              if ".git" not in path.parts:
+                  ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+          for path in sorted(Path(".").rglob("*.json")):
+              if ".git" not in path.parts:
+                  json.loads(path.read_text(encoding="utf-8"))
+          PY
+
+      - name: Run full CPU and Gloo regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tests/test_core.py
+          python tests/test_inference.py
+          python tests/test_kv_cache.py
+          python tests/test_qwen3.py
+          python tests/test_qwen3_tp.py
+          python tests/test_reference_parity.py
+          python tests/test_resume_consistency.py
+          python tests/test_tp_scaling.py
+          python tests/test_continuous_batching.py
+          python tests/test_serving_workloads.py
+          python tests/test_profiling_gate.py
+          python tests/test_mixed_repro.py
+          python tests/test_decode_critical_path.py

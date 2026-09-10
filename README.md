@@ -45,10 +45,10 @@ Ascend 8 卡上的 TP8、2×TP4、4×TP2 共 18 组正式验收。完整与精�
 `v0.7_ascend_evidence.tar.gz` 和 `artifacts/v0.7_qwen3_continuous_batching_acceptance/`。
 正式模型固定为 `Qwen/Qwen3-32B`，tiny 模型只承担白盒正确性与快速 CI。
 
-当前开发分支是 `v0.7.1` Ascend Profiling Gate：在不改写 v0.7 正式结果的前提下，增加
-有界的全 rank Profiler 采集、服务阶段范围、关键 artifact 哈希和六点诊断矩阵，为 v0.8
-只选择一个有真实瓶颈证据的专项。软件实现与 Atlas 证据是两个门禁；六点真机结果完整前
-不冻结 `v0.7.1`。
+`v0.7.1` Ascend Profiling Gate 已完成并冻结；后续 ABBA+BAAB 复现确认，v0.7 的历史
+TP8 慢态受到同设备并发负载污染，干净环境下 mixed workload 的 4×TP2/TP8 goodput 稳定
+倍率为 1.334×。当前开发分支进入 `v0.8` 第一阶段，验证 Decode full-vocab AllGather 是否
+是可形成端到端收益的关键路径。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 
@@ -389,6 +389,19 @@ step trace、timeline 和 communication artifact 通过哈希校验，还验证�
 v0.8 A/B 研究方向。协议、命令和冻结标准见
 [`docs/V0_7_1_ASCEND_PROFILING_GATE.md`](docs/V0_7_1_ASCEND_PROFILING_GATE.md)。
 
+## v0.8 Decode 词表通信关键路径
+
+TP Qwen3 的历史基线在每步先把所有 rank 的 `[B,V/TP]` local logits AllGather 为完整
+`[B,V]`，然后才由 rank 0 做 greedy argmax。候选路径让各 rank 先求本地最大 score/token，
+每个请求只交换两个 FP32 值，再沿用原有 token broadcast。Qwen3-32B TP8 BF16 下，理论
+collective 输入从每 rank 每请求 37984 bytes 降为 8 bytes。
+
+默认命令继续使用 `--greedy-token-path full_gather`；候选使用
+`--greedy-token-path distributed_argmax`。sampling batch 自动回退完整 logits。CPU/Gloo
+负责数值等价门禁，Atlas 使用 short 与 mixed 两个 workload、每组 ABBA 四个 session 判断
+通信下降能否转化为原始吞吐、TPOT 和 goodput 收益。完整设计与真机命令见
+[`docs/V0_8_DECODE_CRITICAL_PATH.md`](docs/V0_8_DECODE_CRITICAL_PATH.md)。
+
 ## 独立运行一次推理
 
 先使用已有训练产物：
@@ -643,7 +656,7 @@ v0.5              Qwen3 真实模型接入、KV Cache 与数值门禁
 v0.6              分布式基础短实验与 Tensor Parallel 推理
 v0.7              Continuous Batching、调度与 KV 生命周期
 v0.7.1            Ascend Profiling Gate 与 v0.8 选题证据
-v0.8              基于 Profiling Gate 只选择一个推理专项研究
+v0.8              Decode 词表通信关键路径：full AllGather 与 distributed argmax A/B
 v0.9              扩展 Ascend 适配、Profiler 后端化与真实多机/多卡 Scaling
 v1.0              完整推理 Infra 交付
 ```

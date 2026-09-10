@@ -73,6 +73,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chat-template", action="store_true")
     parser.add_argument("--enable-thinking", action="store_true")
     parser.add_argument(
+        "--greedy-token-path",
+        choices=("full_gather", "distributed_argmax"),
+        default="full_gather",
+        help=(
+            "TP greedy token 选择路径；distributed_argmax 只交换每个 rank 的"
+            "局部最大 score/token，含采样请求的 batch 自动退回完整 logits"
+        ),
+    )
+    parser.add_argument(
         "--device", choices=("auto", "cpu", "cuda", "npu"), default="auto"
     )
     parser.add_argument("--precision", choices=("fp32", "fp16", "bf16"), default="bf16")
@@ -365,6 +374,7 @@ def main() -> None:
             use_chat_template=args.chat_template,
             system_prompt=args.system_prompt,
             enable_thinking=args.enable_thinking,
+            greedy_token_path=args.greedy_token_path,
         )
         distributed.runtime.synchronize()
         model_load_seconds = time.perf_counter() - load_started
@@ -429,6 +439,8 @@ def main() -> None:
             "full_parameter_count": full_parameter_count,
             "local_parameter_count": local_parameter_count,
         }
+        report["protocol"]["greedy_token_path"] = args.greedy_token_path
+        report["engine"]["token_selection"] = runner.token_selection_metadata()
         report["workload"]["encoded_prompt_lengths"] = encoded_prompt_lengths
         report["workload"]["source_file_sha256"] = source_file_sha256
         report["environment"]["cann_version"] = args.cann_version

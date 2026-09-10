@@ -447,6 +447,22 @@ class ContinuousBatchEngine:
             next_ids = self.distributed.broadcast(next_ids, src=0)
         return next_ids
 
+    def _use_distributed_greedy(
+        self,
+        requests: Sequence[ServingRequest],
+        *,
+        phase: str,
+    ) -> bool:
+        if not requests or any(
+            request.spec.config.strategy != "greedy" for request in requests
+        ):
+            return False
+        if getattr(self.runner, "greedy_token_path", None) != "distributed_argmax":
+            return False
+        local_logits = getattr(self.runner, f"{phase}_slots_local_logits", None)
+        select = getattr(self.runner, "select_greedy_tokens", None)
+        return callable(local_logits) and callable(select)
+
     def _finish(
         self,
         request: ServingRequest,
@@ -726,11 +742,11 @@ class ContinuousBatchEngine:
             self._event("admitted", request, request.admitted_at_ms)
         return resolved
 
-    def _decode_running(self) -> tuple[list[str], list[str]]:
+    def _decode_running(self) -> tuple[list[str], list[str], str | None]:
         with torch.profiler.record_function("minigpt::decode_control"):
             requests = self._synchronized_decode_requests()
         if not requests:
-            return [], []
+            return [], [], None
         with torch.profiler.record_function("minigpt::decode_prepare"):
             slot_ids = [int(request.slot_id) for request in requests]
             input_ids = torch.tensor(
@@ -739,11 +755,34 @@ class ContinuousBatchEngine:
                 device=self.runner.runtime.device,
             )
         try:
-            with torch.profiler.record_function("minigpt::decode_model"):
-                logits = self.runner.decode_slots(slot_ids, input_ids)
-            with torch.profiler.record_function("minigpt::decode_select_tokens"):
-                next_ids = self._select_tokens(logits, requests)
-                self.runner.runtime.synchronize()
+            if self._use_distributed_greedy(requests, phase="decode"):
+                with torch.profiler.record_function("minigpt::decode_model"):
+                    local_logits = self.runner.decode_slots_local_logits(  # type: ignore[attr-defined]
+                        slot_ids,
+                        input_ids,
+                    )
+                with torch.profiler.record_function(
+                    "minigpt::decode_select_tokens"
+                ):
+                    next_ids = self.runner.select_greedy_tokens(  # type: ignore[attr-defined]
+                        local_logits
+                    )
+                    self.runner.runtime.synchronize()
+                selection_path = "distributed_argmax"
+            else:
+                with torch.profiler.record_function("minigpt::decode_model"):
+                    logits = self.runner.decode_slots(slot_ids, input_ids)
+                with torch.profiler.record_function(
+                    "minigpt::decode_select_tokens"
+                ):
+                    next_ids = self._select_tokens(logits, requests)
+                    self.runner.runtime.synchronize()
+                selection_path = (
+                    "full_gather_sampling_fallback"
+                    if getattr(self.runner, "greedy_token_path", None)
+                    == "distributed_argmax"
+                    else str(getattr(self.runner, "greedy_token_path", "full_logits"))
+                )
         except Exception as exc:
             failed_at = self.now_ms()
             self._fail_requests(requests, exc, failed_at)
@@ -754,27 +793,51 @@ class ContinuousBatchEngine:
             self._record_token(request, int(next_ids[row, 0].item()), ready_at)
             if request.state == RequestState.FINISHED:
                 finished.append(request.request_id)
-        return [request.request_id for request in requests], finished
+        return [request.request_id for request in requests], finished, selection_path
 
-    def _admit_and_prefill(self) -> tuple[list[str], list[str]]:
+    def _admit_and_prefill(self) -> tuple[list[str], list[str], str | None]:
         with torch.profiler.record_function("minigpt::prefill_control"):
             requests = self._synchronized_admissions()
         if not requests:
-            return [], []
+            return [], [], None
 
         with torch.profiler.record_function("minigpt::prefill_prepare"):
             input_ids, attention_mask = self._encode_prefill_batch(requests)
             slot_ids = [int(request.slot_id) for request in requests]
         try:
-            with torch.profiler.record_function("minigpt::prefill_model"):
-                logits = self.runner.prefill_slots(
-                    slot_ids,
-                    input_ids,
-                    attention_mask,
+            if self._use_distributed_greedy(requests, phase="prefill"):
+                with torch.profiler.record_function("minigpt::prefill_model"):
+                    local_logits = self.runner.prefill_slots_local_logits(  # type: ignore[attr-defined]
+                        slot_ids,
+                        input_ids,
+                        attention_mask,
+                    )
+                with torch.profiler.record_function(
+                    "minigpt::prefill_select_tokens"
+                ):
+                    next_ids = self.runner.select_greedy_tokens(  # type: ignore[attr-defined]
+                        local_logits
+                    )
+                    self.runner.runtime.synchronize()
+                selection_path = "distributed_argmax"
+            else:
+                with torch.profiler.record_function("minigpt::prefill_model"):
+                    logits = self.runner.prefill_slots(
+                        slot_ids,
+                        input_ids,
+                        attention_mask,
+                    )
+                with torch.profiler.record_function(
+                    "minigpt::prefill_select_tokens"
+                ):
+                    next_ids = self._select_tokens(logits, requests)
+                    self.runner.runtime.synchronize()
+                selection_path = (
+                    "full_gather_sampling_fallback"
+                    if getattr(self.runner, "greedy_token_path", None)
+                    == "distributed_argmax"
+                    else str(getattr(self.runner, "greedy_token_path", "full_logits"))
                 )
-            with torch.profiler.record_function("minigpt::prefill_select_tokens"):
-                next_ids = self._select_tokens(logits, requests)
-                self.runner.runtime.synchronize()
         except Exception as exc:
             failed_at = self.now_ms()
             self._fail_requests(requests, exc, failed_at)
@@ -788,7 +851,7 @@ class ContinuousBatchEngine:
                 finished.append(request.request_id)
             else:
                 self._event("first_token", request, ready_at)
-        return [request.request_id for request in requests], finished
+        return [request.request_id for request in requests], finished, selection_path
 
     @torch.inference_mode()
     def step(self) -> dict[str, object]:
@@ -799,11 +862,13 @@ class ContinuousBatchEngine:
         waiting_before = self.waiting_count
         with torch.profiler.record_function("minigpt::decode_phase"):
             decode_started_at = self.now_ms()
-            decoded, decode_finished = self._decode_running()
+            decoded, decode_finished, decode_selection_path = self._decode_running()
             decode_ended_at = self.now_ms()
         with torch.profiler.record_function("minigpt::prefill_phase"):
             prefill_started_at = self.now_ms()
-            admitted, prefill_finished = self._admit_and_prefill()
+            admitted, prefill_finished, prefill_selection_path = (
+                self._admit_and_prefill()
+            )
             prefill_ended_at = self.now_ms()
         ended_at = self.now_ms()
         active_slots = sorted(self.allocator.owners)
@@ -825,6 +890,8 @@ class ContinuousBatchEngine:
             "waiting_before": waiting_before,
             "decode_batch_size": len(decoded),
             "prefill_batch_size": len(admitted),
+            "decode_token_selection_path": decode_selection_path,
+            "prefill_token_selection_path": prefill_selection_path,
             "decoded_request_ids": decoded,
             "admitted_request_ids": admitted,
             "finished_request_ids": decode_finished + prefill_finished,
@@ -983,6 +1050,24 @@ class ContinuousBatchEngine:
             for step in self.steps
             if int(step["kv_reserved_tokens"]) > 0
         ]
+        token_selection_rows: dict[str, int] = {}
+        for step in self.steps:
+            for phase in ("decode", "prefill"):
+                path = step[f"{phase}_token_selection_path"]
+                if path is None:
+                    continue
+                token_selection_rows[str(path)] = token_selection_rows.get(
+                    str(path), 0
+                ) + int(step[f"{phase}_batch_size"])
+        token_selection: dict[str, object] = {
+            "configured_greedy_path": str(
+                getattr(self.runner, "greedy_token_path", "full_logits")
+            ),
+            "actual_rows_by_path": token_selection_rows,
+        }
+        metadata = getattr(self.runner, "token_selection_metadata", None)
+        if callable(metadata):
+            token_selection["communication_model"] = metadata()
         state_counts = {
             state.value: sum(item["state"] == state.value for item in request_metrics)
             for state in RequestState
@@ -1050,6 +1135,7 @@ class ContinuousBatchEngine:
                 ),
                 "external_fragmentation_tokens": 0,
             },
+            "token_selection": token_selection,
             "requests": request_metrics,
             "steps": list(self.steps),
             "events": list(self.events),
