@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 import json
 import os
 import sys
@@ -33,6 +34,7 @@ from minigpt.qwen3_tp import (  # noqa: E402
     CachedTensorParallelQwen3ModelRunner,
     Qwen3TensorParallelPlan,
     SlotCachedTensorParallelQwen3ModelRunner,
+    TensorParallelQwen3ForCausalLM,
     TensorParallelInferenceEngine,
     load_tp_qwen3_from_pretrained,
 )
@@ -88,6 +90,26 @@ def assert_close(actual: torch.Tensor, expected: torch.Tensor, label: str) -> No
     if not torch.allclose(actual, expected, atol=3e-5, rtol=3e-4):
         max_diff = (actual - expected).abs().max().item()
         raise AssertionError(f"{label} 最大绝对差为 {max_diff}")
+
+
+class _RecordingCollectives:
+    """记录模型实际发送的张量，避免只检查 scheduler 自报的路径标签。"""
+
+    def __init__(self, delegate: object) -> None:
+        self.delegate = delegate
+        self.events: list[tuple[str, tuple[int, ...], torch.dtype]] = []
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self.delegate, name)
+
+    def all_gather_last_dim(self, tensor: torch.Tensor) -> torch.Tensor:
+        self.events.append(("all_gather", tuple(tensor.shape), tensor.dtype))
+        return self.delegate.all_gather_last_dim(tensor)  # type: ignore[attr-defined]
+
+    def broadcast(self, tensor: torch.Tensor, src: int = 0) -> torch.Tensor:
+        assert src == 0
+        self.events.append(("broadcast", tuple(tensor.shape), tensor.dtype))
+        return self.delegate.broadcast(tensor, src=src)  # type: ignore[attr-defined]
 
 
 def save_checkpoint(directory: Path) -> Qwen3ForCausalLM:
@@ -220,7 +242,7 @@ def _tp_worker(
             rank=rank,
             local_rank=rank,
             world_size=world_size,
-            init_method=f"file://{rendezvous_path}",
+            init_method=Path(rendezvous_path).resolve().as_uri(),
             timeout_seconds=60,
         )
         assert distributed.backend == "gloo"
@@ -247,7 +269,11 @@ def _tp_worker(
         assert replica.all_reduce_sum(local).item() == float(rank)
         replica.global_barrier()
 
+        _check_distributed_argmax(distributed)
+        _check_distributed_argmax(replica)
         _check_tp_model(distributed, model_dir)
+        for mismatch in ("request", "greedy_token_path", "capability"):
+            _check_scheduler_mismatch_rank(distributed, mismatch)
     finally:
         if distributed is not None:
             distributed.close()
@@ -267,7 +293,7 @@ def _replica_group_worker(
             rank=rank,
             local_rank=rank,
             world_size=world_size,
-            init_method=f"file://{rendezvous_path}",
+            init_method=Path(rendezvous_path).resolve().as_uri(),
             timeout_seconds=60,
         )
         replica = TensorParallelReplicaContext.create(distributed, tp_size=2)
@@ -292,6 +318,9 @@ def _replica_group_worker(
         measurements = replica.all_gather_floats([rank + 0.5])
         assert measurements == [[value + 0.5] for value in expected_group]
 
+        _check_distributed_argmax(replica)
+        for mismatch in ("request", "greedy_token_path", "capability"):
+            _check_scheduler_mismatch_rank(replica, mismatch)
         replica.global_barrier()
         global_value = torch.tensor([1.0])
         distributed.all_reduce_sum(global_value)
@@ -299,6 +328,61 @@ def _replica_group_worker(
     finally:
         if distributed is not None:
             distributed.close()
+
+
+def _check_distributed_argmax(distributed: object) -> None:
+    raw = tiny_config_dict()
+    raw["vocab_size"] = 131_072
+    recorded = _RecordingCollectives(distributed)
+    # 只测选 token 原语，meta 权重避免为大 token id 用例分配完整 embedding。
+    model = TensorParallelQwen3ForCausalLM(
+        Qwen3Config.from_dict(raw),
+        recorded,  # type: ignore[arg-type]
+        device="meta",
+    )
+    vocab_size = model.config.vocab_size
+    replica_winner = vocab_size - 1 - int(getattr(distributed, "replica_index", 0))
+    for dtype in (torch.float16, torch.bfloat16, torch.float32):
+        logits = torch.full((9, vocab_size), -10.0, dtype=dtype)
+        logits[0] = -7.0
+        logits[1, [1, 3]] = 4.0
+        logits[2, 3] = 7.0
+        for rank in range(1, model.plan.world_size):
+            logits[2, rank * model.plan.vocab_size] = 7.0
+        logits[3, replica_winner] = 3.0
+        logits[4] = float("-inf")
+        logits[5, [2, vocab_size - 1]] = float("inf")
+        logits[6, 0] = -0.0
+        logits[6, -1] = 0.0
+        logits[7, [4, vocab_size - 1]] = float("nan")
+        logits[8, 0] = 1.0
+        logits[8, -1] = 1.0 + torch.finfo(dtype).eps
+        local = logits.narrow(-1, model.plan.vocab_start, model.plan.vocab_size)
+        before = len(recorded.events)
+        with torch.inference_mode():
+            actual = model.distributed_greedy_argmax(local)
+        expected = torch.argmax(logits, dim=-1, keepdim=True)
+        assert torch.equal(actual, expected), (dtype, model.plan.rank, actual, expected)
+        assert actual[:, 0].tolist() == [
+            0, 1, 3, replica_winner, 0, 2, 0, 4, vocab_size - 1
+        ]
+        assert recorded.events[before:] == [
+            ("all_gather", (9, 2), torch.float32),
+            ("broadcast", (9, 1), torch.long),
+        ]
+
+    # 1 + 2**-30 在 FP64 大于 1，但打包成 FP32 后会与较小 token 的 1 并列。
+    # API 必须明确拒绝这种会改变 argmax 的输入，不能静默宣称等价。
+    local_fp64 = torch.full((1, model.plan.vocab_size), -10.0, dtype=torch.float64)
+    local_fp64[0, 0] = 1.0 + model.plan.rank * 2**-30
+    before = len(recorded.events)
+    try:
+        model.distributed_greedy_argmax(local_fp64)
+    except ValueError as exc:
+        assert "FP16、BF16、FP32" in str(exc)
+    else:
+        raise AssertionError("distributed argmax 必须拒绝会丢失分数精度的 FP64 输入")
+    assert len(recorded.events) == before
 
 
 def _check_tp_model(distributed: object, model_dir: str) -> None:
@@ -310,9 +394,10 @@ def _check_tp_model(distributed: object, model_dir: str) -> None:
         device=torch.device("cpu"),
         dtype=torch.float32,
     )
+    model_collectives = _RecordingCollectives(distributed)
     tp_model = load_tp_qwen3_from_pretrained(
         model_dir,
-        distributed,  # type: ignore[arg-type]
+        model_collectives,  # type: ignore[arg-type]
         dtype=torch.float32,
     )
     assert tp_model.plan.rank == rank
@@ -427,7 +512,9 @@ def _check_tp_model(distributed: object, model_dir: str) -> None:
     sample_config = GenerationConfig(
         max_new_tokens=3,
         strategy="sample",
-        top_k=1,
+        temperature=0.8,
+        top_k=8,
+        top_p=0.9,
         seed=7,
     )
     expected_sample = reference_engine.generate_batch(prompts, sample_config)
@@ -435,18 +522,65 @@ def _check_tp_model(distributed: object, model_dir: str) -> None:
     assert [item.generated_ids for item in actual_sample] == [
         item.generated_ids for item in expected_sample
     ]
+    assert [item.generated_ids for item in actual_sample] != [
+        item.generated_ids[:3] for item in expected_generation
+    ]
 
-    slot_engine = ContinuousBatchEngine(
-        SlotCachedTensorParallelQwen3ModelRunner(
-            tp_model,
-            runtime,
-            max_slots=2,
-            max_seq_len=12,
-            greedy_token_path="distributed_argmax",
-        ),
-        tokenizer,
-        distributed=distributed,  # type: ignore[arg-type]
-    )
+    def run_slot_case(
+        path: str,
+        specs: Sequence[RequestSpec],
+    ) -> tuple[ContinuousBatchEngine, list[tuple[str, tuple[int, ...], torch.dtype]]]:
+        engine = ContinuousBatchEngine(
+            SlotCachedTensorParallelQwen3ModelRunner(
+                tp_model,
+                runtime,
+                max_slots=2,
+                max_seq_len=12,
+                greedy_token_path=path,
+            ),
+            tokenizer,
+            distributed=distributed,  # type: ignore[arg-type]
+        )
+        model_collectives.events.clear()
+        for spec in specs:
+            engine.submit(spec)
+        if rank != 0:
+            # follower 的本地 deque 故意不同，batch 仍须服从 rank 0 的 plan。
+            engine._waiting.rotate(1)
+        first_step = engine.step()
+        assert first_step["prefill_batch_size"] == 2
+        engine.run_until_idle()
+        assert engine.allocator.used == 0
+        assert engine.runner.cache_lengths([0, 1]) == [0, 0]
+        return engine, list(model_collectives.events)
+
+    fixed_specs = [
+        RequestSpec("fixed-a", "4 5 6", GenerationConfig(max_new_tokens=4)),
+        RequestSpec("fixed-b", "7 8", GenerationConfig(max_new_tokens=4)),
+    ]
+    fixed_baseline, baseline_events = run_slot_case("full_gather", fixed_specs)
+    fixed_candidate, candidate_events = run_slot_case("distributed_argmax", fixed_specs)
+    for spec, expected in zip(fixed_specs, expected_generation):
+        baseline = fixed_baseline.requests[spec.request_id]
+        candidate = fixed_candidate.requests[spec.request_id]
+        assert baseline.state == candidate.state == RequestState.FINISHED
+        assert baseline.generated_ids == candidate.generated_ids == expected.generated_ids
+    assert fixed_baseline.report()["token_selection"]["actual_rows_by_path"] == {
+        "full_gather": 8
+    }
+    assert fixed_candidate.report()["token_selection"]["actual_rows_by_path"] == {
+        "distributed_argmax": 8
+    }
+    assert baseline_events == [
+        ("all_gather", (2, tp_model.plan.vocab_size), torch.float32)
+    ] + [
+        ("all_gather", (2, 1, tp_model.plan.vocab_size), torch.float32)
+    ] * 3, baseline_events
+    assert candidate_events == [
+        ("all_gather", (2, 2), torch.float32),
+        ("broadcast", (2, 1), torch.long),
+    ] * 4, candidate_events
+
     dynamic_specs = [
         RequestSpec("dynamic-a", "4 5 6", GenerationConfig(max_new_tokens=5)),
         RequestSpec(
@@ -455,7 +589,9 @@ def _check_tp_model(distributed: object, model_dir: str) -> None:
             GenerationConfig(
                 max_new_tokens=2,
                 strategy="sample",
-                top_k=1,
+                temperature=0.8,
+                top_k=8,
+                top_p=0.9,
                 seed=17,
             ),
         ),
@@ -465,24 +601,61 @@ def _check_tp_model(distributed: object, model_dir: str) -> None:
         spec.request_id: reference_engine.generate(spec.prompt, spec.config).generated_ids
         for spec in dynamic_specs
     }
-    for spec in dynamic_specs:
-        slot_engine.submit(spec)
-    if rank != 0:
-        # 故意打乱 follower 的本地 deque；实际 admission 必须服从 rank 0
-        # 广播的 request sequence/slot plan，而不是各 rank 自行取队首。
-        slot_engine._waiting.rotate(1)
-    first_step = slot_engine.step()
-    assert first_step["prefill_batch_size"] == 2
-    slot_engine.run_until_idle()
-    selection_rows = slot_engine.report()["token_selection"]["actual_rows_by_path"]
-    assert selection_rows["distributed_argmax"] > 0
-    assert selection_rows["full_gather_sampling_fallback"] > 0
+    dynamic_baseline, baseline_events = run_slot_case("full_gather", dynamic_specs)
+    slot_engine, candidate_events = run_slot_case("distributed_argmax", dynamic_specs)
+    assert slot_engine.report()["token_selection"]["actual_rows_by_path"] == {
+        "full_gather_sampling_fallback": 4,
+        "distributed_argmax": 6,
+    }
+    assert dynamic_baseline.report()["token_selection"]["actual_rows_by_path"] == {
+        "full_gather": 10
+    }
+    assert slot_engine.steps[0]["prefill_token_selection_path"] == "full_gather_sampling_fallback"
+    assert slot_engine.steps[1]["decode_token_selection_path"] == "full_gather_sampling_fallback"
+    assert slot_engine.steps[1]["prefill_token_selection_path"] == "distributed_argmax"
+    assert all(
+        step["decode_token_selection_path"] == "distributed_argmax"
+        for step in slot_engine.steps[2:]
+    )
+    phase_batches = [
+        ("prefill", 2, False),
+        ("decode", 2, False),
+        ("prefill", 1, True),
+        ("decode", 2, True),
+        ("decode", 2, True),
+        ("decode", 1, True),
+    ]
+    expected_events = []
+    for phase, rows, distributed_greedy in phase_batches:
+        width = 2 if distributed_greedy else tp_model.plan.vocab_size
+        shape = (rows, width) if distributed_greedy or phase == "prefill" else (rows, 1, width)
+        expected_events.append(("all_gather", shape, torch.float32))
+        if distributed_greedy:
+            expected_events.append(("broadcast", (rows, 1), torch.long))
+    assert candidate_events == expected_events, (candidate_events, expected_events)
+    assert baseline_events == [
+        (
+            "all_gather",
+            (rows, tp_model.plan.vocab_size)
+            if phase == "prefill"
+            else (rows, 1, tp_model.plan.vocab_size),
+            torch.float32,
+        )
+        for phase, rows, _distributed_greedy in phase_batches
+    ], baseline_events
     for request_id, expected_ids in expected_dynamic.items():
         request = slot_engine.requests[request_id]
-        assert request.state == RequestState.FINISHED
+        baseline = dynamic_baseline.requests[request_id]
+        assert request.state == baseline.state == RequestState.FINISHED
         assert request.generated_ids == expected_ids
-    assert slot_engine.allocator.used == 0
-    assert slot_engine.runner.cache_lengths([0, 1]) == [0, 0]
+        assert request.generated_ids == baseline.generated_ids
+        if request.spec.config.strategy == "sample" and distributed.is_primary:
+            assert request.generator is not None and baseline.generator is not None
+            assert torch.equal(request.generator.get_state(), baseline.generator.get_state())
+        else:
+            assert request.generator is None and baseline.generator is None
+    greedy_b = reference_engine.generate("7 8", GenerationConfig(max_new_tokens=2))
+    assert slot_engine.requests["dynamic-b"].generated_ids != greedy_b.generated_ids
 
 
 class _ThreadCollectives:
@@ -498,6 +671,7 @@ class _ThreadCollectives:
         }
         self.slots: dict[tuple[str, int], dict[int, torch.Tensor]] = {}
         self.results: dict[tuple[str, int], torch.Tensor] = {}
+        self.errors: dict[tuple[str, int], str] = {}
         self.readers: dict[tuple[str, int], int] = {}
 
     def run(
@@ -516,24 +690,39 @@ class _ThreadCollectives:
             slot[rank] = tensor.detach().clone()
             if len(slot) == self.world_size:
                 ordered = [slot[index] for index in range(self.world_size)]
-                if operation == "all_reduce":
+                if any(
+                    value.shape != ordered[0].shape or value.dtype != ordered[0].dtype
+                    for value in ordered[1:]
+                ):
+                    self.errors[key] = f"collective tensor shape/dtype 不一致：{key}"
+                elif operation == "all_reduce":
                     result = torch.stack(ordered).sum(dim=0)
+                    self.results[key] = result
                 elif operation == "all_gather":
                     result = torch.cat(ordered, dim=-1)
+                    self.results[key] = result
                 else:
                     result = slot[src]
-                self.results[key] = result
+                    self.results[key] = result
                 self.readers[key] = 0
                 self.condition.notify_all()
-            ready = self.condition.wait_for(lambda: key in self.results, timeout=30)
+            ready = self.condition.wait_for(
+                lambda: key in self.results or key in self.errors,
+                timeout=30,
+            )
             if not ready:
                 raise TimeoutError(f"线程 collective 超时：{key}")
-            result = self.results[key].clone()
+            error = self.errors.get(key)
+            result = self.results[key].clone() if error is None else None
             self.readers[key] += 1
             if self.readers[key] == self.world_size:
                 del self.slots[key]
-                del self.results[key]
+                self.results.pop(key, None)
+                self.errors.pop(key, None)
                 del self.readers[key]
+            if error is not None:
+                raise RuntimeError(error)
+            assert result is not None
             return result
 
 
@@ -590,20 +779,74 @@ def check_threaded_tp(model_dir: str, world_size: int) -> None:
             future.result()
 
 
-def check_scheduler_mismatch_fails_all_ranks() -> None:
+def check_threaded_argmax(world_size: int) -> None:
     from minigpt.runtime import RuntimeContext
 
     runtime = RuntimeContext.create("cpu", "fp32")
-    collectives = _ThreadCollectives(2)
+    collectives = _ThreadCollectives(world_size)
     contexts = [
-        _ThreadDistributedContext(rank, 2, runtime, collectives)
-        for rank in range(2)
+        _ThreadDistributedContext(rank, world_size, runtime, collectives)
+        for rank in range(world_size)
     ]
+    with ThreadPoolExecutor(max_workers=world_size) as executor:
+        futures = [executor.submit(_check_distributed_argmax, context) for context in contexts]
+        for future in futures:
+            future.result()
+
+
+def check_token_selection_metadata() -> None:
+    from minigpt.runtime import RuntimeContext
+
+    runtime = RuntimeContext.create("cpu", "fp32")
+    context = _ThreadDistributedContext(0, 8, runtime, _ThreadCollectives(8))
+    config = Qwen3Config.from_json(PROJECT_ROOT / "configs" / "qwen3_32b_official.json")
+    model = TensorParallelQwen3ForCausalLM(
+        config,
+        context,  # type: ignore[arg-type]
+        device="meta",
+        dtype=torch.bfloat16,
+    )
+    runner = SlotCachedTensorParallelQwen3ModelRunner(
+        model,
+        runtime,
+        max_slots=1,
+        max_seq_len=1,
+        greedy_token_path="distributed_argmax",
+    )
+    expected = {
+        "measurement_type": "estimate",
+        "payload_scope": "collective_input_per_rank_per_row",
+        "configured_greedy_path": "distributed_argmax",
+        "global_vocab_size": 151936,
+        "local_vocab_size": 18992,
+        "tp_size": 8,
+        "logit_element_size_bytes": 2,
+        "full_gather_input_bytes_per_rank_per_row": 37984,
+        "distributed_argmax_input_bytes_per_rank_per_row": 8,
+        "collective_input_reduction": 4748.0,
+    }
+    assert runner.token_selection_metadata() == expected
+    # FP32 lm_head 在 BF16 autocast 下产生 BF16 logits，payload 不能按权重计为 4 字节。
+    model.lm_head.to(dtype=torch.float32)
+    runner.runtime = replace(runtime, precision="bf16", amp_dtype=torch.bfloat16)
+    assert runner.token_selection_metadata() == expected
+    try:
+        runner.greedy_token_path = "full_gather"  # type: ignore[misc]
+    except AttributeError:
+        pass
+    else:
+        raise AssertionError("runner 的选 token 通信协议不能在启动后被修改")
+
+
+def _check_scheduler_mismatch_rank(distributed: object, mismatch: str) -> str:
+    runtime = distributed.runtime  # type: ignore[attr-defined]
+    rank = int(distributed.rank)  # type: ignore[attr-defined]
 
     class NeverCalledRunner:
         implementation_name = "never_called"
         max_slots = 1
         max_seq_len = 8
+        greedy_token_path = "full_gather"
 
         def __init__(self) -> None:
             self.runtime = runtime
@@ -622,6 +865,16 @@ def check_scheduler_mismatch_fails_all_ranks() -> None:
             self.model_calls += 1
             raise AssertionError("control plan 不一致时不能进入模型")
 
+        def prefill_slots_local_logits(self, *_args: object) -> torch.Tensor:
+            return self.prefill_slots()
+
+        def decode_slots_local_logits(self, *_args: object) -> torch.Tensor:
+            return self.decode_slots()
+
+        def select_greedy_tokens(self, *_args: object) -> torch.Tensor:
+            self.model_calls += 1
+            raise AssertionError("control plan 不一致时不能进入选 token collective")
+
         @staticmethod
         def release_slots(_slot_ids: Sequence[int]) -> None:
             return None
@@ -630,31 +883,62 @@ def check_scheduler_mismatch_fails_all_ranks() -> None:
         def cache_lengths(slot_ids: Sequence[int]) -> list[int]:
             return [0 for _slot_id in slot_ids]
 
-    runners = [NeverCalledRunner(), NeverCalledRunner()]
+    runner = NeverCalledRunner()
+    if mismatch == "greedy_token_path":
+        if rank == 0:
+            runner.greedy_token_path = "distributed_argmax"
+    elif mismatch == "capability":
+        runner.greedy_token_path = "distributed_argmax"
+        if rank == 1:
+            runner.select_greedy_tokens = None  # type: ignore[assignment]
+    elif mismatch != "request":
+        raise ValueError(f"未知 mismatch case：{mismatch}")
 
-    def run_rank(rank: int) -> str:
-        engine = ContinuousBatchEngine(
-            runners[rank],
-            IntegerTokenizer(),
-            distributed=contexts[rank],
-        )
-        prompt = "4 5" if rank == 0 else "6 7"
-        engine.submit(RequestSpec("same-id", prompt, GenerationConfig(max_new_tokens=2)))
-        try:
-            engine.step()
-        except RuntimeError as exc:
-            return str(exc)
-        raise AssertionError("不同 rank 的请求内容不一致时必须共同失败")
+    engine = ContinuousBatchEngine(
+        runner,
+        IntegerTokenizer(),
+        distributed=distributed,  # type: ignore[arg-type]
+    )
+    prompt = "6 7" if mismatch == "request" and rank == 1 else "4 5"
+    engine.submit(RequestSpec("same-id", prompt, GenerationConfig(max_new_tokens=2)))
+    try:
+        engine.step()
+    except RuntimeError as exc:
+        error = str(exc)
+    else:
+        raise AssertionError(f"不同 rank 的 {mismatch} 不一致时必须共同失败")
+    assert "control plan" in error
+    if mismatch != "request":
+        assert "token_selection" in error
+    assert runner.model_calls == 0
+    return error
 
+
+def check_scheduler_mismatch_fails_all_ranks(mismatch: str = "request") -> None:
+    from minigpt.runtime import RuntimeContext
+
+    runtime = RuntimeContext.create("cpu", "fp32")
+    collectives = _ThreadCollectives(2)
+    contexts = [
+        _ThreadDistributedContext(rank, 2, runtime, collectives)
+        for rank in range(2)
+    ]
     with ThreadPoolExecutor(max_workers=2) as executor:
-        errors = list(executor.map(run_rank, range(2)))
-    assert all("control plan" in error for error in errors)
-    assert all(runner.model_calls == 0 for runner in runners)
+        futures = [
+            executor.submit(_check_scheduler_mismatch_rank, context, mismatch)
+            for context in contexts
+        ]
+        for future in futures:
+            future.result()
 
 
 def main() -> None:
+    torch.set_num_threads(1)
     check_plan_boundaries()
     check_distributed_boundaries()
+    for world_size in (1, 2, 4):
+        check_threaded_argmax(world_size)
+    check_token_selection_metadata()
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
         model_dir = root / "model"
@@ -664,6 +948,8 @@ def main() -> None:
         # group 的对应关系仍能恢复完整模型结果。
         check_threaded_tp(str(model_dir), 4)
         check_scheduler_mismatch_fails_all_ranks()
+        check_scheduler_mismatch_fails_all_ranks("greedy_token_path")
+        check_scheduler_mismatch_fails_all_ranks("capability")
         if os.environ.get("MINIGPT_RUN_GLOO_TESTS") == "1":
             rendezvous_path = root / "gloo-rendezvous"
             mp.spawn(
@@ -672,7 +958,7 @@ def main() -> None:
                 nprocs=2,
                 join=True,
             )
-            print("v0.6 Gloo process-group tests passed.")
+            print("v0.8 Gloo argmax, fixed-batch and sampling fallback tests passed.")
             replica_rendezvous = root / "gloo-replica-rendezvous"
             mp.spawn(
                 _replica_group_worker,
@@ -680,10 +966,10 @@ def main() -> None:
                 nprocs=4,
                 join=True,
             )
-            print("v0.7 Gloo TP subgroup tests passed.")
+            print("v0.8 Gloo TP subgroup argmax tests passed.")
         else:
-            print("v0.6 Gloo test skipped; set MINIGPT_RUN_GLOO_TESTS=1 to enable it.")
-    print("Qwen3 TP and v0.7 replica-group simulation tests passed.")
+            print("Gloo test skipped; set MINIGPT_RUN_GLOO_TESTS=1 to enable it.")
+    print("Qwen3 TP and v0.8 distributed token selection tests passed.")
 
 
 if __name__ == "__main__":

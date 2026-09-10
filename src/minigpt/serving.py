@@ -260,6 +260,15 @@ class ContinuousBatchEngine:
         self._next_sequence_id = 0
         self.events: list[dict[str, object]] = []
         self.steps: list[dict[str, object]] = []
+        self._configured_greedy_path = str(
+            getattr(runner, "greedy_token_path", "full_logits")
+        )
+        self._greedy_capabilities = (
+            callable(getattr(runner, "prefill_slots_local_logits", None)),
+            callable(getattr(runner, "decode_slots_local_logits", None)),
+            callable(getattr(runner, "select_greedy_tokens", None)),
+        )
+        self._token_selection_initialized = False
 
     def now_ms(self) -> float:
         return (self._clock() - self._origin) * 1000.0
@@ -457,11 +466,40 @@ class ContinuousBatchEngine:
             request.spec.config.strategy != "greedy" for request in requests
         ):
             return False
-        if getattr(self.runner, "greedy_token_path", None) != "distributed_argmax":
+        if self._configured_greedy_path != "distributed_argmax":
             return False
-        local_logits = getattr(self.runner, f"{phase}_slots_local_logits", None)
-        select = getattr(self.runner, "select_greedy_tokens", None)
-        return callable(local_logits) and callable(select)
+        return phase in ("prefill", "decode") and all(self._greedy_capabilities)
+
+    def _initialize_token_selection(self) -> None:
+        """首次调度前统一通信协议；后续 batch 不增加配置 collective。"""
+
+        if self._token_selection_initialized:
+            return
+        configuration = (self._configured_greedy_path, self._greedy_capabilities)
+        error = None
+        if (
+            self._configured_greedy_path == "distributed_argmax"
+            and not all(self._greedy_capabilities)
+        ):
+            error = (
+                "distributed_argmax 要求 runner 提供 prefill_slots_local_logits、"
+                "decode_slots_local_logits 和 select_greedy_tokens"
+            )
+        if self.distributed is not None:
+            fingerprint = int.from_bytes(
+                hashlib.sha256(repr(configuration).encode("utf-8")).digest()[:8],
+                "big",
+            ) & ((1 << 63) - 1)
+            primary = torch.tensor(
+                [fingerprint if self.distributed.is_primary else 0],
+                dtype=torch.long,
+                device=self.runner.runtime.device,
+            )
+            self.distributed.broadcast(primary, src=0)
+            if int(primary.item()) != fingerprint:
+                error = f"token selection 配置与 rank 0 不一致：local={configuration!r}"
+        self._raise_if_any_rank_invalid(error, phase="token_selection")
+        self._token_selection_initialized = True
 
     def _finish(
         self,
@@ -779,9 +817,8 @@ class ContinuousBatchEngine:
                     self.runner.runtime.synchronize()
                 selection_path = (
                     "full_gather_sampling_fallback"
-                    if getattr(self.runner, "greedy_token_path", None)
-                    == "distributed_argmax"
-                    else str(getattr(self.runner, "greedy_token_path", "full_logits"))
+                    if self._configured_greedy_path == "distributed_argmax"
+                    else self._configured_greedy_path
                 )
         except Exception as exc:
             failed_at = self.now_ms()
@@ -834,9 +871,8 @@ class ContinuousBatchEngine:
                     self.runner.runtime.synchronize()
                 selection_path = (
                     "full_gather_sampling_fallback"
-                    if getattr(self.runner, "greedy_token_path", None)
-                    == "distributed_argmax"
-                    else str(getattr(self.runner, "greedy_token_path", "full_logits"))
+                    if self._configured_greedy_path == "distributed_argmax"
+                    else self._configured_greedy_path
                 )
         except Exception as exc:
             failed_at = self.now_ms()
@@ -857,6 +893,7 @@ class ContinuousBatchEngine:
     def step(self) -> dict[str, object]:
         """执行一个调度周期；没有请求时返回空 step，但不制造模型调用。"""
 
+        self._initialize_token_selection()
         started_at = self.now_ms()
         active_before = self.running_count
         waiting_before = self.waiting_count
@@ -1060,9 +1097,7 @@ class ContinuousBatchEngine:
                     str(path), 0
                 ) + int(step[f"{phase}_batch_size"])
         token_selection: dict[str, object] = {
-            "configured_greedy_path": str(
-                getattr(self.runner, "greedy_token_path", "full_logits")
-            ),
+            "configured_greedy_path": self._configured_greedy_path,
             "actual_rows_by_path": token_selection_rows,
         }
         metadata = getattr(self.runner, "token_selection_metadata", None)

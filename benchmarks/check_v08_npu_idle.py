@@ -10,7 +10,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from minigpt.mixed_repro import _summarize_initial_npu_state  # noqa: E402
+from minigpt.decode_critical_path import summarize_npu_preflight  # noqa: E402
 from minigpt.serving_telemetry import load_telemetry  # noqa: E402
 
 
@@ -21,16 +21,16 @@ def main() -> None:
     path = Path(args.telemetry)
     if not path.is_absolute():
         path = PROJECT_ROOT / path
-    summary = _summarize_initial_npu_state(
+    summary = summarize_npu_preflight(
         load_telemetry(path),
         expected_logical_device_ids=range(8),
     )
     hbm = summary["overall"]["hbm_usage_percent"]
     aicore = summary["overall"]["aicore_usage_percent"]
-    print(f"preflight HBM max   : {hbm['max']:.3f}%")
-    print(f"preflight AICore max: {aicore['max']:.3f}%")
+    print(f"preflight HBM max   : {hbm['max'] if hbm else 'N/A'}%")
+    print(f"preflight AICore max: {aicore['max'] if aicore else 'N/A'}%")
     if not summary["clean"]:
-        raise SystemExit("NPU preflight 非空闲，拒绝启动正式 A/B")
+        raise SystemExit("NPU preflight 未通过：" + "; ".join(summary["incomplete_reasons"]))
 
 
 if __name__ == "__main__":

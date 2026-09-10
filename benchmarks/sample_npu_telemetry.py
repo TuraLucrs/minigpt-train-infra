@@ -35,6 +35,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interval-ms", type=float, default=200.0)
     parser.add_argument("--timeout-seconds", type=float, default=10.0)
     parser.add_argument("--duration-seconds", type=float, default=None)
+    parser.add_argument("--min-samples", type=int, default=1,
+                        help="有界采集至少完成的查询轮数；失败仍记 errors，不冒充有效样本")
     parser.add_argument("--npu-smi", default="npu-smi")
     parser.add_argument(
         "--query-type",
@@ -80,6 +82,8 @@ def main() -> None:
         raise ValueError("timeout-seconds 必须大于 0")
     if args.duration_seconds is not None and args.duration_seconds <= 0.0:
         raise ValueError("duration-seconds 必须大于 0")
+    if args.min_samples < 1:
+        raise ValueError("min-samples 必须至少为 1")
     targets = _validate_targets(args.target)
     output = project_path(args.output)
     stopped = threading.Event()
@@ -110,6 +114,7 @@ def main() -> None:
         "termination_reason": None,
     }
     started = time.monotonic()
+    cycles = 0
     with ThreadPoolExecutor(max_workers=len(targets)) as executor:
         while not stopped.is_set():
             cycle_started = time.monotonic()
@@ -137,9 +142,11 @@ def main() -> None:
                         }
                     )
             _write_report(output, report)
+            cycles += 1
 
             elapsed = time.monotonic() - started
-            if args.duration_seconds is not None and elapsed >= args.duration_seconds:
+            if (args.duration_seconds is not None and elapsed >= args.duration_seconds
+                    and cycles >= args.min_samples):
                 break
             remaining = args.interval_ms / 1000.0 - (
                 time.monotonic() - cycle_started

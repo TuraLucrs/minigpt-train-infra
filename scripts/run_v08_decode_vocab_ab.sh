@@ -14,6 +14,8 @@ port_base="${MASTER_PORT_BASE:-29810}"
 logical_devices="0,1,2,3,4,5,6,7"
 workload_dir="${WORKLOAD_DIR:-${repo_root}/runs/v08_frozen_workloads}"
 telemetry_pid=""
+active_session_dir=""
+output_owned=0
 
 telemetry_args=(
   --target 0=0:0
@@ -35,15 +37,77 @@ stop_telemetry() {
   fi
   telemetry_pid=""
 }
-trap stop_telemetry EXIT
-trap 'stop_telemetry; exit 130' INT
-trap 'stop_telemetry; exit 143' TERM
+record_session_status() {
+  python - "${active_session_dir}/session_status.json" "$1" "${2:-0}" <<'PY'
+import json
+from pathlib import Path
+import sys
+import time
+
+path, phase, code = Path(sys.argv[1]), sys.argv[2], int(sys.argv[3])
+status = {"started_at_unix_ns": time.time_ns(), "ended_at_unix_ns": None, "exit_code": None}
+if phase == "finish":
+    status = json.loads(path.read_text(encoding="utf-8"))
+    status.update(ended_at_unix_ns=time.time_ns(), exit_code=code)
+temporary = path.with_suffix(".tmp")
+temporary.write_text(json.dumps(status, indent=2) + "\n", encoding="utf-8")
+temporary.replace(path)
+PY
+}
+
+finalize() {
+  local status=$?
+  local summary_status archive_status
+  trap - EXIT INT TERM
+  set +e
+  stop_telemetry
+  # 只归档本次创建的目录；前置校验失败不能触碰已有证据。
+  if [[ "${output_owned}" -eq 1 ]]; then
+    if [[ -n "${active_session_dir}" ]]; then
+      record_session_status finish "${status}"
+    fi
+    python benchmarks/summarize_v08_decode_ab.py \
+      --root "${output_root}" \
+      --output "${output_root}/decode_vocab_ab.json" \
+      --markdown-output "${output_root}/RUN_LOG.md"
+    summary_status=$?
+    if [[ "${status}" -eq 0 && "${summary_status}" -ne 0 ]]; then
+      status=${summary_status}
+    fi
+    printf '%s\n' "${status}" > "${output_root}/EXIT_STATUS"
+    (
+      cd "${output_root}" || exit 1
+      find . -type f ! -name SHA256SUMS -print0 \
+        | sort -z | xargs -0 sha256sum > SHA256SUMS
+    )
+    archive_status=$?
+    if [[ "${archive_status}" -eq 0 ]]; then
+      tar -czf "${archive_output}" \
+        -C "$(dirname "${output_root}")" "$(basename "${output_root}")"
+      archive_status=$?
+    fi
+    if [[ "${archive_status}" -eq 0 ]]; then
+      sha256sum "${archive_output}" > "${archive_output}.sha256"
+      archive_status=$?
+    fi
+    if [[ "${archive_status}" -ne 0 ]]; then
+      echo "证据归档失败，原始文件保留于 ${output_root}" >&2
+      [[ "${status}" -ne 0 ]] || status=${archive_status}
+    else
+      echo "v0.8 A/B 证据（exit=${status}）：${archive_output}"
+    fi
+  fi
+  exit "${status}"
+}
+trap finalize EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 if [[ ! -d "${MODEL_DIR}" ]]; then
   echo "MODEL_DIR 不存在：${MODEL_DIR}" >&2
   exit 1
 fi
-if [[ -e "${output_root}" || -e "${archive_output}" ]]; then
+if [[ -e "${output_root}" || -e "${archive_output}" || -e "${archive_output}.sha256" ]]; then
   echo "A/B 输出已经存在，拒绝覆盖或混入旧证据" >&2
   exit 1
 fi
@@ -68,6 +132,19 @@ for workload in short_short mixed; do
     exit 1
   fi
 done
+python - "${workload_dir}" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+
+sys.path.insert(0, "src")
+from minigpt.decode_critical_path import FORMAL_CASES
+
+for case in FORMAL_CASES.values():
+    path = Path(sys.argv[1]) / (case["workload_class"] + ".json")
+    if hashlib.sha256(path.read_bytes()).hexdigest() != case["source_file_sha256"]:
+        raise SystemExit(f"冻结 workload 哈希不匹配：{path}")
+PY
 
 run_session() {
   local case_id="$1"
@@ -85,10 +162,13 @@ run_session() {
   printf -v session_id 'session-%02d-%s' "${position}" "${greedy_path}"
   session_dir="${output_root}/${case_id}/${session_id}"
   mkdir -p "${session_dir}"
+  active_session_dir="${session_dir}"
+  record_session_status start
 
   python benchmarks/sample_npu_telemetry.py \
     "${telemetry_args[@]}" \
-    --duration-seconds 0.01 \
+    --duration-seconds 1.0 \
+    --min-samples 3 \
     --output "${session_dir}/telemetry_before.json"
   python benchmarks/check_v08_npu_idle.py \
     --telemetry "${session_dir}/telemetry_before.json"
@@ -163,9 +243,12 @@ run_session() {
   python benchmarks/summarize_v071_profile.py \
     --layout-manifest "${session_dir}/layout_manifest.json" \
     --output "${session_dir}/profile_summary.json"
+  record_session_status finish 0
+  active_session_dir=""
 }
 
 mkdir -p "${output_root}"
+output_owned=1
 
 # 每个 workload 都采用 full/candidate/candidate/full，抵消单调机器状态漂移。
 for position in 1 2 3 4; do
@@ -179,22 +262,4 @@ for position in 1 2 3 4; do
     "$((port_base + 4 + position - 1))" 14 1
 done
 
-python benchmarks/summarize_v08_decode_ab.py \
-  --root "${output_root}" \
-  --output "${output_root}/decode_vocab_ab.json" \
-  --markdown-output "${output_root}/RUN_LOG.md"
-
-(
-  cd "${output_root}"
-  find . -type f ! -name SHA256SUMS -print0 \
-    | sort -z \
-    | xargs -0 sha256sum > SHA256SUMS
-)
-tar -czf "${archive_output}" \
-  -C "$(dirname "${output_root}")" \
-  "$(basename "${output_root}")"
-sha256sum "${archive_output}" > "${archive_output}.sha256"
-
-echo "v0.8 A/B 摘要：${output_root}/decode_vocab_ab.json"
-echo "v0.8 A/B 日志：${output_root}/RUN_LOG.md"
-echo "v0.8 A/B 证据：${archive_output}"
+# EXIT handler 对成功、中断和失败执行相同的摘要与归档流程。

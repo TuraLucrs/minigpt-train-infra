@@ -84,3 +84,4 @@ jobs:
           python tests/test_profiling_gate.py
           python tests/test_mixed_repro.py
           python tests/test_decode_critical_path.py
+          python tests/test_v08_runner.py

@@ -402,6 +402,11 @@ collective 输入从每 rank 每请求 37984 bytes 降为 8 bytes。
 通信下降能否转化为原始吞吐、TPOT 和 goodput 收益。完整设计与真机命令见
 [`docs/V0_8_DECODE_CRITICAL_PATH.md`](docs/V0_8_DECODE_CRITICAL_PATH.md)。
 
+v0.8 软件补全还验证首次运行时各 rank 的路径配置一致性，重算逐 step 实际路径和通信
+估算口径，固定源 workload/容量/协议，并检查多样本 NPU preflight、真实 ABBA 时间顺序
+和跨 session 稳定性。证据不足会输出 `incomplete`；失败退出时仍保留原始报告与归档。
+当前属于软件就绪阶段，端到端收益与硬件验收待 Atlas 真机执行。
+
 ## 独立运行一次推理
 
 先使用已有训练产物：

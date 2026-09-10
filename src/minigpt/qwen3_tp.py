@@ -695,6 +695,8 @@ class TensorParallelQwen3ForCausalLM(nn.Module):
             raise ValueError(
                 "distributed greedy argmax 需要 [B, local_vocab_size] logits"
             )
+        if local_logits.dtype not in (torch.float16, torch.bfloat16, torch.float32):
+            raise ValueError("distributed greedy argmax 仅支持 FP16、BF16、FP32 logits")
         if self.config.vocab_size >= 2**24:
             raise ValueError("global token id 超出 FP32 连续整数精确表示范围")
         with torch.profiler.record_function("minigpt::vocab_local_argmax"):
@@ -1060,7 +1062,13 @@ class SlotCachedTensorParallelQwen3ModelRunner(SlotCachedQwen3ModelRunner):
             max_slots=max_slots,
             max_seq_len=max_seq_len,
         )
-        self.greedy_token_path = greedy_token_path
+        self._greedy_token_path = greedy_token_path
+
+    @property
+    def greedy_token_path(self) -> str:
+        """选 token 的通信协议在 runner 生命周期内保持不变。"""
+
+        return self._greedy_token_path
 
     def prefill_slots_local_logits(
         self,
@@ -1105,10 +1113,15 @@ class SlotCachedTensorParallelQwen3ModelRunner(SlotCachedQwen3ModelRunner):
         return self.model.distributed_greedy_argmax(local_logits)
 
     def token_selection_metadata(self) -> dict[str, int | float | str]:
-        local_logit_bytes = self.model.lm_head.weight.element_size()
+        """估算每 rank 每行的 collective 输入，不计 broadcast 或链路传输。"""
+
+        logit_dtype = self.runtime.amp_dtype or self.model.lm_head.weight.dtype
+        local_logit_bytes = torch.tensor([], dtype=logit_dtype).element_size()
         full_gather_bytes = self.model.plan.vocab_size * local_logit_bytes
         candidate_bytes = 2 * torch.tensor([], dtype=torch.float32).element_size()
         return {
+            "measurement_type": "estimate",
+            "payload_scope": "collective_input_per_rank_per_row",
             "configured_greedy_path": self.greedy_token_path,
             "global_vocab_size": self.model.config.vocab_size,
             "local_vocab_size": self.model.plan.vocab_size,

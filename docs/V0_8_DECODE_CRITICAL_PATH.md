@@ -73,9 +73,10 @@ sampling 时，该 batch 自动回退到完整 logits，避免改变采样分布
 warmup、三次 measured replay 和一次排除在性能指标外的有界 Profiler replay。ABBA 顺序
 用于抵消单调机器状态漂移。
 
-每次启动前单独采集八个 NPU 的 HBM 和 AICore；任一 device 超过 HBM 10% 或 AICore 5%
-即拒绝运行。作业期间继续以 200 ms 采集 NPU 状态。这样不会再次接受 v0.7 中被并发负载
-污染的基准。
+每次启动前单独采集八个 NPU 的 HBM 和 AICore：观察至少 1 秒、至少三轮查询，每个 device
+至少三个不同时间戳且跨度不少于 400 ms。检查整个窗口最大值，任一 device 超过 HBM 10%
+或 AICore 5% 即拒绝运行；缺设备、查询错误、采集未完成也不能当作空闲。作业期间继续以
+200 ms 采集 NPU 状态。该检查用于降低复现 v0.7 设备争用污染的风险，不能识别外部进程所有者。
 
 ## 5. 决策门禁
 
@@ -91,9 +92,16 @@ warmup、三次 measured replay 和一次排除在性能指标外的有界 Profi
 session 内重复确定、跨路径计算长度相同，它作为数值警告而不直接否决性能 A/B。算法本身的
 精确等价性由固定 batch 的 CPU/Gloo 测试负责。
 
+只有证据完整且稳定时才作研究判断。跨 session CV 超限、缺失/损坏 artifact、实际路径与
+逐 step 行数不符、protocol/容量不符、与冻结源 workload 哈希不符、session 时间重叠或
+顺序不符，均为 `incomplete`，不能解释为优化无收益。
+
 若任何场景出现超过 2% 的原始吞吐或 goodput 回退，状态为 `candidate_regressed`。若没有
 场景达到上述收益门槛，状态为 `full_vocab_gather_not_end_to_end_bottleneck`，停止继续扩展
 这条优化。
+
+基线 goodput 或 TPOT 为零时，对应倍率为 JSON `null` / Markdown `N/A`；回退门槛直接
+比较原始数值，避免除零与无穷大。基线完成吞吐为零时无法形成有效吞吐对照，判为证据不足。
 
 ## 6. Atlas A3 执行
 
@@ -117,3 +125,32 @@ v0.8_decode_vocab_ab_evidence.tar.gz.sha256
 ```
 
 在真机证据返回前，本阶段状态是“候选实现与 A/B 门禁完成，硬件结论待验收”。
+
+## 7. 软件回归与恢复约定
+
+2026-09-11 的补全增加了 rank 间首次运行前的路径/能力一致性检查（每个 engine 一次）、
+只读 runner 路径配置、FP16/BF16/FP32 与 NaN/Inf/tie/大 token id 测试、固定 batch 全序列
+等价性以及真正的非退化 sampling fallback。CPU/Gloo 同时验证 collective 次序和 payload。
+通信量元数据明确为 `estimate`、`collective_input_per_rank_per_row`，4748× 是输入字节比，
+不能写成实测通信或端到端加速比。
+
+```bash
+python tests/test_qwen3_tp.py
+python tests/test_continuous_batching.py
+python tests/test_serving_workloads.py
+python tests/test_decode_critical_path.py
+python tests/test_v08_runner.py
+MINIGPT_RUN_GLOO_TESTS=1 python tests/test_qwen3_tp.py
+```
+
+Windows 的 PyTorch 2.10 CPU wheel 在本机无法建立 Gloo transport；本地线程回归与真实
+多进程回归分开记录。Linux GitHub Actions 对实际提交运行完整 CPU/Gloo 回归，具体 SHA
+和 run 链接以新交接文档为准。测试中的合成测量 fixture 只验证证据门禁，不属于性能产物。
+
+每次 session 写入带 UNIX ns 边界和退出码的 `session_status.json`。脚本无论正常结束、
+preflight 拒绝、benchmark 失败还是收到中断，都尝试输出 incomplete 摘要、`EXIT_STATUS`、
+`SHA256SUMS` 和 tar/sha256；原始失败退出码优先保留。已有输出拒绝覆盖，失败重跑使用新的
+`V08_OUTPUT_ROOT` 和 `V08_ARCHIVE`。若归档失败，原始目录仍保留并明确报错。
+
+当前交付是软件检查点，不打正式硬件验收 tag。根据本轮明确授权，v0.9 软件开发可以先于
+v0.8 真机实验完成；v0.7/v0.7.1 冻结 tag 与历史证据保持不变。

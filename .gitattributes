@@ -1,0 +1,2 @@
+# Hardware launchers also need to work from Windows Git checkouts.
+*.sh text eol=lf
