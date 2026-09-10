@@ -21,6 +21,13 @@ from minigpt.distributed import (  # noqa: E402
     DistributedContext,
     TensorParallelReplicaContext,
 )
+from minigpt.ascend_profiling import (  # noqa: E402
+    AscendProfileProtocol,
+    AscendStepProfiler,
+    build_profile_manifest,
+    parse_profile_ranks,
+    write_profile_manifest,
+)
 from minigpt.experiment import build_model_directory_provenance  # noqa: E402
 from minigpt.qwen3 import count_qwen3_parameters  # noqa: E402
 from minigpt.qwen3_tp import load_tp_qwen3_slot_runner  # noqa: E402
@@ -89,6 +96,25 @@ def parse_args() -> argparse.Namespace:
         help="正式 Ascend 证据必填；填写环境快照中确认的 CANN 完整版本",
     )
     parser.add_argument("--run-label", default=None)
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="在 measured repeats 之外增加一次 torch_npu Profiler replay",
+    )
+    parser.add_argument(
+        "--profile-ranks",
+        default="all",
+        help="all 或逗号分隔的 global ranks；正式 v0.7.1 gate 必须为 all",
+    )
+    parser.add_argument("--profile-skip-steps", type=int, default=8)
+    parser.add_argument("--profile-warmup-steps", type=int, default=2)
+    parser.add_argument("--profile-active-steps", type=int, default=4)
+    parser.add_argument(
+        "--profile-aic-metrics",
+        choices=("pipe_utilization", "memory", "arithmetic_utilization"),
+        default="pipe_utilization",
+    )
+    parser.add_argument("--profile-memory", action="store_true")
     parser.add_argument("--output-dir", required=True)
     return parser.parse_args()
 
@@ -295,6 +321,38 @@ def main() -> None:
             logical_device_ids[rank] for rank in distributed.group_ranks
         ]
         model_dir = project_path(args.model_dir)
+        output_dir = project_path(args.output_dir)
+        profiling_session = None
+        profile_protocol = None
+        profile_ranks: tuple[int, ...] = ()
+        profile_root = output_dir / "profiler"
+        if args.profile:
+            if global_distributed.runtime.device.type != "npu":
+                raise ValueError("--profile 只支持真实 Ascend NPU")
+            profile_ranks = parse_profile_ranks(
+                args.profile_ranks,
+                global_distributed.world_size,
+            )
+            profile_protocol = AscendProfileProtocol(
+                skip_steps=args.profile_skip_steps,
+                warmup_steps=args.profile_warmup_steps,
+                active_steps=args.profile_active_steps,
+                aic_metrics=args.profile_aic_metrics,
+                profile_memory=args.profile_memory,
+            )
+            profile_protocol.validate()
+            if profile_root.exists():
+                raise FileExistsError(
+                    f"profile 输出目录已经存在，拒绝混入旧数据：{profile_root}"
+                )
+            global_distributed.barrier()
+            profiling_session = AscendStepProfiler(
+                profile_root,
+                global_rank=global_distributed.rank,
+                logical_device_id=logical_device_ids[global_distributed.rank],
+                selected=global_distributed.rank in profile_ranks,
+                protocol=profile_protocol,
+            )
 
         distributed.runtime.synchronize()
         distributed.runtime.reset_peak_memory()
@@ -339,6 +397,7 @@ def main() -> None:
             before_replay=distributed.global_barrier,
             after_replay=distributed.global_barrier,
             deterministic_open_loop=args.deterministic_open_loop,
+            profiling_session=profiling_session,
         )
 
         local_peaks = [
@@ -411,7 +470,6 @@ def main() -> None:
                 for rank, values in enumerate(rank_values)
             ],
         }
-        output_dir = project_path(args.output_dir)
         if global_distributed.is_primary:
             output_dir.mkdir(parents=True, exist_ok=True)
             (output_dir / "source_workload.json").write_bytes(source_payload)
@@ -426,6 +484,40 @@ def main() -> None:
                 encoding="utf-8",
             )
         global_distributed.barrier()
+        profile_manifest_artifact = None
+        if args.profile:
+            assert profile_protocol is not None
+            if global_distributed.is_primary:
+                provenance = json.loads(
+                    (output_dir / "layout_provenance.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                profile_manifest = build_profile_manifest(
+                    profile_root,
+                    layout_id=args.layout_id,
+                    workload_class=source_trace.workload_class,
+                    mode=args.mode,
+                    source_workload_sha256=source_trace.request_sha256,
+                    source_workload_file_sha256=source_file_sha256,
+                    git_commit=str(provenance["git"]["commit"]),
+                    selected_ranks=profile_ranks,
+                    logical_device_ids=logical_device_ids,
+                    protocol=profile_protocol,
+                )
+                profile_manifest_path = output_dir / "profile_manifest.json"
+                write_profile_manifest(profile_manifest_path, profile_manifest)
+            global_distributed.barrier()
+            profile_manifest_path = output_dir / "profile_manifest.json"
+            profile_manifest_payload = profile_manifest_path.read_bytes()
+            profile_manifest_artifact = {
+                "name": profile_manifest_path.name,
+                "sha256": hashlib.sha256(profile_manifest_payload).hexdigest(),
+                "size_bytes": len(profile_manifest_payload),
+            }
+            report["profiling"]["profile_manifest"] = dict(
+                profile_manifest_artifact
+            )
         if distributed.is_primary:
             report["provenance"] = json.loads(
                 (output_dir / "layout_provenance.json").read_text(encoding="utf-8")
@@ -499,6 +591,8 @@ def main() -> None:
                 ).hexdigest(),
                 "reports": report_files,
             }
+            if profile_manifest_artifact is not None:
+                manifest["profile"] = profile_manifest_artifact
             (output_dir / "layout_manifest.json").write_text(
                 json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",

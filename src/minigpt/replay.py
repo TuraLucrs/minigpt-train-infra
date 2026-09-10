@@ -112,6 +112,7 @@ class OfflineTraceReplayer:
         *,
         max_steps: int = 1_000_000,
         script: list[tuple[int, int, int]] | None = None,
+        after_step: Callable[[dict[str, object]], None] | None = None,
     ) -> ReplaySummary:
         """重放 trace。
 
@@ -195,8 +196,10 @@ class OfflineTraceReplayer:
             if action == self.STEP:
                 if scheduler_steps >= max_steps:
                     raise RuntimeError("trace replay 超过 max_steps")
-                self.target.step()
+                step_record = self.target.step()
                 scheduler_steps += 1
+                if after_step is not None:
+                    after_step(step_record)
             elif action == self.WAIT:
                 self.sleeper(wait_us / 1_000_000.0)
                 wait_count += 1

@@ -166,16 +166,29 @@ MiniGPT 的 tiny shape 不足以代表真实 kernel、显存、通信和吞吐�
 - 不同并发和请求分布下的 p50/p95/p99；
 - 明确吞吐与单请求延迟之间的 trade-off。
 
+### v0.7.1——Ascend Profiling Gate
+
+- 保持 v0.7 冻结 tag 和正式 18 点结果不变；
+- 为 Decode、Prefill、control、model 和 token selection 增加可解释范围；
+- 在 measured repeats 之外做一次输出等价的有界 profile replay，避免自污染性能指标；
+- 固定 Level1、PipeUtilization、8/2/4 step 窗口并采集全部 8 个 ranks；
+- 对三组 v0.7 现象运行六点诊断矩阵，校验 operator、kernel、step trace、timeline 和通信证据；
+- 只有完整 gate 才能进入 v0.8 选题，阈值只生成诊断信号，不自动替代工程判断。
+
+这个小版本把“依据真实 profiler 选择 v0.8”所需的最小能力前移；完整协议见
+`docs/V0_7_1_ASCEND_PROFILING_GATE.md`。
+
 ### v0.8——推理专项研究
 
 候选方向包括 Paged KV Cache、量化、Speculative Decoding、CUDA Graph、算子融合、
-Prefix Cache、调度优化和长上下文显存优化。到该阶段根据真实 profiler 和实验瓶颈只选择
-一个有证据、有对照实验的研究问题，不提前凭空锁题。
+Prefix Cache、调度优化和长上下文显存优化。到该阶段根据 v0.7.1 Profiling Gate 的真实
+瓶颈只选择一个有证据、有对照实验的研究问题，不提前凭空锁题。
 
 专项研究只属于推理方向。训练最多用于构造测试模型或验证数值，不构成研究主题。
 
-### v0.9——Ascend 适配、Profiler 与真实多卡实验
+### v0.9——扩展 Ascend 适配、Profiler 后端化与真实多卡实验
 
+- 将 v0.7.1 的最小 Ascend Profiler collector 收敛到稳定后端抽象；
 - `torch_npu`、CANN、HCCL 和 Ascend profiler 限制在后端目录；
 - A3 测试 2/4/8/16 个 logical devices，并同时记录物理卡数；
 - A5 测试 1/2/4/8 个 devices；

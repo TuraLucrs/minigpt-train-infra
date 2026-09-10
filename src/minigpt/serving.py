@@ -727,19 +727,23 @@ class ContinuousBatchEngine:
         return resolved
 
     def _decode_running(self) -> tuple[list[str], list[str]]:
-        requests = self._synchronized_decode_requests()
+        with torch.profiler.record_function("minigpt::decode_control"):
+            requests = self._synchronized_decode_requests()
         if not requests:
             return [], []
-        slot_ids = [int(request.slot_id) for request in requests]
-        input_ids = torch.tensor(
-            [[request.generated_ids[-1]] for request in requests],
-            dtype=torch.long,
-            device=self.runner.runtime.device,
-        )
+        with torch.profiler.record_function("minigpt::decode_prepare"):
+            slot_ids = [int(request.slot_id) for request in requests]
+            input_ids = torch.tensor(
+                [[request.generated_ids[-1]] for request in requests],
+                dtype=torch.long,
+                device=self.runner.runtime.device,
+            )
         try:
-            logits = self.runner.decode_slots(slot_ids, input_ids)
-            next_ids = self._select_tokens(logits, requests)
-            self.runner.runtime.synchronize()
+            with torch.profiler.record_function("minigpt::decode_model"):
+                logits = self.runner.decode_slots(slot_ids, input_ids)
+            with torch.profiler.record_function("minigpt::decode_select_tokens"):
+                next_ids = self._select_tokens(logits, requests)
+                self.runner.runtime.synchronize()
         except Exception as exc:
             failed_at = self.now_ms()
             self._fail_requests(requests, exc, failed_at)
@@ -753,16 +757,24 @@ class ContinuousBatchEngine:
         return [request.request_id for request in requests], finished
 
     def _admit_and_prefill(self) -> tuple[list[str], list[str]]:
-        requests = self._synchronized_admissions()
+        with torch.profiler.record_function("minigpt::prefill_control"):
+            requests = self._synchronized_admissions()
         if not requests:
             return [], []
 
-        input_ids, attention_mask = self._encode_prefill_batch(requests)
-        slot_ids = [int(request.slot_id) for request in requests]
+        with torch.profiler.record_function("minigpt::prefill_prepare"):
+            input_ids, attention_mask = self._encode_prefill_batch(requests)
+            slot_ids = [int(request.slot_id) for request in requests]
         try:
-            logits = self.runner.prefill_slots(slot_ids, input_ids, attention_mask)
-            next_ids = self._select_tokens(logits, requests)
-            self.runner.runtime.synchronize()
+            with torch.profiler.record_function("minigpt::prefill_model"):
+                logits = self.runner.prefill_slots(
+                    slot_ids,
+                    input_ids,
+                    attention_mask,
+                )
+            with torch.profiler.record_function("minigpt::prefill_select_tokens"):
+                next_ids = self._select_tokens(logits, requests)
+                self.runner.runtime.synchronize()
         except Exception as exc:
             failed_at = self.now_ms()
             self._fail_requests(requests, exc, failed_at)
@@ -785,8 +797,14 @@ class ContinuousBatchEngine:
         started_at = self.now_ms()
         active_before = self.running_count
         waiting_before = self.waiting_count
-        decoded, decode_finished = self._decode_running()
-        admitted, prefill_finished = self._admit_and_prefill()
+        with torch.profiler.record_function("minigpt::decode_phase"):
+            decode_started_at = self.now_ms()
+            decoded, decode_finished = self._decode_running()
+            decode_ended_at = self.now_ms()
+        with torch.profiler.record_function("minigpt::prefill_phase"):
+            prefill_started_at = self.now_ms()
+            admitted, prefill_finished = self._admit_and_prefill()
+            prefill_ended_at = self.now_ms()
         ended_at = self.now_ms()
         active_slots = sorted(self.allocator.owners)
         used_tokens = sum(self.runner.cache_lengths(active_slots))
@@ -795,6 +813,14 @@ class ContinuousBatchEngine:
             "started_at_ms": started_at,
             "ended_at_ms": ended_at,
             "duration_ms": ended_at - started_at,
+            "decode_phase_ms": decode_ended_at - decode_started_at,
+            "prefill_phase_ms": prefill_ended_at - prefill_started_at,
+            "scheduler_bookkeeping_ms": max(
+                0.0,
+                (ended_at - started_at)
+                - (decode_ended_at - decode_started_at)
+                - (prefill_ended_at - prefill_started_at),
+            ),
             "active_before": active_before,
             "waiting_before": waiting_before,
             "decode_batch_size": len(decoded),
@@ -949,6 +975,14 @@ class ContinuousBatchEngine:
             ),
             default=0,
         )
+        internal_waste_ratios = [
+            (
+                (int(step["kv_reserved_tokens"]) - int(step["kv_used_tokens"]))
+                / int(step["kv_reserved_tokens"])
+            )
+            for step in self.steps
+            if int(step["kv_reserved_tokens"]) > 0
+        ]
         state_counts = {
             state.value: sum(item["state"] == state.value for item in request_metrics)
             for state in RequestState
@@ -1005,6 +1039,15 @@ class ContinuousBatchEngine:
                 "peak_used_tokens": peak_used_tokens,
                 "peak_reserved_tokens": peak_reserved_tokens,
                 "peak_internal_waste_tokens": peak_internal_waste_tokens,
+                "peak_internal_waste_capacity_ratio": (
+                    peak_internal_waste_tokens
+                    / (self.allocator.capacity * self.runner.max_seq_len)
+                ),
+                "mean_active_internal_waste_ratio": (
+                    statistics.fmean(internal_waste_ratios)
+                    if internal_waste_ratios
+                    else 0.0
+                ),
                 "external_fragmentation_tokens": 0,
             },
             "requests": request_metrics,

@@ -106,6 +106,35 @@ class AdvancingRunner:
         return self.delegate.cache_lengths(slot_ids)
 
 
+class RecordingStepProfiler:
+    def __init__(self) -> None:
+        self.started = False
+        self.finished = False
+        self.records: list[dict[str, object]] = []
+
+    def __enter__(self) -> "RecordingStepProfiler":
+        assert self.started is False
+        self.started = True
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        assert self.started is True
+        self.finished = True
+
+    def step(self, record: dict[str, object]) -> None:
+        assert self.started is True and self.finished is False
+        self.records.append(record)
+
+    def metadata(self) -> dict[str, object]:
+        assert self.finished is True
+        return {
+            "collector": "test",
+            "selected": True,
+            "observed_scheduler_steps": len(self.records),
+            "protocol": {"kind": "test"},
+        }
+
+
 def build_engine(
     clock: ManualClock,
     *,
@@ -311,6 +340,9 @@ def check_replay_benchmark_protocol() -> None:
     assert report["summary"]["goodput_requests_per_second"]["median"] > 0.0
     assert report["summary"]["ttft_ms"]["p95"] >= 0.0
     assert report["summary"]["active_batch_size"]["p99"] >= 1.0
+    assert report["summary"]["scheduler_phase_fraction"][
+        "decode_phase_ms"
+    ]["median"] >= 0.0
 
     scripted_clock = ManualClock()
     scripted_report = benchmark_trace_replay(
@@ -332,6 +364,32 @@ def check_replay_benchmark_protocol() -> None:
         scripted_report["runs"][0]["output_sha256"]
         == scripted_report["runs"][1]["output_sha256"]
     )
+
+    profiled_clock = ManualClock()
+    profiler = RecordingStepProfiler()
+    profiled_report = benchmark_trace_replay(
+        build_engine(profiled_clock, seed=31, max_slots=2),
+        tiny_trace(arrival_interval_ms=1.0),
+        mode="open_loop",
+        closed_loop_clients=None,
+        warmup=1,
+        repeats=2,
+        ttft_slo_ms=1_000.0,
+        tpot_slo_ms=1_000.0,
+        e2e_slo_ms=1_000.0,
+        clock=profiled_clock,
+        sleeper=profiled_clock.advance,
+        deterministic_open_loop=True,
+        profiling_session=profiler,
+    )
+    assert len(profiled_report["runs"]) == 2
+    assert profiled_report["profiling"]["measurement_excluded"] is True
+    assert profiled_report["profiling"]["observed_scheduler_steps"] == len(
+        profiler.records
+    )
+    assert profiled_report["profiling"]["replay"]["output_sha256"] in {
+        run["output_sha256"] for run in profiled_report["runs"]
+    }
 
     try:
         benchmark_trace_replay(
@@ -391,6 +449,10 @@ def fake_layout_report(
             "requests": requests,
             "steps": [
                 {
+                    "duration_ms": 10.0,
+                    "decode_phase_ms": 6.0,
+                    "prefill_phase_ms": 3.0,
+                    "scheduler_bookkeeping_ms": 1.0,
                     "active_after": len(requests),
                     "decode_batch_size": len(requests),
                     "prefill_batch_size": len(requests),
@@ -401,6 +463,8 @@ def fake_layout_report(
                 "peak_slots_used": min(len(requests), max_slots),
                 "peak_used_tokens": 64,
                 "peak_internal_waste_tokens": 16,
+                "peak_internal_waste_capacity_ratio": 16 / (max_slots * 4096),
+                "mean_active_internal_waste_ratio": 0.5,
                 "external_fragmentation_tokens": 0,
             },
         }
@@ -415,7 +479,7 @@ def fake_layout_report(
                 "serving": serving,
             }
         )
-    return {
+    report = {
         "benchmark": "continuous_batching_trace_replay",
         "protocol": {
             "mode": mode,
@@ -522,6 +586,31 @@ def fake_layout_report(
         "evidence_class": "qwen3_32b_ascend_continuous_batching_candidate",
         "runs": runs,
     }
+    report["profiling"] = {
+        "collector": "torch_npu.profiler",
+        "selected": True,
+        "global_rank": replica_index * tp_size,
+        "logical_device_id": local_devices[0],
+        "observed_scheduler_steps": 16,
+        "measurement_excluded": True,
+        "protocol": {
+            "skip_steps": 8,
+            "warmup_steps": 2,
+            "active_steps": 4,
+            "profiler_level": "level1",
+            "aic_metrics": "pipe_utilization",
+            "record_shapes": True,
+            "profile_memory": False,
+            "with_stack": False,
+            "sys_interconnection": True,
+        },
+        "replay": {
+            "scheduler_steps": 16,
+            "wall_time_ms": duration_ms,
+            "output_sha256": runs[0]["output_sha256"],
+        },
+    }
+    return report
 
 
 def fake_source_trace(
