@@ -1,7 +1,9 @@
 # MiniGPT 推理 Infra 交接：v0.8 / v0.9 软件就绪
 
-> 日期：2026-09-11（Asia/Shanghai）  
-> 仓库：https://github.com/TuraLucrs/minigpt-train-infra  
+> 日期：2026-09-11（Asia/Shanghai）
+>
+> 仓库：https://github.com/TuraLucrs/minigpt-train-infra
+>
 > 本文记录软件交付与恢复入口；真实硬件验收、性能结论和正式版本 tag 仍待完成。
 
 ## 0. 新会话先读
@@ -165,7 +167,7 @@ python tests/test_benchmark_entrypoints.py
 MINIGPT_RUN_GLOO_TESTS=1 python tests/test_experiment_matrix.py
 ```
 
-`tests/test_experiment_matrix.py` 默认真实执行 CPU TP1 的 4 点，并正确断言全矩阵仍缺 12 点；环境变量启用后在同一配置上继续 TP2/TP4，最终要求 16/16 完整。失败/timeout/锁、重试与孤儿记录、resume 复用、raw replay 与 protocol/manifest/hash/identity 篡改均有回归。
+`tests/test_experiment_matrix.py` 默认真实执行 CPU TP1 的 4 点，并正确断言全矩阵仍缺 12 点；环境变量启用后在同一配置上继续 TP2/TP4，最终要求 16/16 完整。失败/timeout/锁、重试与孤儿记录、resume 复用、raw replay 与 protocol/manifest/hash/identity 篡改均有回归。Linux CI 还真实运行了 timeout、SIGTERM、控制器与 launcher 被强杀后的孤儿 worker 三种退出场景，核验无关进程存活和锁/resume 保护；三种均已通过。
 
 矩阵排错先读 `matrix_state.json` 对应 attempt、`preflight.log`、`runtime_probe.json`、`device_preflight.json`（硬件）和 `benchmark.log`；再读 output 下原始 benchmark 与 profile。Linux 进程回收问题另查 `.process_guards/` 和 attempt 的 `*.process_tree.json`，根据记录的 PID/创建标记核查现场；删除锁或登记不能证明 worker 已停止。不要直接修改 journal 将失败改成 succeeded。
 
@@ -181,7 +183,7 @@ v1.0 仍是可复现的推理研究基础设施，最终研究成果需要真实
 
 - **源码快照**保留提交内的源码、入口、测试、脚本、配置、文档、精选 artifacts 和三个根目录 evidence 压缩包，v0.8 默认脚本所需的冻结 workload 也在其中；不包含 Python venv、模型权重、`v0.7.1_profiling_detail` 大型原始明细或完整 `.git`。
 - **增量 bundle**保留本轮起点之后的 v0.8/v0.9 Git 对象与分支，需要已有起点提交及其历史对象的仓库，不能单独 `git clone` 成完整历史。
-- 已执行 bundle prerequisite 验证、SHA-256、源码归档逐文件核验和恢复检查，详情见回执。GitHub 分支是远端恢复链，本地 outputs 是可带走的恢复材料；同一磁盘目录不算异地备份，也没有宣称上传到另一个资料库。
+- 核验范围包括 bundle prerequisite、SHA-256、源码归档逐文件回读和恢复检查，实际执行结果见回执。GitHub 分支是远端恢复链，本地 outputs 是可带走的恢复材料；同一磁盘目录不算异地备份，也没有宣称上传到另一个资料库。
 - 原用户的 2026-09-10 紧急全量备份及其 12 卷校验仍在旧交接文档中；本次没有改写该旧文档。若使用旧备份，先按旧哈希恢复基线，再应用本次 bundle。
 
 有基线仓库时恢复增量示例：
