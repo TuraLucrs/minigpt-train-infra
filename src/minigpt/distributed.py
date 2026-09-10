@@ -12,6 +12,7 @@ import torch
 import torch.distributed as dist
 
 from .runtime import RuntimeContext
+from .backends.runtime import get_runtime_backend
 
 
 def _environment_int(name: str, default: int) -> int:
@@ -25,11 +26,7 @@ def _environment_int(name: str, default: int) -> int:
 
 
 def _default_backend(device_type: str) -> str:
-    if device_type == "cuda":
-        return "nccl"
-    if device_type == "npu":
-        return "hccl"
-    return "gloo"
+    return get_runtime_backend(device_type).distributed_backend
 
 
 @dataclass
@@ -199,12 +196,6 @@ class DistributedContext:
         return tensor
 
     def metadata(self) -> dict[str, str | int | bool]:
-        if self.runtime.device.type == "cuda":
-            visible_device_count = torch.cuda.device_count()
-        elif self.runtime.device.type == "npu":
-            visible_device_count = torch.npu.device_count()  # type: ignore[attr-defined]
-        else:
-            visible_device_count = 0
         return {
             "backend": self.backend,
             "rank": self.rank,
@@ -213,7 +204,7 @@ class DistributedContext:
             "is_primary": self.is_primary,
             "process_group_initialized": dist.is_available() and dist.is_initialized(),
             "hostname": socket.gethostname(),
-            "visible_device_count": visible_device_count,
+            "visible_device_count": self.runtime.visible_device_count(),
         }
 
     def close(self) -> None:

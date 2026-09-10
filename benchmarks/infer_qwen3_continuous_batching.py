@@ -35,6 +35,10 @@ from minigpt.serving import ContinuousBatchEngine  # noqa: E402
 from minigpt.serving_benchmark import benchmark_trace_replay  # noqa: E402
 from minigpt.replica import partition_workload_by_projected_load  # noqa: E402
 from minigpt.workload import WorkloadTrace  # noqa: E402
+from minigpt.backends import profiling as portable_profiling  # noqa: E402
+from minigpt.benchmark_contract import (  # noqa: E402
+    memory_from_measured_runs, validate_device_mapping,
+)
 
 
 QWEN3_32B_PARAMETERS = 32_762_123_264
@@ -124,6 +128,8 @@ def parse_args() -> argparse.Namespace:
         default="pipe_utilization",
     )
     parser.add_argument("--profile-memory", action="store_true")
+    parser.add_argument("--profile-format", choices=("legacy_ascend", "portable"), default="legacy_ascend",
+                        help="v0.7.1/v0.8 保留 legacy_ascend；v0.9 使用 CPU/CUDA/Ascend portable schema v2")
     parser.add_argument("--output-dir", required=True)
     return parser.parse_args()
 
@@ -151,7 +157,15 @@ def parse_device_ids(value: str, world_size: int) -> list[int]:
 def validate_layout(
     args: argparse.Namespace,
     global_world_size: int,
+    device_type: str | None = None,
 ) -> list[int]:
+    cpu_processes = (device_type or getattr(args, "device", None)) == "cpu"
+    if cpu_processes:
+        if args.physical_card_count != 0 or args.chips_per_card != 0:
+            raise ValueError("CPU 进程拓扑使用 physical-card-count=0、chips-per-card=0")
+        if args.tp_size <= 0 or global_world_size % args.tp_size:
+            raise ValueError("tp-size 必须为 global world_size 的正因数")
+        return parse_device_ids(args.logical_device_ids, global_world_size)
     if args.physical_card_count <= 0 or args.chips_per_card <= 0:
         raise ValueError("physical-card-count/chips-per-card 必须大于 0")
     if args.tp_size <= 0 or global_world_size % args.tp_size != 0:
@@ -290,7 +304,8 @@ def main() -> None:
             backend=args.backend,
             timeout_seconds=args.distributed_timeout_seconds,
         )
-        logical_device_ids = validate_layout(args, global_distributed.world_size)
+        logical_device_ids = validate_layout(args, global_distributed.world_size, global_distributed.runtime.device.type)
+        device_mapping = validate_device_mapping(global_distributed, logical_device_ids)
         distributed = TensorParallelReplicaContext.create(
             global_distributed,
             tp_size=args.tp_size,
@@ -336,31 +351,31 @@ def main() -> None:
         profile_ranks: tuple[int, ...] = ()
         profile_root = output_dir / "profiler"
         if args.profile:
-            if global_distributed.runtime.device.type != "npu":
+            portable_profile = args.profile_format == "portable"
+            if not portable_profile and global_distributed.runtime.device.type != "npu":
                 raise ValueError("--profile 只支持真实 Ascend NPU")
             profile_ranks = parse_profile_ranks(
                 args.profile_ranks,
                 global_distributed.world_size,
             )
-            profile_protocol = AscendProfileProtocol(
-                skip_steps=args.profile_skip_steps,
-                warmup_steps=args.profile_warmup_steps,
-                active_steps=args.profile_active_steps,
-                aic_metrics=args.profile_aic_metrics,
-                profile_memory=args.profile_memory,
+            protocol_args = dict(skip_steps=args.profile_skip_steps, warmup_steps=args.profile_warmup_steps,
+                                 active_steps=args.profile_active_steps, profile_memory=args.profile_memory)
+            profile_protocol = (
+                portable_profiling.ProfileProtocol(**protocol_args, ascend_aic_metrics=args.profile_aic_metrics)
+                if portable_profile else AscendProfileProtocol(**protocol_args, aic_metrics=args.profile_aic_metrics)
             )
             profile_protocol.validate()
-            if profile_root.exists():
+            if profile_root.exists() or (output_dir / "profile_manifest.json").exists():
                 raise FileExistsError(
                     f"profile 输出目录已经存在，拒绝混入旧数据：{profile_root}"
                 )
             global_distributed.barrier()
-            profiling_session = AscendStepProfiler(
-                profile_root,
-                global_rank=global_distributed.rank,
-                logical_device_id=logical_device_ids[global_distributed.rank],
-                selected=global_distributed.rank in profile_ranks,
-                protocol=profile_protocol,
+            collector_args = dict(global_rank=global_distributed.rank,
+                                  logical_device_id=logical_device_ids[global_distributed.rank],
+                                  selected=global_distributed.rank in profile_ranks, protocol=profile_protocol)
+            profiling_session = (
+                portable_profiling.create_step_profiler(global_distributed.runtime, profile_root, **collector_args)
+                if portable_profile else AscendStepProfiler(profile_root, **collector_args)
             )
 
         distributed.runtime.synchronize()
@@ -441,6 +456,7 @@ def main() -> None:
         }
         report["protocol"]["greedy_token_path"] = args.greedy_token_path
         report["engine"]["token_selection"] = runner.token_selection_metadata()
+        report["memory_measurements"] = memory_from_measured_runs(distributed, replica_device_ids, report["runs"])
         report["workload"]["encoded_prompt_lengths"] = encoded_prompt_lengths
         report["workload"]["source_file_sha256"] = source_file_sha256
         report["environment"]["cann_version"] = args.cann_version
@@ -467,6 +483,7 @@ def main() -> None:
             "chips_per_card": args.chips_per_card,
             "interconnect_topology": args.interconnect_topology,
             "run_label": args.run_label,
+            "device_mapping": device_mapping,
             "rank_results_consistent": True,
             "per_rank": [
                 {
@@ -505,7 +522,8 @@ def main() -> None:
                         encoding="utf-8"
                     )
                 )
-                profile_manifest = build_profile_manifest(
+                manifest_builder = portable_profiling.build_profile_manifest if args.profile_format == "portable" else build_profile_manifest
+                profile_manifest = manifest_builder(
                     profile_root,
                     layout_id=args.layout_id,
                     workload_class=source_trace.workload_class,
@@ -516,6 +534,7 @@ def main() -> None:
                     selected_ranks=profile_ranks,
                     logical_device_ids=logical_device_ids,
                     protocol=profile_protocol,
+                    **({"runtime": global_distributed.runtime} if args.profile_format == "portable" else {}),
                 )
                 profile_manifest_path = output_dir / "profile_manifest.json"
                 write_profile_manifest(profile_manifest_path, profile_manifest)

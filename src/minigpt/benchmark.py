@@ -9,15 +9,18 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+import hashlib
+import json
 import math
 import platform
 import statistics
 import time
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import torch
 
 from .inference import GenerationConfig, GenerationResult, InferenceEngine
+from .backends.profile_types import StepProfiler
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,41 @@ class InferenceRunMetrics:
 class TimedGeneration:
     result: GenerationResult
     metrics: InferenceRunMetrics
+
+
+@dataclass(frozen=True)
+class TimedStaticBatch:
+    results: list[GenerationResult]
+    metrics: dict[str, object]
+    requests: list[dict[str, object]]
+
+
+def _request_record(
+    row: int, result: GenerationResult, *, ttft_ms: float,
+    tpot_ms: float | None, e2e_latency_ms: float,
+) -> dict[str, object]:
+    return {
+        "request_id": str(row), "row_index": row, "state": "finished",
+        "prompt_ids": list(result.prompt_ids), "generated_ids": list(result.generated_ids),
+        "stop_reason": result.stop_reason, "input_tokens": len(result.prompt_ids),
+        "output_tokens": len(result.generated_ids), "ttft_ms": ttft_ms,
+        "tpot_ms": tpot_ms, "e2e_latency_ms": e2e_latency_ms,
+    }
+
+
+def generation_output_digest(requests: Sequence[dict[str, object]]) -> str:
+    """Hash request identity, input, output and terminal state in row order.
+
+    Recompute after replacing benchmark row IDs with workload request IDs,
+    including the corresponding independent profiling replay records.
+    """
+    canonical = [{key: row[key] for key in (
+        "request_id", "prompt_ids", "generated_ids", "stop_reason", "state",
+    )} for row in requests]
+    return hashlib.sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
+
+
+_output_digest = generation_output_digest
 
 
 def percentile(values: Sequence[float], quantile: float) -> float:
@@ -84,7 +122,10 @@ def summarize(values: Sequence[float]) -> dict[str, float | int]:
 
 
 @torch.inference_mode()
-def timed_generate(engine: InferenceEngine, prompt: str, config: GenerationConfig) -> TimedGeneration:
+def timed_generate(
+    engine: InferenceEngine, prompt: str, config: GenerationConfig, *,
+    after_step: Callable[[dict[str, object]], None] | None = None,
+) -> TimedGeneration:
     """执行一次可测量的同步请求。
 
     TTFT 从请求开始计到第一个 token 已取回并 decode 为文本，因此包含 tokenizer、Host 调度、
@@ -111,14 +152,19 @@ def timed_generate(engine: InferenceEngine, prompt: str, config: GenerationConfi
     generator = engine.make_generator(config)
 
     prefill_start = time.perf_counter()
-    next_logits = engine.runner.prefill(input_ids, attention_mask)
-    next_id = engine.select_next_token(next_logits, config, generator)
-    next_id = engine.synchronize_next_ids(next_id)
-    runtime.synchronize()
-    prefill_end = time.perf_counter()
-    generated_ids = [int(next_id[0, 0].item())]
-    engine.tokenizer.decode(generated_ids)
-    first_token_ready = time.perf_counter()
+    with torch.profiler.record_function("minigpt::prefill_phase"):
+        with torch.profiler.record_function("minigpt::prefill_model"):
+            next_logits = engine.runner.prefill(input_ids, attention_mask)
+        with torch.profiler.record_function("minigpt::prefill_token_selection"):
+            next_id = engine.select_next_token(next_logits, config, generator)
+            next_id = engine.synchronize_next_ids(next_id)
+            runtime.synchronize()
+        prefill_end = time.perf_counter()
+        generated_ids = [int(next_id[0, 0].item())]
+        engine.tokenizer.decode(generated_ids)
+        first_token_ready = time.perf_counter()
+    if after_step is not None:
+        after_step({"prefill_batch_size": 1, "decode_batch_size": 0})
 
     decode_step_seconds: list[float] = []
     stop_reason = "length"
@@ -129,17 +175,22 @@ def timed_generate(engine: InferenceEngine, prompt: str, config: GenerationConfi
         if finished:
             break
         decode_start = time.perf_counter()
-        next_logits = engine.runner.decode(
-            next_id,
-            torch.ones(1, dtype=torch.bool, device=next_id.device),
-        )
-        next_id = engine.select_next_token(next_logits, config, generator)
-        next_id = engine.synchronize_next_ids(next_id)
-        runtime.synchronize()
-        token_id = int(next_id[0, 0].item())
-        generated_ids.append(token_id)
-        engine.tokenizer.decode([token_id])
-        decode_step_seconds.append(time.perf_counter() - decode_start)
+        with torch.profiler.record_function("minigpt::decode_phase"):
+            with torch.profiler.record_function("minigpt::decode_model"):
+                next_logits = engine.runner.decode(
+                    next_id,
+                    torch.ones(1, dtype=torch.bool, device=next_id.device),
+                )
+            with torch.profiler.record_function("minigpt::decode_token_selection"):
+                next_id = engine.select_next_token(next_logits, config, generator)
+                next_id = engine.synchronize_next_ids(next_id)
+                runtime.synchronize()
+            token_id = int(next_id[0, 0].item())
+            generated_ids.append(token_id)
+            engine.tokenizer.decode([token_id])
+            decode_step_seconds.append(time.perf_counter() - decode_start)
+        if after_step is not None:
+            after_step({"prefill_batch_size": 0, "decode_batch_size": 1})
         if token_id in stop_token_ids:
             finished = True
             stop_reason = "eos"
@@ -194,6 +245,8 @@ def benchmark_generation(
     config: GenerationConfig,
     warmup: int = 2,
     repeats: int = 5,
+    *,
+    profiling_session: StepProfiler | None = None,
 ) -> dict[str, Any]:
     """先 warmup，再重复测量并返回可直接写入 JSON 的完整报告。"""
 
@@ -206,11 +259,48 @@ def benchmark_generation(
         engine.generate(prompt, config)
         engine.runner.runtime.synchronize()
 
-    timed_runs = [timed_generate(engine, prompt, config) for _ in range(repeats)]
+    timed_runs: list[TimedGeneration] = []
+    measured_memory: list[dict[str, object]] = []
+    for _ in range(repeats):
+        timed_runs.append(timed_generate(engine, prompt, config))
+        # Capture before the next run resets allocator peaks or a profiler
+        # replay allocates trace buffers on the device.
+        measured_memory.append(engine.runner.runtime.memory_snapshot().to_dict())
     expected_ids = timed_runs[0].result.generated_ids
     if any(run.result.generated_ids != expected_ids for run in timed_runs[1:]):
         raise AssertionError("重复 benchmark 生成结果不稳定")
-    run_dicts = [asdict(run.metrics) for run in timed_runs]
+    run_dicts = []
+    for run, memory_snapshot in zip(timed_runs, measured_memory):
+        requests = [_request_record(
+            0, run.result, ttft_ms=run.metrics.ttft_ms,
+            tpot_ms=run.metrics.tpot_ms, e2e_latency_ms=run.metrics.e2e_latency_ms,
+        )]
+        run_dicts.append({**asdict(run.metrics), "requests": requests,
+                         "memory_snapshot": memory_snapshot, "output_sha256": _output_digest(requests)})
+
+    profiling = None
+    if profiling_session is not None:
+        steps = 0
+
+        def after_step(record: dict[str, object]) -> None:
+            nonlocal steps
+            steps += 1
+            profiling_session.step(record)
+
+        with profiling_session:
+            profile_run = timed_generate(engine, prompt, config, after_step=after_step)
+        profile_requests = [_request_record(
+            0, profile_run.result, ttft_ms=profile_run.metrics.ttft_ms,
+            tpot_ms=profile_run.metrics.tpot_ms, e2e_latency_ms=profile_run.metrics.e2e_latency_ms,
+        )]
+        digest = _output_digest(profile_requests)
+        if digest != run_dicts[0]["output_sha256"]:
+            raise AssertionError("profiling replay 与 measured single-request 输出不一致")
+        profiling = {
+            **profiling_session.metadata(), "measurement_excluded": True,
+            "replay": {"scheduler_steps": steps, "wall_time_ms": profile_run.metrics.e2e_latency_ms,
+                       "output_sha256": digest, "requests": profile_requests},
+        }
 
     summary_fields = (
         "tokenization_ms",
@@ -235,7 +325,7 @@ def benchmark_generation(
         summary["decode_tokens_per_second"] = summarize(decode_throughput_values)
 
     runtime = engine.runner.runtime
-    return {
+    report = {
         "schema_version": 2,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "benchmark": f"single_request_{runtime.device.type}_{engine.runner.implementation_name}",
@@ -271,6 +361,9 @@ def benchmark_generation(
         "runs": run_dicts,
         "summary": summary,
     }
+    if profiling is not None:
+        report["profiling"] = profiling
+    return report
 
 
 def compare_decode_modes(
@@ -321,6 +414,140 @@ def compare_decode_modes(
 
 
 @torch.inference_mode()
+def timed_static_batch(
+    engine: InferenceEngine, prompts: Sequence[str], config: GenerationConfig, *,
+    after_step: Callable[[dict[str, object]], None] | None = None,
+) -> TimedStaticBatch:
+    """Measure each row's actual first token and terminal delivery boundary.
+
+All rows arrive together. A completed row is detokenized and timestamped at
+that step, while the remaining rows continue through masked Decode. Batch E2E
+is kept separately from per-request E2E. Sampling consumes generators in the
+same row order as InferenceEngine.generate_batch, including inactive rows.
+"""
+    if not prompts:
+        raise ValueError("prompts 不能为空")
+    config.validate()
+    stop_tokens = frozenset(config.stop_token_ids())
+    if any(token >= engine.tokenizer.vocab_size for token in stop_tokens):
+        raise ValueError("停止 token 超出 tokenizer 词表")
+    runtime = engine.runner.runtime
+    runtime.synchronize()
+    runtime.reset_peak_memory()
+    started_unix_ns = time.time_ns()
+    started = time.perf_counter()
+    input_ids, attention_mask, prompt_rows = engine.encode_prompts(prompts)
+    engine.validate_generation_capacity(prompt_rows, config.max_new_tokens)
+    tokenization_end = time.perf_counter()
+    batch_size = len(prompts)
+    generators = engine.make_generators(config, batch_size)
+    generated: list[list[int]] = [[] for _ in prompts]
+    finished = [False] * batch_size
+    first_ready: list[float | None] = [None] * batch_size
+    last_ready: list[float | None] = [None] * batch_size
+    token_intervals: list[list[float]] = [[] for _ in prompts]
+    results: list[GenerationResult | None] = [None] * batch_size
+    requests: list[dict[str, object] | None] = [None] * batch_size
+    decode_step_ms: list[float] = []
+
+    def select(logits: torch.Tensor) -> torch.Tensor:
+        ids = torch.cat([
+            engine.select_next_token(logits[row : row + 1], config, generators[row])
+            for row in range(batch_size)
+        ])
+        ids = engine.synchronize_next_ids(ids)
+        runtime.synchronize()
+        return ids
+
+    def deliver(next_ids: torch.Tensor, step: int) -> None:
+        for row, prompt in enumerate(prompts):
+            if finished[row]:
+                next_ids[row, 0] = engine.pad_token_id
+                continue
+            token_id = int(next_ids[row, 0].item())
+            generated[row].append(token_id)
+            engine.tokenizer.decode([token_id])
+            ready = time.perf_counter()
+            if first_ready[row] is None:
+                first_ready[row] = ready
+            else:
+                token_intervals[row].append((ready - float(last_ready[row])) * 1000.0)
+            last_ready[row] = ready
+            is_eos = token_id in stop_tokens
+            if not is_eos and step + 1 < config.max_new_tokens:
+                continue
+            finished[row] = True
+            all_ids = prompt_rows[row] + generated[row]
+            result = GenerationResult(
+                prompt_text=prompt, completion_text=engine.tokenizer.decode(generated[row]),
+                full_text=engine.tokenizer.decode(all_ids), prompt_ids=list(prompt_rows[row]),
+                generated_ids=list(generated[row]), all_ids=all_ids,
+                prefill_tokens=min(len(prompt_rows[row]), engine.runner.block_size),
+                stop_reason="eos" if is_eos else "length",
+            )
+            completed = time.perf_counter()
+            results[row] = result
+            request = _request_record(
+                row, result, ttft_ms=(float(first_ready[row]) - started) * 1000.0,
+                tpot_ms=statistics.fmean(token_intervals[row]) if token_intervals[row] else None,
+                e2e_latency_ms=(completed - started) * 1000.0,
+            )
+            request.update({"first_token_ready_ms": (float(first_ready[row]) - started) * 1000.0,
+                            "completed_at_ms": (completed - started) * 1000.0,
+                            "decode_step_ms": list(token_intervals[row])})
+            requests[row] = request
+
+    prefill_started = time.perf_counter()
+    with torch.profiler.record_function("minigpt::prefill_phase"):
+        with torch.profiler.record_function("minigpt::prefill_model"):
+            logits = engine.runner.prefill(input_ids, attention_mask)
+        with torch.profiler.record_function("minigpt::prefill_token_selection"):
+            next_ids = select(logits)
+        prefill_ended = time.perf_counter()
+        deliver(next_ids, 0)
+    if after_step is not None:
+        after_step({"prefill_batch_size": batch_size, "decode_batch_size": 0})
+    for step in range(1, config.max_new_tokens):
+        if all(finished):
+            break
+        active_rows = sum(not value for value in finished)
+        decode_started = time.perf_counter()
+        with torch.profiler.record_function("minigpt::decode_phase"):
+            active_mask = torch.tensor([not value for value in finished], dtype=torch.bool, device=input_ids.device)
+            with torch.profiler.record_function("minigpt::decode_model"):
+                logits = engine.runner.decode(next_ids, active_mask)
+            with torch.profiler.record_function("minigpt::decode_token_selection"):
+                next_ids = select(logits)
+            deliver(next_ids, step)
+            decode_step_ms.append((time.perf_counter() - decode_started) * 1000.0)
+        if after_step is not None:
+            after_step({"prefill_batch_size": 0, "decode_batch_size": active_rows})
+    runtime.synchronize()
+    ended = time.perf_counter()
+    ended_unix_ns = time.time_ns()
+    _, peak_memory_mb = runtime.memory_stats_mb()
+    if any(result is None for result in results) or any(request is None for request in requests):
+        raise AssertionError("static batch ended with nonterminal requests")
+    final_results = [result for result in results if result is not None]
+    final_requests = [request for request in requests if request is not None]
+    elapsed = ended - started
+    output_tokens = sum(len(result.generated_ids) for result in final_results)
+    metrics: dict[str, object] = {
+        "started_at_unix_ns": started_unix_ns, "ended_at_unix_ns": ended_unix_ns,
+        "e2e_latency_ms": elapsed * 1000.0,
+        "tokenization_ms": (tokenization_end - started) * 1000.0,
+        "prefill_ms": (prefill_ended - prefill_started) * 1000.0,
+        "decode_ms": sum(decode_step_ms), "decode_step_ms": decode_step_ms,
+        "input_tokens": sum(len(result.prompt_ids) for result in final_results),
+        "output_tokens": output_tokens,
+        "output_tokens_per_second": output_tokens / max(elapsed, 1e-12),
+        "peak_device_memory_mb": peak_memory_mb,
+    }
+    metrics["memory_snapshot"] = runtime.memory_snapshot().to_dict()
+    return TimedStaticBatch(final_results, metrics, final_requests)
+
+
+@torch.inference_mode()
 def benchmark_static_batch(
     engine: InferenceEngine,
     prompts: Sequence[str],
@@ -328,6 +555,7 @@ def benchmark_static_batch(
     *,
     warmup: int = 2,
     repeats: int = 5,
+    profiling_session: StepProfiler | None = None,
 ) -> dict[str, Any]:
     """测量固定请求集合在静态 batch 下的 E2E 吞吐和设备内存。"""
 
@@ -343,40 +571,50 @@ def benchmark_static_batch(
         engine.generate_batch(prompts, config)
         engine.runner.runtime.synchronize()
 
-    runs: list[dict[str, float | int]] = []
+    runs: list[dict[str, object]] = []
     expected_ids: list[list[int]] | None = None
     for _ in range(repeats):
-        runtime = engine.runner.runtime
-        runtime.synchronize()
-        runtime.reset_peak_memory()
-        started = time.perf_counter()
-        results = engine.generate_batch(prompts, config)
-        runtime.synchronize()
-        elapsed = time.perf_counter() - started
-        _, peak_memory_mb = runtime.memory_stats_mb()
-
-        generated_ids = [result.generated_ids for result in results]
+        timed = timed_static_batch(engine, prompts, config)
+        generated_ids = [result.generated_ids for result in timed.results]
         if expected_ids is None:
             expected_ids = generated_ids
         elif generated_ids != expected_ids:
             raise AssertionError("重复静态 batch 生成结果不稳定")
-        input_tokens = sum(len(result.prompt_ids) for result in results)
-        output_tokens = sum(len(result.generated_ids) for result in results)
-        runs.append(
-            {
-                "e2e_latency_ms": elapsed * 1000.0,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "output_tokens_per_second": output_tokens / max(elapsed, 1e-12),
-                "peak_device_memory_mb": peak_memory_mb,
-            }
-        )
+        runs.append({**timed.metrics, "requests": timed.requests, "output_sha256": _output_digest(timed.requests)})
+
+    profiling = None
+    if profiling_session is not None:
+        steps = 0
+
+        def after_step(record: dict[str, object]) -> None:
+            nonlocal steps
+            steps += 1
+            profiling_session.step(record)
+
+        with profiling_session:
+            profile_run = timed_static_batch(engine, prompts, config, after_step=after_step)
+        digest = _output_digest(profile_run.requests)
+        if digest != runs[0]["output_sha256"]:
+            raise AssertionError("profiling replay 与 measured static-batch 输出不一致")
+        profiling = {
+            **profiling_session.metadata(), "measurement_excluded": True,
+            "replay": {"scheduler_steps": steps, "wall_time_ms": profile_run.metrics["e2e_latency_ms"],
+                       "output_sha256": digest, "requests": profile_run.requests},
+        }
 
     runtime = engine.runner.runtime
-    return {
+    report = {
         "schema_version": 2,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "benchmark": f"static_batch_{engine.runner.implementation_name}",
+        "measurement_scope": {
+            "arrival": "all rows arrive at batch start, before shared tokenization",
+            "ttft": "batch start to this row's first token decoded for delivery",
+            "tpot": "mean interval between this row's delivered tokens, excluding its first token",
+            "request_e2e": "batch start to this row's terminal completion/full-text detokenization; finished rows do not wait for remaining rows",
+            "e2e_latency": "whole-batch wall time, retained separately from per-request E2E",
+            "profiling": "a separate output-equivalent replay excluded from measured runs",
+        },
         "environment": {
             "python": platform.python_version(),
             "pytorch": torch.__version__,
@@ -408,5 +646,12 @@ def benchmark_static_batch(
             "peak_device_memory_mb": summarize(
                 [float(run["peak_device_memory_mb"]) for run in runs]
             ),
+            "ttft_ms": summarize([float(row["ttft_ms"]) for run in runs for row in run["requests"]]),
+            "request_e2e_latency_ms": summarize([float(row["e2e_latency_ms"]) for run in runs for row in run["requests"]]),
         },
     }
+    tpot_values = [float(row["tpot_ms"]) for run in runs for row in run["requests"] if row["tpot_ms"] is not None]
+    report["summary"]["tpot_ms"] = summarize(tpot_values) if tpot_values else None
+    if profiling is not None:
+        report["profiling"] = profiling
+    return report

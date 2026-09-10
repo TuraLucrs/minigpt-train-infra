@@ -506,11 +506,15 @@ def _summarize_layout(
     execution_fingerprint = _execution_fingerprint(first)
     if not str(execution_fingerprint.get("hostname") or ""):
         raise ValueError(f"layout {layout_id!r} 缺少 hostname")
-    if int(execution_fingerprint.get("visible_device_count") or 0) < (
+    cpu_processes = execution_fingerprint.get("device_type") == "cpu"
+    if cpu_processes and any(int(execution_fingerprint.get(field) or 0) != 0
+                             for field in ("visible_device_count", "physical_card_count", "chips_per_card")):
+        raise ValueError("CPU layout 不能声称存在 accelerator 或物理卡")
+    if not cpu_processes and int(execution_fingerprint.get("visible_device_count") or 0) < (
         global_world_size
     ):
         raise ValueError(f"layout {layout_id!r} 可见设备数少于 global world_size")
-    if (
+    if not cpu_processes and (
         int(execution_fingerprint.get("physical_card_count") or 0)
         * int(execution_fingerprint.get("chips_per_card") or 0)
         != global_world_size

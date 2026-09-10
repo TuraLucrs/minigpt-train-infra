@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "description": "Example launch order only. Verify these logical and physical ids against the target machine before use.",
+  "devices": [
+    {
+      "logical_device_id": 0,
+      "physical_card_id": 0,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 1,
+      "physical_card_id": 1,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 2,
+      "physical_card_id": 2,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 3,
+      "physical_card_id": 3,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 4,
+      "physical_card_id": 4,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 5,
+      "physical_card_id": 5,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 6,
+      "physical_card_id": 6,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 7,
+      "physical_card_id": 7,
+      "chip_id": 0
+    }
+  ]
+}

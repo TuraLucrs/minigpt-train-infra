@@ -196,12 +196,19 @@ TP/Replica/SLO 联合决策继续作为 v1.0 后的长期研究候选，但当�
 
 ### v0.9——扩展 Ascend 适配、Profiler 后端化与真实多卡实验
 
+软件实现与可执行协议见 `docs/V0_9_BACKENDS_PROFILER_MATRIX.md`。本轮授权先将 v0.8/v0.9
+推进到软件就绪，随后再运行真实硬件验收；此顺序调整不构成正式硬件冻结或性能结论。
+
 - 将 v0.7.1 的最小 Ascend Profiler collector 收敛到稳定后端抽象；
 - `torch_npu`、CANN、HCCL 和 Ascend profiler 限制在后端目录；
 - A3 测试 2/4/8/16 个 logical devices，并同时记录物理卡数；
 - A5 测试 1/2/4/8 个 devices；
 - 对 Prefill/Decode、KV Cache、TP、Batching 做严格 A/B Benchmark；
 - 对比通用指标下的 CUDA/NCCL 与 Ascend/HCCL 行为。
+
+交付包含实际 runtime adapter、真实 CPU/CUDA/Ascend profiler、逐请求测量、A3/A5/CUDA
+ABBA 执行器与可恢复证据链。当前多设备 launcher 明确为单机 torchrun；CPU/tiny 结果不
+作为硬件性能证据。Batching 对照使用固定同时到达的同批请求，不冒充随机持续到达负载。
 
 ### v1.0——推理 Infra 完整交付
 

@@ -47,8 +47,10 @@ Ascend 8 卡上的 TP8、2×TP4、4×TP2 共 18 组正式验收。完整与精�
 
 `v0.7.1` Ascend Profiling Gate 已完成并冻结；后续 ABBA+BAAB 复现确认，v0.7 的历史
 TP8 慢态受到同设备并发负载污染，干净环境下 mixed workload 的 4×TP2/TP8 goodput 稳定
-倍率为 1.334×。当前开发分支进入 `v0.8` 第一阶段，验证 Decode full-vocab AllGather 是否
-是可形成端到端收益的关键路径。
+倍率为 1.334×。`v0.8` Decode 候选算法、完整证据门禁与失败恢复已补全；`v0.9` 进一步
+交付真实后端/Profiler 适配、统一测量入口及可恢复 A3/A5/CUDA 矩阵。两版当前为软件就绪、
+真实硬件验证待执行，尚不声称 Decode 加速或新的跨硬件性能结果。软件状态、完整命令与
+边界见 [`docs/V0_9_BACKENDS_PROFILER_MATRIX.md`](docs/V0_9_BACKENDS_PROFILER_MATRIX.md)。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 
@@ -406,6 +408,30 @@ v0.8 软件补全还验证首次运行时各 rank 的路径配置一致性，重
 估算口径，固定源 workload/容量/协议，并检查多样本 NPU preflight、真实 ABBA 时间顺序
 和跨 session 稳定性。证据不足会输出 `incomplete`；失败退出时仍保留原始报告与归档。
 当前属于软件就绪阶段，端到端收益与硬件验收待 Atlas 真机执行。
+
+## v0.9 后端、Profiler 与可恢复矩阵
+
+`RuntimeContext` 保留原接口，CPU、CUDA、Ascend 的设备操作集中在 `src/minigpt/backends/`。
+portable Profiler 使用真实 torch/torch_npu collector，写带 rank、实际窗口、源文件摘要和
+artifact 校验的 schema v2；历史 v0.7.1/v0.8 的 schema v1 继续兼容。
+
+新矩阵直接启动真实推理子进程，覆盖 A3 2/4/8/16 logical devices、A5/CUDA 1/2/4/8：
+KV recompute/cached、TP scaling、固定 batch 的 static/continuous A/B。每个硬件预设含
+22 cases/88 个独立进程，使用 ABBA、单独 warmup/measured/profile、真实设备映射与空闲
+检查，并保存失败、中断、恢复记录。tiny CPU 只验证执行链与数值；缺失设备计量为 `null`。
+
+```bash
+python benchmarks/run_v09_matrix.py --config configs/v09_ascend_a3.json --list-points
+python scripts/create_tiny_qwen3_fixture.py --output runs/v09_tiny_model
+python benchmarks/run_v09_matrix.py \
+  --config configs/v09_cpu_correctness.json \
+  --model-dir runs/v09_tiny_model --output-dir runs/v09_cpu
+```
+
+完整 CPU 矩阵需要可用的 Gloo 多进程；本机 Windows wheel 不支持该 transport 时，可用
+`--case kv-short-tp1 --case batching-short-tp1` 执行实际单进程四点，完整多进程由 Linux CI
+验证。架构、真实硬件命令、严格比较边界及恢复说明见
+[`v0.9 文档`](docs/V0_9_BACKENDS_PROFILER_MATRIX.md)。
 
 ## 独立运行一次推理
 

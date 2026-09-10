@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "matrix_id": "v09-cuda",
+  "description": "Qwen3-32B dense hardware acceptance matrix. Runs 88 independent benchmark processes. Inspect device mapping and select cases for a bounded machine window.",
+  "hardware_family": "cuda",
+  "device": "cuda",
+  "precision": "bf16",
+  "device_counts": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "chips_per_card": 1,
+  "batch_size": 4,
+  "sessions_per_variant": 2,
+  "warmup": 1,
+  "repeats": 3,
+  "timeout_seconds": 3600,
+  "max_seq_len": 4096,
+  "profile": {
+    "enabled": true,
+    "skip_steps": 0,
+    "warmup_steps": 0,
+    "active_steps": 4
+  },
+  "slo": {
+    "ttft_ms": 20000,
+    "tpot_ms": 1000,
+    "e2e_ms": 180000
+  },
+  "max_session_cv": 0.1,
+  "seed": 2026,
+  "workloads": [
+    {
+      "id": "short",
+      "workload_class": "short_short",
+      "prompts": [
+        "用一句话解释 KV Cache。",
+        "说明 Prefill 和 Decode 的区别。"
+      ],
+      "prompt_repeat": 1,
+      "max_new_tokens": 32
+    },
+    {
+      "id": "long",
+      "workload_class": "long_prefill_short_decode",
+      "prompts": [
+        "请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。"
+      ],
+      "prompt_repeat": 16,
+      "max_new_tokens": 16
+    }
+  ]
+}

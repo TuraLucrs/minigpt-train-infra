@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "matrix_id": "v09-cpu",
+  "description": "CPU tiny correctness and real Gloo integration only; no hardware performance claims.",
+  "hardware_family": "cpu",
+  "device": "cpu",
+  "precision": "fp32",
+  "device_counts": [
+    1,
+    2,
+    4
+  ],
+  "chips_per_card": 0,
+  "batch_size": 2,
+  "sessions_per_variant": 1,
+  "warmup": 1,
+  "repeats": 2,
+  "timeout_seconds": 180,
+  "max_seq_len": 64,
+  "profile": {
+    "enabled": true,
+    "skip_steps": 0,
+    "warmup_steps": 0,
+    "active_steps": 3
+  },
+  "slo": {
+    "ttft_ms": 20000,
+    "tpot_ms": 1000,
+    "e2e_ms": 180000
+  },
+  "max_session_cv": 0.1,
+  "seed": 2026,
+  "workloads": [
+    {
+      "id": "short",
+      "workload_class": "short_short",
+      "prompts": [
+        "Hello world",
+        "MiniGPT cache test"
+      ],
+      "prompt_repeat": 1,
+      "max_new_tokens": 6
+    }
+  ]
+}

@@ -261,6 +261,7 @@ def benchmark_trace_replay(
                 "current_device_memory_mb": current_memory_mb,
                 "peak_device_memory_mb": peak_memory_mb,
             },
+            "memory_snapshot": engine.runner.runtime.memory_snapshot().to_dict(),
             "output_sha256": serving_output_digest(serving),
             "serving": serving,
         }
@@ -310,6 +311,9 @@ def benchmark_trace_replay(
                 "scheduler_steps": profile_run["replay"]["scheduler_steps"],
                 "wall_time_ms": profile_run["replay"]["wall_time_ms"],
                 "output_sha256": profile_run["output_sha256"],
+                "serving": _profile_serving,
+                "started_at_unix_ns": profile_run["replay"]["started_at_unix_ns"],
+                "ended_at_unix_ns": profile_run["replay"]["ended_at_unix_ns"],
             },
         }
 
