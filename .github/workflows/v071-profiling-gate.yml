@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - upgrade/v0.7.1-ascend-profiling-gate
+      - investigate/v0.7.1-mixed-repro
   workflow_dispatch:
 
 permissions:
@@ -53,6 +54,7 @@ jobs:
           test "$(python -c 'import importlib.metadata; print(importlib.metadata.version("minigpt-train"))')" = "0.7.1"
           git diff --check
           bash -n scripts/run_v071_ascend_profiling_gate.sh
+          bash -n scripts/run_v071_mixed_repro_check.sh
           python -m compileall -q src tests benchmarks scripts
           python - <<'PY'
           import ast
@@ -82,3 +84,4 @@ jobs:
           python tests/test_continuous_batching.py
           python tests/test_serving_workloads.py
           python tests/test_profiling_gate.py
+          python tests/test_mixed_repro.py

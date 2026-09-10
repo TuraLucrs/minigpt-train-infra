@@ -293,6 +293,14 @@ def validate_telemetry(telemetry: Mapping[str, object]) -> None:
             value = _number(sample[field], field)
             if not 0.0 <= value <= 100.0:
                 raise ValueError(f"{field} 必须位于 [0, 100]")
+        for field in (
+            "aicore_rated_frequency_mhz",
+            "aicore_current_frequency_mhz",
+            "temperature_celsius",
+            "power_watts",
+        ):
+            if field in sample and _number(sample[field], field) < 0.0:
+                raise ValueError(f"{field} 不能小于 0")
 
 
 def _sample_summary(values: Sequence[float]) -> dict[str, float | int] | None:
@@ -399,6 +407,11 @@ def summarize_telemetry(
         "memory_bandwidth_usage_percent",
         "aicpu_usage_percent",
         "ctrlcpu_usage_percent",
+        "aicore_rated_frequency_mhz",
+        "aicore_current_frequency_mhz",
+        "temperature_celsius",
+        "power_watts",
+        "memory_capacity_mb",
     )
     per_device: dict[str, object] = {}
     for device_id in sorted(expected_devices):

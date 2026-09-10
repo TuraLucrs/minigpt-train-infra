@@ -776,6 +776,10 @@ def fake_telemetry() -> dict[str, object]:
                         "aicpu_usage_percent": 3.0,
                         "ctrlcpu_usage_percent": 4.0,
                         "memory_bandwidth_usage_percent": 40.0,
+                        "aicore_rated_frequency_mhz": 1800.0,
+                        "aicore_current_frequency_mhz": 1750.0,
+                        "temperature_celsius": 42.0 + device_id,
+                        "power_watts": 220.0 + device_id,
                     }
                 )
     return {
@@ -846,6 +850,8 @@ def check_npu_telemetry() -> None:
     assert summary["all_runs_covered"] is True
     assert summary["source_file_verified"] is False
     assert summary["overall"]["aicore_usage_percent"]["count"] == 48
+    assert summary["overall"]["aicore_current_frequency_mhz"]["median"] == 1750.0
+    assert summary["overall"]["temperature_celsius"]["count"] == 48
     try:
         summarize_telemetry(
             fake_telemetry(),
