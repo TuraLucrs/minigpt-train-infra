@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "pilot_id": "slo-layout-pilot-a3",
+  "description": "A3 research pilot after v0.9: two workload/SLO operating points, three eight-device TP/replica layouts, and two counterbalanced independent sessions per layout.",
+  "hardware_family": "ascend_a3",
+  "global_world_size": 8,
+  "physical_card_count": 4,
+  "chips_per_card": 2,
+  "warmup": 1,
+  "repeats": 3,
+  "max_seq_len": 4096,
+  "max_start_skew_ms": 100.0,
+  "min_telemetry_samples_per_device_per_run": 2,
+  "max_session_cv": 0.10,
+  "min_winner_margin": 0.05,
+  "layouts": [
+    {
+      "id": "tp8",
+      "tp_size": 8,
+      "replica_count": 1,
+      "per_replica_max_slots": 32,
+      "per_replica_max_queue_size": 128
+    },
+    {
+      "id": "2xtp4",
+      "tp_size": 4,
+      "replica_count": 2,
+      "per_replica_max_slots": 16,
+      "per_replica_max_queue_size": 64
+    },
+    {
+      "id": "4xtp2",
+      "tp_size": 2,
+      "replica_count": 4,
+      "per_replica_max_slots": 8,
+      "per_replica_max_queue_size": 32
+    }
+  ],
+  "round_orders": [
+    ["tp8", "2xtp4", "4xtp2"],
+    ["4xtp2", "2xtp4", "tp8"]
+  ],
+  "scenarios": [
+    {
+      "id": "short_strict_closed",
+      "workload_class": "short_short",
+      "mode": "closed_loop",
+      "closed_loop_clients": 64,
+      "deterministic_open_loop": false,
+      "slo": {
+        "ttft_ms": 2000.0,
+        "tpot_ms": 200.0,
+        "e2e_ms": 5000.0
+      }
+    },
+    {
+      "id": "mixed_standard_open",
+      "workload_class": "mixed",
+      "mode": "open_loop",
+      "closed_loop_clients": null,
+      "deterministic_open_loop": true,
+      "slo": {
+        "ttft_ms": 15000.0,
+        "tpot_ms": 500.0,
+        "e2e_ms": 30000.0
+      }
+    }
+  ]
+}

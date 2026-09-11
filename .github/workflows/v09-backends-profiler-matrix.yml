@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - upgrade/v0.9-backends-profiler-matrix
+      - research/slo-layout-pilot-a3
   workflow_dispatch:
 
 permissions:
@@ -52,6 +53,7 @@ jobs:
           git diff --check
           bash -n scripts/run_v08_decode_vocab_ab.sh
           python -m compileall -q src tests benchmarks scripts
+          python benchmarks/run_slo_layout_pilot.py --config configs/slo_layout_pilot_a3.json --list-sessions
           python - <<'PY'
           import ast
           import json
@@ -97,3 +99,4 @@ jobs:
           python tests/test_backend_telemetry.py
           python tests/test_benchmark_entrypoints.py
           python tests/test_experiment_matrix.py
+          python tests/test_slo_layout_pilot.py
