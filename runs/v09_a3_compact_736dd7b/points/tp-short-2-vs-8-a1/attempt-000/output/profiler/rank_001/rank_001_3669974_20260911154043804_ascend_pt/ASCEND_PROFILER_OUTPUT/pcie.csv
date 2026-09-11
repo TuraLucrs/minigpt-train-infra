@@ -1,0 +1,8 @@
+Device_id,Mode,Min,Max,Avg
+1,Tx_p_avg(MB/s),7.629,15.259,15.259
+1,Tx_np_avg(MB/s),0.0,0.0,0.0
+1,Tx_cpl_avg(MB/s),0.0,0.0,0.0
+1,Tx_latency_avg(us),0.0,0.0,0.0
+1,Rx_p_avg(MB/s),0.0,0.0,0.0
+1,Rx_np_avg(MB/s),0.0,0.0,0.0
+1,Rx_cpl_avg(MB/s),0.0,0.0,0.0

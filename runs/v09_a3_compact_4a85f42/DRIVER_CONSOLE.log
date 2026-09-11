@@ -1,0 +1,36 @@
+running kv-long-tp2-a0 (attempt 0, TP=2)
+kv-long-tp2-a0: failed
+deferred kv-long-tp2-b0: complete earlier sessions in kv-long-tp2 first
+deferred kv-long-tp2-b1: complete earlier sessions in kv-long-tp2 first
+deferred kv-long-tp2-a1: complete earlier sessions in kv-long-tp2 first
+running tp-short-2-vs-8-a0 (attempt 0, TP=2)
+tp-short-2-vs-8-a0: failed
+deferred tp-short-2-vs-8-b0: complete earlier sessions in tp-short-2-vs-8 first
+deferred tp-short-2-vs-8-b1: complete earlier sessions in tp-short-2-vs-8 first
+deferred tp-short-2-vs-8-a1: complete earlier sessions in tp-short-2-vs-8 first
+running batching-short-tp8-a0 (attempt 0, TP=8)
+Traceback (most recent call last):
+  File "/root/minigpt-v09/benchmarks/run_v09_matrix.py", line 70, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/root/minigpt-v09/benchmarks/run_v09_matrix.py", line 41, in main
+    state = run_matrix(config_path, args.model_dir, args.output_dir, project_root=PROJECT_ROOT,
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/minigpt-v09/src/minigpt/experiment_matrix.py", line 1275, in run_matrix
+    return _run_matrix(config_path, model_dir, output_dir, project_root=project_root,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/minigpt-v09/src/minigpt/experiment_matrix.py", line 1421, in _run_matrix
+    outcome = _execute(command, env=env, project_root=project, log_path=attempt_dir / "benchmark.log",
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/minigpt-v09/src/minigpt/experiment_matrix.py", line 791, in _execute
+    returncode = process.wait(timeout=timeout_seconds)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/subprocess.py", line 1264, in wait
+    return self._wait(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/subprocess.py", line 2047, in _wait
+    time.sleep(delay)
+  File "/root/minigpt-v09/src/minigpt/experiment_matrix.py", line 872, in interrupted
+    raise KeyboardInterrupt("matrix controller received SIGTERM")
+KeyboardInterrupt: matrix controller received SIGTERM
+[ERROR] 2026-09-11-15:20:10 (PID:3652832, Device:-1, RankID:-1) ERR99999 UNKNOWN applicaiton exception

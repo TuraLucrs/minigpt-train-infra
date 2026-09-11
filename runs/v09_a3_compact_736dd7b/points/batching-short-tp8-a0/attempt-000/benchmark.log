@@ -1,0 +1,44 @@
+<frozen runpy>:128: RuntimeWarning: 'torch.distributed.run' found in sys.modules after import of package 'torch.distributed', but prior to execution of 'torch.distributed.run'; this may result in unpredictable behaviour
+[W911 15:42:49.733822970 ProcessGroupHCCL.cpp:1302] Warning: The watchdog timeout 600000ms(which is set by init_process_group) is less than or equal to HCCL execution timeout 1836000ms! The plog may not be recorded. (function ProcessGroupHCCL)
+[rank0]:[W911 15:42:49.739428400 NPUCachingAllocator.cpp:204] Warning: The current CANN and HDK(driver) versions require processing for 32 padding size, with memory allocation. (function operator())
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[2026-09-11 15:43:29] [WARNING] [3671039] profiler.py: Profiler won't be using warmup, this can skew profiler results
+[2026-09-11 15:43:31] [INFO] [3672064] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_006/rank_006_3671045_20260911154329160_ascend_pt
+[2026-09-11 15:43:31] [INFO] [3672068] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_004/rank_004_3671043_20260911154329160_ascend_pt
+||[2026-09-11 15:43:32] [INFO] [3672092] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_001/rank_001_3671040_20260911154329162_ascend_pt
+[2026-09-11 15:43:32] [INFO] [3672098] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_000/rank_000_3671039_20260911154329161_ascend_pt
+||[2026-09-11 15:43:32] [INFO] [3672112] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_007/rank_007_3671046_20260911154329163_ascend_pt
+|[2026-09-11 15:43:32] [INFO] [3672124] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_003/rank_003_3671042_20260911154329162_ascend_pt
+[2026-09-11 15:43:32] [INFO] [3672130] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_005/rank_005_3671044_20260911154329161_ascend_pt
+||[2026-09-11 15:43:32] [INFO] [3672176] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_002/rank_002_3671041_20260911154329161_ascend_pt
+|////////--------\\\\\\\\||||||||////////--------\\\\\\\\||||||||///////[2026-09-11 15:43:42] [INFO] [3672085] profiler.py: CANN profiling data parsed in a total time of 0:00:10.081020
+[2026-09-11 15:43:42] [INFO] [3672082] profiler.py: CANN profiling data parsed in a total time of 0:00:10.105035
+/-[2026-09-11 15:43:42] [INFO] [3672117] profiler.py: CANN profiling data parsed in a total time of 0:00:10.100648[2026-09-11 15:43:42] [INFO] [3672121] profiler.py: CANN profiling data parsed in a total time of 0:00:10.065396
+
+[2026-09-11 15:43:42] [INFO] [3672142] profiler.py: CANN profiling data parsed in a total time of 0:00:10.127923
+-[2026-09-11 15:43:42] [INFO] [3672158] profiler.py: CANN profiling data parsed in a total time of 0:00:10.122702
+[2026-09-11 15:43:42] [INFO] [3672154] profiler.py: CANN profiling data parsed in a total time of 0:00:10.131548
+[2026-09-11 15:43:42] [INFO] [3672234] profiler.py: CANN profiling data parsed in a total time of 0:00:10.123859
+------\\\\\\\\||||[2026-09-11 15:43:44] [INFO] [3672098] profiler.py: All profiling data parsed in a total time of 0:00:12.836744
+|[2026-09-11 15:43:45] [INFO] [3672092] profiler.py: All profiling data parsed in a total time of 0:00:13.063320
+|[2026-09-11 15:43:45] [INFO] [3672130] profiler.py: All profiling data parsed in a total time of 0:00:13.000026
+[2026-09-11 15:43:45] [INFO] [3672112] profiler.py: All profiling data parsed in a total time of 0:00:13.148683
+[2026-09-11 15:43:45] [INFO] [3672124] profiler.py: All profiling data parsed in a total time of 0:00:13.087939
+[2026-09-11 15:43:45] [INFO] [3672064] profiler.py: All profiling data parsed in a total time of 0:00:13.522083
+/[2026-09-11 15:43:45] [INFO] [3672068] profiler.py: All profiling data parsed in a total time of 0:00:13.649558
+[2026-09-11 15:43:45] [INFO] [3672176] profiler.py: All profiling data parsed in a total time of 0:00:13.322097
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+================================================================================
+Qwen3 Tensor Parallel Benchmark（中位数）
+world size       : 8
+backend          : hccl
+evidence class   : qwen3_32b_tp_incomplete_evidence
+TTFT             : 185.721 ms
+TPOT             : 195.366 ms
+E2E latency      : 6242.320 ms
+output tok/s     : 20.505
+model load       : 12.197 s
+max rank peak MB : 8075.059
+报告              : /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/report.json

@@ -1,0 +1,3 @@
+[2026-09-11-15:43:42.945] [INFO] [AscendProfiler_CommunicationParser:97] Profiler logger initialized at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_005/rank_005_3671044_20260911154329161_ascend_pt/logs/profiler_20260911154342_3674203_CommunicationParser.log
+[2026-09-11-15:43:42.946] [INFO] [AscendProfiler_CommunicationParser:66] CommunicationParser start.
+[2026-09-11-15:43:43.020] [INFO] [AscendProfiler_CommunicationParser:73] CommunicationParser finish.

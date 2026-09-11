@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "matrix_id": "v09-ascend-a3",
+  "hardware_family": "ascend_a3",
+  "device_counts": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "required_device_counts": [
+    2,
+    8
+  ],
+  "session_order": [
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline"
+  ],
+  "cases": [
+    {
+      "case_id": "kv-long-tp2",
+      "axis": "kv",
+      "workload_id": "long",
+      "batch_size": 1,
+      "point_ids": [
+        "kv-long-tp2-a0",
+        "kv-long-tp2-b0",
+        "kv-long-tp2-b1",
+        "kv-long-tp2-a1"
+      ],
+      "phase_metrics": [
+        "prefill_ms",
+        "decode_ms"
+      ]
+    },
+    {
+      "case_id": "tp-short-2-vs-8",
+      "axis": "tp",
+      "workload_id": "short",
+      "batch_size": 1,
+      "point_ids": [
+        "tp-short-2-vs-8-a0",
+        "tp-short-2-vs-8-b0",
+        "tp-short-2-vs-8-b1",
+        "tp-short-2-vs-8-a1"
+      ],
+      "phase_metrics": [
+        "prefill_ms",
+        "decode_ms"
+      ]
+    },
+    {
+      "case_id": "batching-short-tp8",
+      "axis": "batching",
+      "workload_id": "short",
+      "batch_size": 4,
+      "point_ids": [
+        "batching-short-tp8-a0",
+        "batching-short-tp8-b0",
+        "batching-short-tp8-b1",
+        "batching-short-tp8-a1"
+      ],
+      "phase_metrics": []
+    }
+  ],
+  "points": [
+    {
+      "point_id": "kv-long-tp2-a0",
+      "case_id": "kv-long-tp2",
+      "axis": "kv",
+      "role": "baseline",
+      "session": 0,
+      "workload_id": "long",
+      "batch_size": 1,
+      "tp_size": 2,
+      "entrypoint": "tp",
+      "decode_mode": "recompute"
+    },
+    {
+      "point_id": "kv-long-tp2-b0",
+      "case_id": "kv-long-tp2",
+      "axis": "kv",
+      "role": "candidate",
+      "session": 0,
+      "workload_id": "long",
+      "batch_size": 1,
+      "tp_size": 2,
+      "entrypoint": "tp",
+      "decode_mode": "kv_cache"
+    },
+    {
+      "point_id": "kv-long-tp2-b1",
+      "case_id": "kv-long-tp2",
+      "axis": "kv",
+      "role": "candidate",
+      "session": 1,
+      "workload_id": "long",
+      "batch_size": 1,
+      "tp_size": 2,
+      "entrypoint": "tp",
+      "decode_mode": "kv_cache"
+    },
+    {
+      "point_id": "kv-long-tp2-a1",
+      "case_id": "kv-long-tp2",
+      "axis": "kv",
+      "role": "baseline",
+      "session": 1,
+      "workload_id": "long",
+      "batch_size": 1,
+      "tp_size": 2,
+      "entrypoint": "tp",
+      "decode_mode": "recompute"
+    },
+    {
+      "point_id": "tp-short-2-vs-8-a0",
+      "case_id": "tp-short-2-vs-8",
+      "axis": "tp",
+      "role": "baseline",
+      "session": 0,
+      "workload_id": "short",
+      "batch_size": 1,
+      "tp_size": 2,
+      "entrypoint": "tp",
+      "decode_mode": "kv_cache"
+    },
+    {
+      "point_id": "tp-short-2-vs-8-b0",
+      "case_id": "tp-short-2-vs-8",
+      "axis": "tp",
+      "role": "candidate",
+      "session": 0,
+      "workload_id": "short",
+      "batch_size": 1,
+      "tp_size": 8,
+      "entrypoint": "tp",
+      "decode_mode": "kv_cache"
+    },
+    {
+      "point_id": "tp-short-2-vs-8-b1",
+      "case_id": "tp-short-2-vs-8",
+      "axis": "tp",
+      "role": "candidate",
+      "session": 1,
+      "workload_id": "short",
+      "batch_size": 1,
+      "tp_size": 8,
+      "entrypoint": "tp",
+      "decode_mode": "kv_cache"
+    },
+    {
+      "point_id": "tp-short-2-vs-8-a1",
+      "case_id": "tp-short-2-vs-8",
+      "axis": "tp",
+      "role": "baseline",
+      "session": 1,
+      "workload_id": "short",
+      "batch_size": 1,
+      "tp_size": 2,
+      "entrypoint": "tp",
+      "decode_mode": "kv_cache"
+    },
+    {
+      "point_id": "batching-short-tp8-a0",
+      "case_id": "batching-short-tp8",
+      "axis": "batching",
+      "role": "baseline",
+      "session": 0,
+      "workload_id": "short",
+      "batch_size": 4,
+      "tp_size": 8,
+      "entrypoint": "tp",
+      "decode_mode": "kv_cache"
+    },
+    {
+      "point_id": "batching-short-tp8-b0",
+      "case_id": "batching-short-tp8",
+      "axis": "batching",
+      "role": "candidate",
+      "session": 0,
+      "workload_id": "short",
+      "batch_size": 4,
+      "tp_size": 8,
+      "entrypoint": "continuous",
+      "decode_mode": "kv_cache"
+    },
+    {
+      "point_id": "batching-short-tp8-b1",
+      "case_id": "batching-short-tp8",
+      "axis": "batching",
+      "role": "candidate",
+      "session": 1,
+      "workload_id": "short",
+      "batch_size": 4,
+      "tp_size": 8,
+      "entrypoint": "continuous",
+      "decode_mode": "kv_cache"
+    },
+    {
+      "point_id": "batching-short-tp8-a1",
+      "case_id": "batching-short-tp8",
+      "axis": "batching",
+      "role": "baseline",
+      "session": 1,
+      "workload_id": "short",
+      "batch_size": 4,
+      "tp_size": 8,
+      "entrypoint": "tp",
+      "decode_mode": "kv_cache"
+    }
+  ]
+}

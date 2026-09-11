@@ -1,0 +1,26 @@
+running kv-long-tp2-a0 (attempt 0, TP=2)
+kv-long-tp2-a0: succeeded
+running kv-long-tp2-b0 (attempt 0, TP=2)
+kv-long-tp2-b0: succeeded
+running kv-long-tp2-b1 (attempt 0, TP=2)
+kv-long-tp2-b1: succeeded
+running kv-long-tp2-a1 (attempt 0, TP=2)
+kv-long-tp2-a1: succeeded
+running tp-short-2-vs-8-a0 (attempt 0, TP=2)
+tp-short-2-vs-8-a0: succeeded
+running tp-short-2-vs-8-b0 (attempt 0, TP=8)
+tp-short-2-vs-8-b0: succeeded
+running tp-short-2-vs-8-b1 (attempt 0, TP=8)
+tp-short-2-vs-8-b1: succeeded
+running tp-short-2-vs-8-a1 (attempt 0, TP=2)
+tp-short-2-vs-8-a1: succeeded
+running batching-short-tp8-a0 (attempt 0, TP=8)
+batching-short-tp8-a0: succeeded
+running batching-short-tp8-b0 (attempt 0, TP=8)
+batching-short-tp8-b0: succeeded
+running batching-short-tp8-b1 (attempt 0, TP=8)
+batching-short-tp8-b1: succeeded
+running batching-short-tp8-a1 (attempt 0, TP=8)
+batching-short-tp8-a1: succeeded
+Selected points complete: 12/12
+Full matrix complete: True; report: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/MATRIX_REPORT.md

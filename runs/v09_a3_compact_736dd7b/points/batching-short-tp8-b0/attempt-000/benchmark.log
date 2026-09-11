@@ -1,0 +1,45 @@
+<frozen runpy>:128: RuntimeWarning: 'torch.distributed.run' found in sys.modules after import of package 'torch.distributed', but prior to execution of 'torch.distributed.run'; this may result in unpredictable behaviour
+[W911 15:45:50.551654120 ProcessGroupHCCL.cpp:1302] Warning: The watchdog timeout 600000ms(which is set by init_process_group) is less than or equal to HCCL execution timeout 1836000ms! The plog may not be recorded. (function ProcessGroupHCCL)
+[rank0]:[W911 15:45:50.561959490 NPUCachingAllocator.cpp:204] Warning: The current CANN and HDK(driver) versions require processing for 32 padding size, with memory allocation. (function operator())
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[2026-09-11 15:46:29] [WARNING] [3674549] profiler.py: Profiler won't be using warmup, this can skew profiler results
+[2026-09-11 15:46:32] [INFO] [3675573] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_005/rank_005_3674554_20260911154629377_ascend_pt
+|[2026-09-11 15:46:32] [INFO] [3675586] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_004/rank_004_3674553_20260911154629378_ascend_pt
+[2026-09-11 15:46:32] [INFO] [3675590] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_001/rank_001_3674550_20260911154629377_ascend_pt
+||[2026-09-11 15:46:32] [INFO] [3675619] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_006/rank_006_3674555_20260911154629378_ascend_pt
+|[2026-09-11 15:46:32] [INFO] [3675628] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_000/rank_000_3674549_20260911154629380_ascend_pt
+[2026-09-11 15:46:32] [INFO] [3675632] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_003/rank_003_3674552_20260911154629378_ascend_pt
+||[2026-09-11 15:46:32] [INFO] [3675695] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_007/rank_007_3674556_20260911154629378_ascend_pt
+[2026-09-11 15:46:32] [INFO] [3675712] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_002/rank_002_3674551_20260911154629378_ascend_pt
+||////////--------\\\\\\\\||||||||////////--------\\\\\\\\||||||||/////[2026-09-11 15:46:42] [INFO] [3675604] profiler.py: CANN profiling data parsed in a total time of 0:00:10.101836[2026-09-11 15:46:42] [INFO] [3675582] profiler.py: CANN profiling data parsed in a total time of 0:00:10.145687
+/[2026-09-11 15:46:42] [INFO] [3675607] profiler.py: CANN profiling data parsed in a total time of 0:00:10.090894
+
+//[2026-09-11 15:46:42] [INFO] [3675648] profiler.py: CANN profiling data parsed in a total time of 0:00:10.085576
+[2026-09-11 15:46:42] [INFO] [3675661] profiler.py: CANN profiling data parsed in a total time of 0:00:10.091047
+[2026-09-11 15:46:42] [INFO] [3675681] profiler.py: CANN profiling data parsed in a total time of 0:00:10.084070
+[2026-09-11 15:46:43] [INFO] [3675778] profiler.py: CANN profiling data parsed in a total time of 0:00:10.101517[2026-09-11 15:46:43] [INFO] [3675781] profiler.py: CANN profiling data parsed in a total time of 0:00:10.098214
+
+--------\\\\\\\\|||||[2026-09-11 15:46:45] [INFO] [3675573] profiler.py: All profiling data parsed in a total time of 0:00:13.401693
+||[2026-09-11 15:46:45] [INFO] [3675632] profiler.py: All profiling data parsed in a total time of 0:00:13.072399
+[2026-09-11 15:46:45] [INFO] [3675586] profiler.py: All profiling data parsed in a total time of 0:00:13.412997
+[2026-09-11 15:46:45] [INFO] [3675590] profiler.py: All profiling data parsed in a total time of 0:00:13.429180
+|[2026-09-11 15:46:45] [INFO] [3675628] profiler.py: All profiling data parsed in a total time of 0:00:13.326490
+[2026-09-11 15:46:46] [INFO] [3675712] profiler.py: All profiling data parsed in a total time of 0:00:13.385605
+[2026-09-11 15:46:46] [INFO] [3675695] profiler.py: All profiling data parsed in a total time of 0:00:13.410761
+[2026-09-11 15:46:46] [INFO] [3675619] profiler.py: All profiling data parsed in a total time of 0:00:13.722439
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+================================================================================
+Qwen3 Continuous Batching Benchmark（measured repeats 中位数）
+layout / replica : batching-short-tp8-b0 / 0
+TP size          : 8
+workload         : short-n4
+mode             : closed_loop
+request/s        : 0.661
+goodput request/s: 0.661
+output token/s   : 21.151
+evidence class   : qwen3_32b_continuous_batching_incomplete_evidence
+report           : /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/replica-00.json

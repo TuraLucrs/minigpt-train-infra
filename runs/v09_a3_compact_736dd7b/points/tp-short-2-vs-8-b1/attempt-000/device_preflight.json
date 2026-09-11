@@ -1,0 +1,1101 @@
+{
+  "schema_version": 1,
+  "device_type": "npu",
+  "supported": true,
+  "collector": "npu-smi_info_common",
+  "units": {
+    "memory_usage_percent": "percent",
+    "compute_utilization_percent": "percent",
+    "cuda_memory": "MiB",
+    "wall_clock": "unix_nanoseconds",
+    "sampling_clock": "monotonic_nanoseconds"
+  },
+  "capabilities": {
+    "device_memory_utilization": true,
+    "device_compute_utilization": true,
+    "per_device_raw_samples": true,
+    "raw_command_output": false,
+    "memory_source": "HBM Usage Rate(%)",
+    "compute_source": "AICore Usage Rate(%)"
+  },
+  "index_mapping": "logical_device_id maps explicitly to npu-smi -i physical_card_id and Chip ID chip_id.",
+  "devices": [
+    {
+      "logical_device_id": 0,
+      "physical_card_id": 0,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 1,
+      "physical_card_id": 0,
+      "chip_id": 1
+    },
+    {
+      "logical_device_id": 2,
+      "physical_card_id": 1,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 3,
+      "physical_card_id": 1,
+      "chip_id": 1
+    },
+    {
+      "logical_device_id": 4,
+      "physical_card_id": 2,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 5,
+      "physical_card_id": 2,
+      "chip_id": 1
+    },
+    {
+      "logical_device_id": 6,
+      "physical_card_id": 3,
+      "chip_id": 0
+    },
+    {
+      "logical_device_id": 7,
+      "physical_card_id": 3,
+      "chip_id": 1
+    }
+  ],
+  "protocol": {
+    "samples": 3,
+    "interval_seconds": 0.5,
+    "interval_policy": "minimum_wait_between_completed_rounds",
+    "query_timeout_seconds": 10.0,
+    "minimum_samples": 3,
+    "minimum_span_seconds": 1.0,
+    "memory_limit_percent": 10.0,
+    "compute_limit_percent": 5.0,
+    "aggregation": "maximum_over_all_samples_per_device",
+    "collection_phase": "before_model_launch"
+  },
+  "started": {
+    "unix_ns": 1789112212569923520,
+    "monotonic_ns": 1295742863300660
+  },
+  "rounds": [
+    {
+      "round_index": 0,
+      "started": {
+        "unix_ns": 1789112212569958920,
+        "monotonic_ns": 1295742863335840
+      },
+      "queries": [
+        {
+          "logical_device_ids": [
+            0
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "0"
+          ],
+          "started": {
+            "unix_ns": 1789112212569964860,
+            "monotonic_ns": 1295742863341730
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112212830842520,
+            "collection_latency_ms": 521.72964,
+            "logical_device_id": 0,
+            "npu_id": 0,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 31.0,
+            "power_watts": 172.4
+          },
+          "ended": {
+            "unix_ns": 1789112213091889500,
+            "monotonic_ns": 1295743385266510
+          }
+        },
+        {
+          "logical_device_ids": [
+            1
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "0"
+          ],
+          "started": {
+            "unix_ns": 1789112213091900080,
+            "monotonic_ns": 1295743385276960
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112213358539150,
+            "collection_latency_ms": 533.26114,
+            "logical_device_id": 1,
+            "npu_id": 0,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 35.0,
+            "power_watts": 171.7
+          },
+          "ended": {
+            "unix_ns": 1789112213625287860,
+            "monotonic_ns": 1295743918664890
+          }
+        },
+        {
+          "logical_device_ids": [
+            2
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "1"
+          ],
+          "started": {
+            "unix_ns": 1789112213625292800,
+            "monotonic_ns": 1295743918669680
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112213885466365,
+            "collection_latency_ms": 520.33901,
+            "logical_device_id": 2,
+            "npu_id": 1,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 32.0,
+            "power_watts": 156.5
+          },
+          "ended": {
+            "unix_ns": 1789112214145746010,
+            "monotonic_ns": 1295744439123000
+          }
+        },
+        {
+          "logical_device_ids": [
+            3
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "1"
+          ],
+          "started": {
+            "unix_ns": 1789112214145750370,
+            "monotonic_ns": 1295744439127260
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112214402450615,
+            "collection_latency_ms": 513.39149,
+            "logical_device_id": 3,
+            "npu_id": 1,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 38.0,
+            "power_watts": 157.3
+          },
+          "ended": {
+            "unix_ns": 1789112214659258180,
+            "monotonic_ns": 1295744952635180
+          }
+        },
+        {
+          "logical_device_ids": [
+            4
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "2"
+          ],
+          "started": {
+            "unix_ns": 1789112214659261340,
+            "monotonic_ns": 1295744952638220
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112214919942870,
+            "collection_latency_ms": 521.35576,
+            "logical_device_id": 4,
+            "npu_id": 2,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 31.0,
+            "power_watts": 166.0
+          },
+          "ended": {
+            "unix_ns": 1789112215180724880,
+            "monotonic_ns": 1295745474101850
+          }
+        },
+        {
+          "logical_device_ids": [
+            5
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "2"
+          ],
+          "started": {
+            "unix_ns": 1789112215180727270,
+            "monotonic_ns": 1295745474104140
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112215438794370,
+            "collection_latency_ms": 516.1274,
+            "logical_device_id": 5,
+            "npu_id": 2,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 35.0,
+            "power_watts": 165.3
+          },
+          "ended": {
+            "unix_ns": 1789112215696968260,
+            "monotonic_ns": 1295745990345250
+          }
+        },
+        {
+          "logical_device_ids": [
+            6
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "3"
+          ],
+          "started": {
+            "unix_ns": 1789112215696972040,
+            "monotonic_ns": 1295745990348920
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112215954094565,
+            "collection_latency_ms": 514.23775,
+            "logical_device_id": 6,
+            "npu_id": 3,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 30.0,
+            "power_watts": 153.9
+          },
+          "ended": {
+            "unix_ns": 1789112216211318210,
+            "monotonic_ns": 1295746504695170
+          }
+        },
+        {
+          "logical_device_ids": [
+            7
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "3"
+          ],
+          "started": {
+            "unix_ns": 1789112216211320570,
+            "monotonic_ns": 1295746504697420
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112216474618265,
+            "collection_latency_ms": 526.58855,
+            "logical_device_id": 7,
+            "npu_id": 3,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 37.0,
+            "power_watts": 154.1
+          },
+          "ended": {
+            "unix_ns": 1789112216738034660,
+            "monotonic_ns": 1295747031411660
+          }
+        }
+      ],
+      "ended": {
+        "unix_ns": 1789112216738035910,
+        "monotonic_ns": 1295747031412800
+      }
+    },
+    {
+      "round_index": 1,
+      "started": {
+        "unix_ns": 1789112217238100060,
+        "monotonic_ns": 1295747531477200
+      },
+      "queries": [
+        {
+          "logical_device_ids": [
+            0
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "0"
+          ],
+          "started": {
+            "unix_ns": 1789112217238107310,
+            "monotonic_ns": 1295747531484230
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112217499621835,
+            "collection_latency_ms": 523.01417,
+            "logical_device_id": 0,
+            "npu_id": 0,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 32.0,
+            "power_watts": 172.6
+          },
+          "ended": {
+            "unix_ns": 1789112217761255650,
+            "monotonic_ns": 1295748054632670
+          }
+        },
+        {
+          "logical_device_ids": [
+            1
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "0"
+          ],
+          "started": {
+            "unix_ns": 1789112217761259180,
+            "monotonic_ns": 1295748054636040
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112218021752825,
+            "collection_latency_ms": 520.97949,
+            "logical_device_id": 1,
+            "npu_id": 0,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 35.0,
+            "power_watts": 171.8
+          },
+          "ended": {
+            "unix_ns": 1789112218282360360,
+            "monotonic_ns": 1295748575737410
+          }
+        },
+        {
+          "logical_device_ids": [
+            2
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "1"
+          ],
+          "started": {
+            "unix_ns": 1789112218282363280,
+            "monotonic_ns": 1295748575740180
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112218541274710,
+            "collection_latency_ms": 517.81542,
+            "logical_device_id": 2,
+            "npu_id": 1,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 32.0,
+            "power_watts": 156.5
+          },
+          "ended": {
+            "unix_ns": 1789112218800286080,
+            "monotonic_ns": 1295749093663060
+          }
+        },
+        {
+          "logical_device_ids": [
+            3
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "1"
+          ],
+          "started": {
+            "unix_ns": 1789112218800288480,
+            "monotonic_ns": 1295749093665380
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112219061321730,
+            "collection_latency_ms": 522.0593,
+            "logical_device_id": 3,
+            "npu_id": 1,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 38.0,
+            "power_watts": 156.4
+          },
+          "ended": {
+            "unix_ns": 1789112219322462630,
+            "monotonic_ns": 1295749615839630
+          }
+        },
+        {
+          "logical_device_ids": [
+            4
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "2"
+          ],
+          "started": {
+            "unix_ns": 1789112219322465630,
+            "monotonic_ns": 1295749615842500
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112219580270375,
+            "collection_latency_ms": 515.60299,
+            "logical_device_id": 4,
+            "npu_id": 2,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 31.0,
+            "power_watts": 166.6
+          },
+          "ended": {
+            "unix_ns": 1789112219838220060,
+            "monotonic_ns": 1295750131597040
+          }
+        },
+        {
+          "logical_device_ids": [
+            5
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "2"
+          ],
+          "started": {
+            "unix_ns": 1789112219838230710,
+            "monotonic_ns": 1295750131607580
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112220105093555,
+            "collection_latency_ms": 533.71049,
+            "logical_device_id": 5,
+            "npu_id": 2,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 35.0,
+            "power_watts": 166.4
+          },
+          "ended": {
+            "unix_ns": 1789112220372065580,
+            "monotonic_ns": 1295750665442570
+          }
+        },
+        {
+          "logical_device_ids": [
+            6
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "3"
+          ],
+          "started": {
+            "unix_ns": 1789112220372070140,
+            "monotonic_ns": 1295750665447020
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112220641976375,
+            "collection_latency_ms": 539.80447,
+            "logical_device_id": 6,
+            "npu_id": 3,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 30.0,
+            "power_watts": 154.8
+          },
+          "ended": {
+            "unix_ns": 1789112220912003170,
+            "monotonic_ns": 1295751205380200
+          }
+        },
+        {
+          "logical_device_ids": [
+            7
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "3"
+          ],
+          "started": {
+            "unix_ns": 1789112220912011750,
+            "monotonic_ns": 1295751205388630
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112221171992110,
+            "collection_latency_ms": 519.9507,
+            "logical_device_id": 7,
+            "npu_id": 3,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 37.0,
+            "power_watts": 154.3
+          },
+          "ended": {
+            "unix_ns": 1789112221432092330,
+            "monotonic_ns": 1295751725469310
+          }
+        }
+      ],
+      "ended": {
+        "unix_ns": 1789112221432093560,
+        "monotonic_ns": 1295751725470420
+      }
+    },
+    {
+      "round_index": 2,
+      "started": {
+        "unix_ns": 1789112221932158320,
+        "monotonic_ns": 1295752225535570
+      },
+      "queries": [
+        {
+          "logical_device_ids": [
+            0
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "0"
+          ],
+          "started": {
+            "unix_ns": 1789112221932164910,
+            "monotonic_ns": 1295752225541830
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112222227112260,
+            "collection_latency_ms": 589.88342,
+            "logical_device_id": 0,
+            "npu_id": 0,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 32.0,
+            "power_watts": 171.5
+          },
+          "ended": {
+            "unix_ns": 1789112222522168910,
+            "monotonic_ns": 1295752815545920
+          }
+        },
+        {
+          "logical_device_ids": [
+            1
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "0"
+          ],
+          "started": {
+            "unix_ns": 1789112222522171710,
+            "monotonic_ns": 1295752815548600
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112222778442210,
+            "collection_latency_ms": 512.53258,
+            "logical_device_id": 1,
+            "npu_id": 0,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 35.0,
+            "power_watts": 172.6
+          },
+          "ended": {
+            "unix_ns": 1789112223034833400,
+            "monotonic_ns": 1295753328210420
+          }
+        },
+        {
+          "logical_device_ids": [
+            2
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "1"
+          ],
+          "started": {
+            "unix_ns": 1789112223034840640,
+            "monotonic_ns": 1295753328217520
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112223289424400,
+            "collection_latency_ms": 509.1589,
+            "logical_device_id": 2,
+            "npu_id": 1,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 32.0,
+            "power_watts": 157.2
+          },
+          "ended": {
+            "unix_ns": 1789112223544121710,
+            "monotonic_ns": 1295753837498870
+          }
+        },
+        {
+          "logical_device_ids": [
+            3
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "1"
+          ],
+          "started": {
+            "unix_ns": 1789112223544125700,
+            "monotonic_ns": 1295753837502570
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112223805659105,
+            "collection_latency_ms": 523.05833,
+            "logical_device_id": 3,
+            "npu_id": 1,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 38.0,
+            "power_watts": 155.4
+          },
+          "ended": {
+            "unix_ns": 1789112224067306410,
+            "monotonic_ns": 1295754360683520
+          }
+        },
+        {
+          "logical_device_ids": [
+            4
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "2"
+          ],
+          "started": {
+            "unix_ns": 1789112224067309430,
+            "monotonic_ns": 1295754360686310
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112224328868865,
+            "collection_latency_ms": 523.11063,
+            "logical_device_id": 4,
+            "npu_id": 2,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 30.0,
+            "power_watts": 166.5
+          },
+          "ended": {
+            "unix_ns": 1789112224590548520,
+            "monotonic_ns": 1295754883925640
+          }
+        },
+        {
+          "logical_device_ids": [
+            5
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "2"
+          ],
+          "started": {
+            "unix_ns": 1789112224590552120,
+            "monotonic_ns": 1295754883929000
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112224850176200,
+            "collection_latency_ms": 519.23956,
+            "logical_device_id": 5,
+            "npu_id": 2,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 35.0,
+            "power_watts": 166.1
+          },
+          "ended": {
+            "unix_ns": 1789112225109913740,
+            "monotonic_ns": 1295755403290870
+          }
+        },
+        {
+          "logical_device_ids": [
+            6
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "3"
+          ],
+          "started": {
+            "unix_ns": 1789112225109917070,
+            "monotonic_ns": 1295755403293950
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112225368758320,
+            "collection_latency_ms": 517.67488,
+            "logical_device_id": 6,
+            "npu_id": 3,
+            "chip_id": 0,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 30.0,
+            "power_watts": 154.3
+          },
+          "ended": {
+            "unix_ns": 1789112225627716450,
+            "monotonic_ns": 1295755921093460
+          }
+        },
+        {
+          "logical_device_ids": [
+            7
+          ],
+          "command": [
+            "npu-smi",
+            "info",
+            "-t",
+            "common",
+            "-i",
+            "3"
+          ],
+          "started": {
+            "unix_ns": 1789112225627719670,
+            "monotonic_ns": 1295755921096550
+          },
+          "returncode": 0,
+          "error": null,
+          "raw_sample": {
+            "timestamp_unix_ns": 1789112225893018430,
+            "collection_latency_ms": 530.58936,
+            "logical_device_id": 7,
+            "npu_id": 3,
+            "chip_id": 1,
+            "memory_usage_percent": 0.0,
+            "hbm_usage_percent": 4.0,
+            "aicore_usage_percent": 0.0,
+            "aicore_rated_frequency_mhz": 1800.0,
+            "aicore_current_frequency_mhz": 800.0,
+            "temperature_celsius": 37.0,
+            "power_watts": 154.1
+          },
+          "ended": {
+            "unix_ns": 1789112226158439510,
+            "monotonic_ns": 1295756451816480
+          }
+        }
+      ],
+      "ended": {
+        "unix_ns": 1789112226158440790,
+        "monotonic_ns": 1295756451817660
+      }
+    }
+  ],
+  "ended": {
+    "unix_ns": 1789112226158445810,
+    "monotonic_ns": 1295756451822710
+  },
+  "clean": true,
+  "complete": true,
+  "sample_rounds": 3,
+  "sample_span_seconds": 9.36219973,
+  "device_maxima": [
+    {
+      "chip_id": 0,
+      "logical_device_id": 0,
+      "physical_card_id": 0,
+      "sample_count": 3,
+      "sample_span_seconds": 9.396239755,
+      "max_memory_usage_percent": 4.0,
+      "max_compute_utilization_percent": 0.0,
+      "clean": true
+    },
+    {
+      "chip_id": 1,
+      "logical_device_id": 1,
+      "physical_card_id": 0,
+      "sample_count": 3,
+      "sample_span_seconds": 9.419908585,
+      "max_memory_usage_percent": 4.0,
+      "max_compute_utilization_percent": 0.0,
+      "clean": true
+    },
+    {
+      "chip_id": 0,
+      "logical_device_id": 2,
+      "physical_card_id": 1,
+      "sample_count": 3,
+      "sample_span_seconds": 9.403961855,
+      "max_memory_usage_percent": 4.0,
+      "max_compute_utilization_percent": 0.0,
+      "clean": true
+    },
+    {
+      "chip_id": 1,
+      "logical_device_id": 3,
+      "physical_card_id": 1,
+      "sample_count": 3,
+      "sample_span_seconds": 9.403211825,
+      "max_memory_usage_percent": 4.0,
+      "max_compute_utilization_percent": 0.0,
+      "clean": true
+    },
+    {
+      "chip_id": 0,
+      "logical_device_id": 4,
+      "physical_card_id": 2,
+      "sample_count": 3,
+      "sample_span_seconds": 9.40893594,
+      "max_memory_usage_percent": 4.0,
+      "max_compute_utilization_percent": 0.0,
+      "clean": true
+    },
+    {
+      "chip_id": 1,
+      "logical_device_id": 5,
+      "physical_card_id": 2,
+      "sample_count": 3,
+      "sample_span_seconds": 9.41138524,
+      "max_memory_usage_percent": 4.0,
+      "max_compute_utilization_percent": 0.0,
+      "clean": true
+    },
+    {
+      "chip_id": 0,
+      "logical_device_id": 6,
+      "physical_card_id": 3,
+      "sample_count": 3,
+      "sample_span_seconds": 9.41467166,
+      "max_memory_usage_percent": 4.0,
+      "max_compute_utilization_percent": 0.0,
+      "clean": true
+    },
+    {
+      "chip_id": 1,
+      "logical_device_id": 7,
+      "physical_card_id": 3,
+      "sample_count": 3,
+      "sample_span_seconds": 9.418401975,
+      "max_memory_usage_percent": 4.0,
+      "max_compute_utilization_percent": 0.0,
+      "clean": true
+    }
+  ],
+  "errors": [],
+  "violations": []
+}

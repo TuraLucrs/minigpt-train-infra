@@ -1,0 +1,3 @@
+[2026-09-11-15:46:42.882] [INFO] [AscendProfiler_TraceStepTimeParser:97] Profiler logger initialized at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_001/rank_001_3674550_20260911154629377_ascend_pt/logs/profiler_20260911154642_3677661_TraceStepTimeParser.log
+[2026-09-11-15:46:42.883] [INFO] [AscendProfiler_TraceStepTimeParser:169] TraceStepTimeParser start.
+[2026-09-11-15:46:44.437] [INFO] [AscendProfiler_TraceStepTimeParser:177] TraceStepTimeParser finish.

@@ -1,0 +1,3 @@
+[2026-09-11-15:52:48.488] [INFO] [AscendProfiler_MemoryViewParser:97] Profiler logger initialized at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a1/attempt-000/output/profiler/rank_004/rank_004_3681556_20260911155235086_ascend_pt/logs/profiler_20260911155248_3684661_MemoryViewParser.log
+[2026-09-11-15:52:48.488] [INFO] [AscendProfiler_MemoryViewParser:78] MemoryViewParser start.
+[2026-09-11-15:52:48.493] [INFO] [AscendProfiler_MemoryViewParser:89] MemoryViewParser finish.

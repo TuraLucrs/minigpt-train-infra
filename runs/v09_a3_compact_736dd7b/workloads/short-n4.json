@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "workload_id": "short-n4",
+  "workload_class": "short_short",
+  "request_sha256": "c548a976bfddccab9031c371fef0a458e75e2866e9a79ebff5bf2245f233c38d",
+  "metadata": {
+    "generator": "v09_fixed_work_matrix",
+    "eos_policy": "fixed_output_length",
+    "arrival_policy": "all_requests_ready_at_start"
+  },
+  "partition": null,
+  "requests": [
+    {
+      "request_id": "short-0000",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 0.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 32,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2026,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short-0001",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 0.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 32,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2026,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short-0002",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 0.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 32,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2026,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short-0003",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 0.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 32,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2026,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    }
+  ]
+}

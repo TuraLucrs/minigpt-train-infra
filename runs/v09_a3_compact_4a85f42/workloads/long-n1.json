@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "workload_id": "long-n1",
+  "workload_class": "long_prefill_short_decode",
+  "request_sha256": "b8ee32e65deef9b329be772fb687e091dd3d0e2df7ffad85c79491caa4c2deaf",
+  "metadata": {
+    "generator": "v09_fixed_work_matrix",
+    "eos_policy": "fixed_output_length",
+    "arrival_policy": "all_requests_ready_at_start"
+  },
+  "partition": null,
+  "requests": [
+    {
+      "request_id": "long-0000",
+      "prompt": "请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。请沿着请求进入调度器、完成 Prefill、逐 token Decode、释放 KV Cache 的顺序，解释每一步的数据形状、状态变化和可能失败的位置。",
+      "arrival_time_ms": 0.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2026,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    }
+  ]
+}

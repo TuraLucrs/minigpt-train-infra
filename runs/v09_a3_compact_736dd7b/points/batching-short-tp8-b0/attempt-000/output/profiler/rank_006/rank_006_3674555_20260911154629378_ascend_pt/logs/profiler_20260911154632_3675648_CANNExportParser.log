@@ -1,0 +1,3 @@
+[2026-09-11-15:46:32.739] [INFO] [AscendProfiler_CANNExportParser:97] Profiler logger initialized at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_006/rank_006_3674555_20260911154629378_ascend_pt/logs/profiler_20260911154632_3675648_CANNExportParser.log
+[2026-09-11-15:46:32.739] [INFO] [AscendProfiler_CANNExportParser:59] CANNExportParser start.
+[2026-09-11-15:46:42.828] [INFO] [AscendProfiler_CANNExportParser:108] CANNExportParser finish.

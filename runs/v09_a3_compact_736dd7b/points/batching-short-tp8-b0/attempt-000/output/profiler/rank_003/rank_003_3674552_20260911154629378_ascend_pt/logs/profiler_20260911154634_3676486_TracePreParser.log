@@ -1,0 +1,3 @@
+[2026-09-11-15:46:34.049] [INFO] [AscendProfiler_TracePreParser:97] Profiler logger initialized at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_003/rank_003_3674552_20260911154629378_ascend_pt/logs/profiler_20260911154634_3676486_TracePreParser.log
+[2026-09-11-15:46:34.049] [INFO] [AscendProfiler_TracePreParser:36] TracePreParser start.
+[2026-09-11-15:46:35.963] [INFO] [AscendProfiler_TracePreParser:50] TracePreParser finish.

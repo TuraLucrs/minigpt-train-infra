@@ -1,0 +1,3 @@
+[2026-09-11-15:35:06.683] [INFO] [AscendProfiler_CANNAnalyzeParser:97] Profiler logger initialized at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/tp-short-2-vs-8-b0/attempt-000/output/profiler/rank_004/rank_004_3663166_20260911153455076_ascend_pt/logs/profiler_20260911153506_3666073_CANNAnalyzeParser.log
+[2026-09-11-15:35:06.683] [INFO] [AscendProfiler_CANNAnalyzeParser:41] CANNAnalyzeParser start.
+[2026-09-11-15:35:07.719] [INFO] [AscendProfiler_CANNAnalyzeParser:67] CANNAnalyzeParser finish.

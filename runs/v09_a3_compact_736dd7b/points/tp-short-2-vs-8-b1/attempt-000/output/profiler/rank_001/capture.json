@@ -1,0 +1,48 @@
+{
+  "collector": "torch_npu.profiler",
+  "selected": true,
+  "global_rank": 1,
+  "logical_device_id": 1,
+  "observed_scheduler_steps": 32,
+  "protocol": {
+    "skip_steps": 0,
+    "warmup_steps": 0,
+    "active_steps": 4,
+    "record_shapes": true,
+    "profile_memory": false,
+    "with_stack": false,
+    "ascend_profiler_level": "level1",
+    "ascend_aic_metrics": "pipe_utilization",
+    "ascend_sys_interconnection": true
+  },
+  "captured_scheduler_window": {
+    "start_step": 0,
+    "end_step_exclusive": 4,
+    "observed_active_steps": 4,
+    "step_indices": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "prefill_steps": 1,
+    "decode_steps": 3,
+    "mixed_steps": 0
+  },
+  "rank_output_dir": "/root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/tp-short-2-vs-8-b1/attempt-000/output/profiler/rank_001",
+  "backend_protocol": {
+    "skip_steps": 0,
+    "warmup_steps": 0,
+    "active_steps": 4,
+    "profiler_level": "level1",
+    "aic_metrics": "pipe_utilization",
+    "record_shapes": true,
+    "profile_memory": false,
+    "with_stack": false,
+    "sys_interconnection": true
+  },
+  "backend": "npu",
+  "capture_status": "complete",
+  "failure_reason": null,
+  "trace_time_unit": "us"
+}

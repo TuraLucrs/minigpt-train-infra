@@ -1,0 +1,3 @@
+[2026-09-11-15:46:42.686] [INFO] [AscendProfiler_IntegrateParser:97] Profiler logger initialized at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b0/attempt-000/output/profiler/rank_005/rank_005_3674554_20260911154629377_ascend_pt/logs/profiler_20260911154642_3677639_IntegrateParser.log
+[2026-09-11-15:46:42.687] [INFO] [AscendProfiler_IntegrateParser:37] IntegrateParser start.
+[2026-09-11-15:46:43.008] [INFO] [AscendProfiler_IntegrateParser:46] IntegrateParser finish.

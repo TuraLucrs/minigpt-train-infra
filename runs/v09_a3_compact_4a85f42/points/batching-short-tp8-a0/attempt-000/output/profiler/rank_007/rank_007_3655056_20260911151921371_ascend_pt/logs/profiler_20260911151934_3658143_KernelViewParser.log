@@ -1,0 +1,3 @@
+[2026-09-11-15:19:34.523] [INFO] [AscendProfiler_KernelViewParser:97] Profiler logger initialized at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_007/rank_007_3655056_20260911151921371_ascend_pt/logs/profiler_20260911151934_3658143_KernelViewParser.log
+[2026-09-11-15:19:34.523] [INFO] [AscendProfiler_KernelViewParser:45] KernelViewParser start.
+[2026-09-11-15:19:35.052] [INFO] [AscendProfiler_KernelViewParser:53] KernelViewParser finish.

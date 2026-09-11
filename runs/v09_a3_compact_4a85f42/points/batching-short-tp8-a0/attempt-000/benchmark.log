@@ -1,0 +1,64 @@
+<frozen runpy>:128: RuntimeWarning: 'torch.distributed.run' found in sys.modules after import of package 'torch.distributed', but prior to execution of 'torch.distributed.run'; this may result in unpredictable behaviour
+[W911 15:18:43.299926310 ProcessGroupHCCL.cpp:1302] Warning: The watchdog timeout 600000ms(which is set by init_process_group) is less than or equal to HCCL execution timeout 1836000ms! The plog may not be recorded. (function ProcessGroupHCCL)
+[rank0]:[W911 15:18:43.306397300 NPUCachingAllocator.cpp:204] Warning: The current CANN and HDK(driver) versions require processing for 32 padding size, with memory allocation. (function operator())
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[2026-09-11 15:19:21] [WARNING] [3655049] profiler.py: Profiler won't be using warmup, this can skew profiler results
+[2026-09-11 15:19:24] [INFO] [3656067] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_004/rank_004_3655053_20260911151921372_ascend_pt
+|[2026-09-11 15:19:24] [INFO] [3656073] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_007/rank_007_3655056_20260911151921371_ascend_pt
+|[2026-09-11 15:19:24] [INFO] [3656091] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_006/rank_006_3655055_20260911151921370_ascend_pt
+|[2026-09-11 15:19:24] [INFO] [3656109] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_005/rank_005_3655054_20260911151921370_ascend_pt
+|[2026-09-11 15:19:24] [INFO] [3656124] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_000/rank_000_3655049_20260911151921370_ascend_pt
+|[2026-09-11 15:19:24] [INFO] [3656155] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_001/rank_001_3655050_20260911151921372_ascend_pt
+|[2026-09-11 15:19:24] [INFO] [3656218] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_003/rank_003_3655052_20260911151921372_ascend_pt
+[2026-09-11 15:19:24] [INFO] [3656222] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/batching-short-tp8-a0/attempt-000/output/profiler/rank_002/rank_002_3655051_20260911151921371_ascend_pt
+||////////--------\\\\\\\\||||||||////////--------\\\\\\\\||||||||///-/[2026-09-11 15:19:34] [INFO] [3656085] profiler.py: CANN profiling data parsed in a total time of 0:00:10.104153[2026-09-11 15:19:34] [INFO] [3656088] profiler.py: CANN profiling data parsed in a total time of 0:00:10.091781
+
+//[2026-09-11 15:19:34] [INFO] [3656106] profiler.py: CANN profiling data parsed in a total time of 0:00:10.140012
+[2026-09-11 15:19:34] [INFO] [3656118] profiler.py: CANN profiling data parsed in a total time of 0:00:10.070502
+//[2026-09-11 15:19:34] [INFO] [3656146] profiler.py: CANN profiling data parsed in a total time of 0:00:10.102034
+[2026-09-11 15:19:34] [INFO] [3656215] profiler.py: CANN profiling data parsed in a total time of 0:00:10.138553
+-[2026-09-11 15:19:34] [INFO] [3656303] profiler.py: CANN profiling data parsed in a total time of 0:00:10.101923[2026-09-11 15:19:34] [INFO] [3656313] profiler.py: CANN profiling data parsed in a total time of 0:00:10.088719
+
+-\-----\\|\\\\\[2026-09-11 15:19:36] [INFO] [3656073] profiler.py: All profiling data parsed in a total time of 0:00:12.799925
+|/[2026-09-11 15:19:37] [INFO] [3656109] profiler.py: All profiling data parsed in a total time of 0:00:12.856272
+[2026-09-11 15:19:37] [INFO] [3656155] profiler.py: All profiling data parsed in a total time of 0:00:12.750812
+[2026-09-11 15:19:37] [INFO] [3656067] profiler.py: All profiling data parsed in a total time of 0:00:13.322026
+[2026-09-11 15:19:37] [INFO] [3656091] profiler.py: All profiling data parsed in a total time of 0:00:13.115054
+||[2026-09-11 15:19:37] [INFO] [3656222] profiler.py: All profiling data parsed in a total time of 0:00:13.010273
+[2026-09-11 15:19:37] [INFO] [3656218] profiler.py: All profiling data parsed in a total time of 0:00:13.119498
+[2026-09-11 15:19:37] [INFO] [3656124] profiler.py: All profiling data parsed in a total time of 0:00:13.360422
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+W0911 15:20:04.594000 3655039 site-packages/torch/distributed/elastic/agent/server/api.py:739] Received 15 death signal, shutting down workers
+W0911 15:20:04.595000 3655039 site-packages/torch/distributed/elastic/multiprocessing/api.py:1010] Sending process 3655049 closing signal SIGTERM
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/usr/local/lib/python3.12/site-packages/torch/distributed/run.py", line 995, in <module>
+    main()
+  File "/usr/local/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 362, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/distributed/run.py", line 991, in main
+    run(args)
+  File "/usr/local/lib/python3.12/site-packages/torch/distributed/run.py", line 982, in run
+    elastic_launch(
+  File "/usr/local/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 170, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 308, in launch_agent
+    result = agent.run()
+             ^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/distributed/elastic/metrics/api.py", line 134, in wrapper
+    result = f(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/api.py", line 731, in run
+    result = self._invoke_run(role)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/api.py", line 908, in _invoke_run
+    time.sleep(monitor_interval)
+  File "/usr/local/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 86, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 3655039 got signal: 15
+[ERROR] 2026-09-11-15:20:06 (PID:3655039, Device:-1, RankID:-1) ERR99999 UNKNOWN applicaiton exception

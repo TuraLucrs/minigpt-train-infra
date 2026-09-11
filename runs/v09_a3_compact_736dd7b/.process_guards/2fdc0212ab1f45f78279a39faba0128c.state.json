@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "kind": "linux_child_subreaper",
+  "guard": {
+    "pid": 3669881,
+    "birth_marker": "129590710",
+    "parent_pid": 3658488,
+    "process_group_id": 3669881,
+    "session_id": 3669881,
+    "state": "R"
+  },
+  "controller": {
+    "pid": 3658488,
+    "birth_marker": "129478353"
+  },
+  "command": [
+    "/usr/local/bin/python3.12",
+    "-c",
+    "\nimport json, sys\nfrom pathlib import Path\nfrom minigpt.runtime import RuntimeContext\nruntime = RuntimeContext.create(sys.argv[1], sys.argv[2], device_index=0, allow_accelerator_fallback=False, allow_precision_fallback=False)\ncount = runtime.visible_device_count()\nexpected = int(sys.argv[3])\nif runtime.device.type != 'cpu' and count != expected:\n    raise RuntimeError(f'visible device count {count} does not match selected mapping {expected}')\npayload = {'environment': runtime.backend_metadata(), 'visible_device_count': count, 'expected_process_count': expected,\n           'memory': runtime.memory_snapshot().to_dict(), 'visibility_count_verified': True}\nPath(sys.argv[4]).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')\n",
+    "npu",
+    "bf16",
+    "2",
+    "/root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/tp-short-2-vs-8-a1/attempt-000/runtime_probe.json"
+  ],
+  "status": "complete",
+  "cleanup_complete": true,
+  "launcher": {
+    "pid": 3669884,
+    "birth_marker": "129590989",
+    "parent_pid": 3669881,
+    "process_group_id": 3669884,
+    "session_id": 3669884,
+    "state": "R"
+  },
+  "processes": [
+    {
+      "pid": 3669884,
+      "birth_marker": "129590989",
+      "parent_pid": 3669881,
+      "process_group_id": 3669884,
+      "session_id": 3669884
+    }
+  ],
+  "live_processes": [],
+  "errors": [],
+  "launcher_exit_code": 0,
+  "orphaned_workers": false,
+  "stop_requested": false,
+  "completed_at_utc": "2026-09-11T07:39:48.043268+00:00"
+}

@@ -1,0 +1,2293 @@
+{
+  "schema_version": 1,
+  "kind": "linux_child_subreaper",
+  "guard": {
+    "pid": 3671032,
+    "birth_marker": "129609010",
+    "parent_pid": 3658488,
+    "process_group_id": 3671032,
+    "session_id": 3671032,
+    "state": "R"
+  },
+  "controller": {
+    "pid": 3658488,
+    "birth_marker": "129478353"
+  },
+  "command": [
+    "/usr/local/bin/python3.12",
+    "-m",
+    "torch.distributed.run",
+    "--nnodes=1",
+    "--nproc-per-node=8",
+    "--master-addr=127.0.0.1",
+    "--master-port=49017",
+    "/root/minigpt-v09/benchmarks/infer_qwen3_tp.py",
+    "--model-dir",
+    "/data/models/Qwen3-32B",
+    "--workload",
+    "/root/minigpt-v09/runs/v09_a3_compact_736dd7b/workloads/short-n4.json",
+    "--device",
+    "npu",
+    "--precision",
+    "bf16",
+    "--backend",
+    "hccl",
+    "--warmup",
+    "1",
+    "--repeats",
+    "3",
+    "--hash-weights",
+    "--logical-device-ids",
+    "0,1,2,3,4,5,6,7",
+    "--physical-card-count",
+    "4",
+    "--chips-per-card",
+    "2",
+    "--interconnect-topology",
+    "4 physical cards, 2 logical devices per card",
+    "--run-label",
+    "batching-short-tp8-a0",
+    "--distributed-timeout-seconds",
+    "600",
+    "--cann-version",
+    "26.2.rc1.b021",
+    "--decode-mode",
+    "kv_cache",
+    "--output",
+    "/root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a0/attempt-000/output/report.json",
+    "--profile",
+    "--profile-format",
+    "portable",
+    "--profile-ranks",
+    "all",
+    "--profile-skip-steps",
+    "0",
+    "--profile-warmup-steps",
+    "0",
+    "--profile-active-steps",
+    "4"
+  ],
+  "status": "complete",
+  "cleanup_complete": true,
+  "launcher": {
+    "pid": 3671035,
+    "birth_marker": "129609283",
+    "parent_pid": 3671032,
+    "process_group_id": 3671035,
+    "session_id": 3671035,
+    "state": "R"
+  },
+  "processes": [
+    {
+      "pid": 3671035,
+      "birth_marker": "129609283",
+      "parent_pid": 3671032,
+      "process_group_id": 3671035,
+      "session_id": 3671035
+    },
+    {
+      "pid": 3671040,
+      "birth_marker": "129609558",
+      "parent_pid": 3671035,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3671041,
+      "birth_marker": "129609559",
+      "parent_pid": 3671035,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3671042,
+      "birth_marker": "129609559",
+      "parent_pid": 3671035,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3671043,
+      "birth_marker": "129609559",
+      "parent_pid": 3671035,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3671044,
+      "birth_marker": "129609559",
+      "parent_pid": 3671035,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3671045,
+      "birth_marker": "129609560",
+      "parent_pid": 3671035,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3671046,
+      "birth_marker": "129609560",
+      "parent_pid": 3671035,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3671039,
+      "birth_marker": "129609558",
+      "parent_pid": 3671035,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3672064,
+      "birth_marker": "129614227",
+      "parent_pid": 3671045,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672068,
+      "birth_marker": "129614227",
+      "parent_pid": 3671043,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3672082,
+      "birth_marker": "129614236",
+      "parent_pid": 3672068,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3672089,
+      "birth_marker": "129614245",
+      "parent_pid": 3672082,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3672095,
+      "birth_marker": "129614246",
+      "parent_pid": 3672089,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3672085,
+      "birth_marker": "129614237",
+      "parent_pid": 3672064,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672088,
+      "birth_marker": "129614244",
+      "parent_pid": 3672085,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672091,
+      "birth_marker": "129614245",
+      "parent_pid": 3672088,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672098,
+      "birth_marker": "129614246",
+      "parent_pid": 3671039,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3672117,
+      "birth_marker": "129614255",
+      "parent_pid": 3672098,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3672112,
+      "birth_marker": "129614252",
+      "parent_pid": 3671046,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3672124,
+      "birth_marker": "129614258",
+      "parent_pid": 3671042,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3672092,
+      "birth_marker": "129614245",
+      "parent_pid": 3671040,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3672121,
+      "birth_marker": "129614256",
+      "parent_pid": 3672092,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3672137,
+      "birth_marker": "129614261",
+      "parent_pid": 3672121,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3672141,
+      "birth_marker": "129614262",
+      "parent_pid": 3672137,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3672154,
+      "birth_marker": "129614267",
+      "parent_pid": 3672124,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3672210,
+      "birth_marker": "129614278",
+      "parent_pid": 3672154,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3672219,
+      "birth_marker": "129614279",
+      "parent_pid": 3672210,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3672142,
+      "birth_marker": "129614263",
+      "parent_pid": 3672112,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3672181,
+      "birth_marker": "129614274",
+      "parent_pid": 3672142,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3672194,
+      "birth_marker": "129614275",
+      "parent_pid": 3672181,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3672145,
+      "birth_marker": "129614264",
+      "parent_pid": 3672117,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3672153,
+      "birth_marker": "129614265",
+      "parent_pid": 3672145,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3672161,
+      "birth_marker": "129614268",
+      "parent_pid": 3672091,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672213,
+      "birth_marker": "129614279",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672215,
+      "birth_marker": "129614279",
+      "parent_pid": 3672213,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672163,
+      "birth_marker": "129614268",
+      "parent_pid": 3672095,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3672211,
+      "birth_marker": "129614278",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3672214,
+      "birth_marker": "129614279",
+      "parent_pid": 3672211,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3672130,
+      "birth_marker": "129614258",
+      "parent_pid": 3671044,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3672158,
+      "birth_marker": "129614268",
+      "parent_pid": 3672130,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3672209,
+      "birth_marker": "129614278",
+      "parent_pid": 3672158,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3672218,
+      "birth_marker": "129614279",
+      "parent_pid": 3672209,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3672176,
+      "birth_marker": "129614273",
+      "parent_pid": 3671041,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3672234,
+      "birth_marker": "129614281",
+      "parent_pid": 3672176,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3672292,
+      "birth_marker": "129614293",
+      "parent_pid": 3672234,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3672296,
+      "birth_marker": "129614294",
+      "parent_pid": 3672292,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3672416,
+      "birth_marker": "129614302",
+      "parent_pid": 3672218,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3672254,
+      "birth_marker": "129614287",
+      "parent_pid": 3672153,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3672347,
+      "birth_marker": "129614297",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3672360,
+      "birth_marker": "129614298",
+      "parent_pid": 3672347,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3672351,
+      "birth_marker": "129614297",
+      "parent_pid": 3672194,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3672417,
+      "birth_marker": "129614302",
+      "parent_pid": 3672219,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3672246,
+      "birth_marker": "129614284",
+      "parent_pid": 3672141,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3672320,
+      "birth_marker": "129614295",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3672336,
+      "birth_marker": "129614296",
+      "parent_pid": 3672320,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3672544,
+      "birth_marker": "129614315",
+      "parent_pid": 3672417,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3672547,
+      "birth_marker": "129614316",
+      "parent_pid": 3672544,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3672441,
+      "birth_marker": "129614307",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3672442,
+      "birth_marker": "129614308",
+      "parent_pid": 3672441,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3672539,
+      "birth_marker": "129614314",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3672542,
+      "birth_marker": "129614314",
+      "parent_pid": 3672539,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3672546,
+      "birth_marker": "129614315",
+      "parent_pid": 3672296,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3672652,
+      "birth_marker": "129614326",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3672657,
+      "birth_marker": "129614326",
+      "parent_pid": 3672652,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3672848,
+      "birth_marker": "129614356",
+      "parent_pid": 3672068,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3672850,
+      "birth_marker": "129614356",
+      "parent_pid": 3672064,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672877,
+      "birth_marker": "129614381",
+      "parent_pid": 3672130,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3672884,
+      "birth_marker": "129614383",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672885,
+      "birth_marker": "129614383",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672886,
+      "birth_marker": "129614383",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672887,
+      "birth_marker": "129614384",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672888,
+      "birth_marker": "129614384",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672889,
+      "birth_marker": "129614384",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3672870,
+      "birth_marker": "129614377",
+      "parent_pid": 3672092,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3672875,
+      "birth_marker": "129614381",
+      "parent_pid": 3672124,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3672866,
+      "birth_marker": "129614376",
+      "parent_pid": 3672112,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3672858,
+      "birth_marker": "129614370",
+      "parent_pid": 3672098,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673026,
+      "birth_marker": "129614408",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673027,
+      "birth_marker": "129614408",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673005,
+      "birth_marker": "129614406",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673008,
+      "birth_marker": "129614407",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673009,
+      "birth_marker": "129614407",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673010,
+      "birth_marker": "129614407",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673012,
+      "birth_marker": "129614407",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673013,
+      "birth_marker": "129614407",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673015,
+      "birth_marker": "129614408",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673020,
+      "birth_marker": "129614408",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673001,
+      "birth_marker": "129614405",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3672971,
+      "birth_marker": "129614400",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673209,
+      "birth_marker": "129614432",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673207,
+      "birth_marker": "129614432",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673102,
+      "birth_marker": "129614420",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673130,
+      "birth_marker": "129614423",
+      "parent_pid": 3672417,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673158,
+      "birth_marker": "129614426",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673029,
+      "birth_marker": "129614409",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673201,
+      "birth_marker": "129614431",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673202,
+      "birth_marker": "129614431",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673206,
+      "birth_marker": "129614432",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673208,
+      "birth_marker": "129614432",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673210,
+      "birth_marker": "129614432",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673211,
+      "birth_marker": "129614432",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673212,
+      "birth_marker": "129614432",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673031,
+      "birth_marker": "129614409",
+      "parent_pid": 3672176,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673216,
+      "birth_marker": "129614434",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673237,
+      "birth_marker": "129614438",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673318,
+      "birth_marker": "129614479",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673319,
+      "birth_marker": "129614479",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673320,
+      "birth_marker": "129614479",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673322,
+      "birth_marker": "129614480",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673323,
+      "birth_marker": "129614480",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673324,
+      "birth_marker": "129614480",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673312,
+      "birth_marker": "129614477",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673313,
+      "birth_marker": "129614477",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673308,
+      "birth_marker": "129614477",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673309,
+      "birth_marker": "129614477",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673310,
+      "birth_marker": "129614477",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673311,
+      "birth_marker": "129614477",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673298,
+      "birth_marker": "129614472",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673299,
+      "birth_marker": "129614472",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673300,
+      "birth_marker": "129614472",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673366,
+      "birth_marker": "129614506",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673367,
+      "birth_marker": "129614506",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673368,
+      "birth_marker": "129614506",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673369,
+      "birth_marker": "129614506",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673370,
+      "birth_marker": "129614507",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673371,
+      "birth_marker": "129614507",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673373,
+      "birth_marker": "129614509",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673380,
+      "birth_marker": "129614511",
+      "parent_pid": 3672417,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673359,
+      "birth_marker": "129614499",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673360,
+      "birth_marker": "129614499",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673361,
+      "birth_marker": "129614499",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673362,
+      "birth_marker": "129614499",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673363,
+      "birth_marker": "129614499",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673364,
+      "birth_marker": "129614499",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673354,
+      "birth_marker": "129614495",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673376,
+      "birth_marker": "129614510",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673377,
+      "birth_marker": "129614510",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673378,
+      "birth_marker": "129614510",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673379,
+      "birth_marker": "129614511",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673374,
+      "birth_marker": "129614510",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673375,
+      "birth_marker": "129614510",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673347,
+      "birth_marker": "129614493",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673334,
+      "birth_marker": "129614487",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673382,
+      "birth_marker": "129614522",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673381,
+      "birth_marker": "129614515",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673383,
+      "birth_marker": "129614526",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673393,
+      "birth_marker": "129614572",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673394,
+      "birth_marker": "129614572",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673395,
+      "birth_marker": "129614572",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673389,
+      "birth_marker": "129614571",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673390,
+      "birth_marker": "129614571",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673391,
+      "birth_marker": "129614571",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673385,
+      "birth_marker": "129614566",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673386,
+      "birth_marker": "129614566",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673387,
+      "birth_marker": "129614566",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673409,
+      "birth_marker": "129614600",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673410,
+      "birth_marker": "129614600",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673411,
+      "birth_marker": "129614600",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673401,
+      "birth_marker": "129614588",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673402,
+      "birth_marker": "129614588",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673403,
+      "birth_marker": "129614588",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673397,
+      "birth_marker": "129614587",
+      "parent_pid": 3672417,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673398,
+      "birth_marker": "129614587",
+      "parent_pid": 3672417,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673399,
+      "birth_marker": "129614587",
+      "parent_pid": 3672417,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673405,
+      "birth_marker": "129614591",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673406,
+      "birth_marker": "129614592",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673407,
+      "birth_marker": "129614592",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673413,
+      "birth_marker": "129614602",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673414,
+      "birth_marker": "129614602",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673415,
+      "birth_marker": "129614602",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673416,
+      "birth_marker": "129614631",
+      "parent_pid": 3672161,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673460,
+      "birth_marker": "129614655",
+      "parent_pid": 3672246,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673449,
+      "birth_marker": "129614651",
+      "parent_pid": 3672417,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673461,
+      "birth_marker": "129614656",
+      "parent_pid": 3672351,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673428,
+      "birth_marker": "129614637",
+      "parent_pid": 3672254,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673427,
+      "birth_marker": "129614637",
+      "parent_pid": 3672163,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673482,
+      "birth_marker": "129614665",
+      "parent_pid": 3672546,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673493,
+      "birth_marker": "129614669",
+      "parent_pid": 3672416,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673688,
+      "birth_marker": "129614945",
+      "parent_pid": 3672088,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673689,
+      "birth_marker": "129614946",
+      "parent_pid": 3672089,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673695,
+      "birth_marker": "129614967",
+      "parent_pid": 3673689,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673693,
+      "birth_marker": "129614967",
+      "parent_pid": 3673688,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673698,
+      "birth_marker": "129614971",
+      "parent_pid": 3673693,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673699,
+      "birth_marker": "129614971",
+      "parent_pid": 3673693,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673700,
+      "birth_marker": "129614971",
+      "parent_pid": 3673693,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673691,
+      "birth_marker": "129614965",
+      "parent_pid": 3672145,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673690,
+      "birth_marker": "129614962",
+      "parent_pid": 3672137,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673714,
+      "birth_marker": "129614984",
+      "parent_pid": 3673690,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673732,
+      "birth_marker": "129614989",
+      "parent_pid": 3673714,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673720,
+      "birth_marker": "129614988",
+      "parent_pid": 3673714,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673722,
+      "birth_marker": "129614988",
+      "parent_pid": 3673714,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673724,
+      "birth_marker": "129614988",
+      "parent_pid": 3673714,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673725,
+      "birth_marker": "129614989",
+      "parent_pid": 3673714,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673727,
+      "birth_marker": "129614989",
+      "parent_pid": 3673714,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673717,
+      "birth_marker": "129614987",
+      "parent_pid": 3673691,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673760,
+      "birth_marker": "129614993",
+      "parent_pid": 3673717,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673761,
+      "birth_marker": "129614993",
+      "parent_pid": 3673717,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673762,
+      "birth_marker": "129614993",
+      "parent_pid": 3673717,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673737,
+      "birth_marker": "129614992",
+      "parent_pid": 3673717,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673738,
+      "birth_marker": "129614992",
+      "parent_pid": 3673717,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673749,
+      "birth_marker": "129614992",
+      "parent_pid": 3673717,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673735,
+      "birth_marker": "129614991",
+      "parent_pid": 3673693,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673736,
+      "birth_marker": "129614991",
+      "parent_pid": 3673695,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673763,
+      "birth_marker": "129614994",
+      "parent_pid": 3672292,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673711,
+      "birth_marker": "129614980",
+      "parent_pid": 3672209,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673710,
+      "birth_marker": "129614975",
+      "parent_pid": 3672181,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673712,
+      "birth_marker": "129614980",
+      "parent_pid": 3672210,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673769,
+      "birth_marker": "129615002",
+      "parent_pid": 3673712,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673792,
+      "birth_marker": "129615008",
+      "parent_pid": 3673769,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673794,
+      "birth_marker": "129615008",
+      "parent_pid": 3673769,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673796,
+      "birth_marker": "129615008",
+      "parent_pid": 3673769,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673785,
+      "birth_marker": "129615008",
+      "parent_pid": 3673769,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673787,
+      "birth_marker": "129615008",
+      "parent_pid": 3673769,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673789,
+      "birth_marker": "129615008",
+      "parent_pid": 3673769,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673765,
+      "birth_marker": "129614998",
+      "parent_pid": 3673710,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673827,
+      "birth_marker": "129615020",
+      "parent_pid": 3673765,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673828,
+      "birth_marker": "129615020",
+      "parent_pid": 3673765,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673829,
+      "birth_marker": "129615020",
+      "parent_pid": 3673765,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673830,
+      "birth_marker": "129615020",
+      "parent_pid": 3673765,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673770,
+      "birth_marker": "129615002",
+      "parent_pid": 3673711,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673793,
+      "birth_marker": "129615008",
+      "parent_pid": 3673770,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673795,
+      "birth_marker": "129615008",
+      "parent_pid": 3673770,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673786,
+      "birth_marker": "129615008",
+      "parent_pid": 3673770,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673788,
+      "birth_marker": "129615008",
+      "parent_pid": 3673770,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673790,
+      "birth_marker": "129615008",
+      "parent_pid": 3673770,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673791,
+      "birth_marker": "129615008",
+      "parent_pid": 3673770,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673824,
+      "birth_marker": "129615016",
+      "parent_pid": 3673763,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673812,
+      "birth_marker": "129615012",
+      "parent_pid": 3673717,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673784,
+      "birth_marker": "129615007",
+      "parent_pid": 3673714,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673885,
+      "birth_marker": "129615041",
+      "parent_pid": 3673824,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3673859,
+      "birth_marker": "129615027",
+      "parent_pid": 3673770,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3673831,
+      "birth_marker": "129615021",
+      "parent_pid": 3673765,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673858,
+      "birth_marker": "129615027",
+      "parent_pid": 3673769,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3673912,
+      "birth_marker": "129615114",
+      "parent_pid": 3672064,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673918,
+      "birth_marker": "129615118",
+      "parent_pid": 3672064,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673915,
+      "birth_marker": "129615115",
+      "parent_pid": 3673912,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673917,
+      "birth_marker": "129615116",
+      "parent_pid": 3673915,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3673944,
+      "birth_marker": "129615132",
+      "parent_pid": 3672092,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673949,
+      "birth_marker": "129615136",
+      "parent_pid": 3672092,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673946,
+      "birth_marker": "129615133",
+      "parent_pid": 3673944,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673948,
+      "birth_marker": "129615134",
+      "parent_pid": 3673946,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3673953,
+      "birth_marker": "129615140",
+      "parent_pid": 3672098,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673964,
+      "birth_marker": "129615141",
+      "parent_pid": 3673953,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673966,
+      "birth_marker": "129615142",
+      "parent_pid": 3673964,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3673921,
+      "birth_marker": "129615124",
+      "parent_pid": 3672068,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673926,
+      "birth_marker": "129615127",
+      "parent_pid": 3672068,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673923,
+      "birth_marker": "129615124",
+      "parent_pid": 3673921,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3673925,
+      "birth_marker": "129615125",
+      "parent_pid": 3673923,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3674080,
+      "birth_marker": "129615180",
+      "parent_pid": 3672176,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674068,
+      "birth_marker": "129615175",
+      "parent_pid": 3672176,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674070,
+      "birth_marker": "129615176",
+      "parent_pid": 3674068,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674072,
+      "birth_marker": "129615177",
+      "parent_pid": 3674070,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674017,
+      "birth_marker": "129615155",
+      "parent_pid": 3672130,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3674030,
+      "birth_marker": "129615160",
+      "parent_pid": 3672130,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3674022,
+      "birth_marker": "129615156",
+      "parent_pid": 3674017,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3674027,
+      "birth_marker": "129615157",
+      "parent_pid": 3674022,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3674012,
+      "birth_marker": "129615152",
+      "parent_pid": 3672124,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3674021,
+      "birth_marker": "129615156",
+      "parent_pid": 3672124,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3674025,
+      "birth_marker": "129615157",
+      "parent_pid": 3674021,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3674029,
+      "birth_marker": "129615158",
+      "parent_pid": 3674025,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3674003,
+      "birth_marker": "129615150",
+      "parent_pid": 3672112,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3674019,
+      "birth_marker": "129615156",
+      "parent_pid": 3672112,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3674032,
+      "birth_marker": "129615161",
+      "parent_pid": 3674003,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3674034,
+      "birth_marker": "129615162",
+      "parent_pid": 3674032,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3673970,
+      "birth_marker": "129615144",
+      "parent_pid": 3672098,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3674116,
+      "birth_marker": "129615205",
+      "parent_pid": 3673824,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674117,
+      "birth_marker": "129615205",
+      "parent_pid": 3673824,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674118,
+      "birth_marker": "129615206",
+      "parent_pid": 3673824,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674119,
+      "birth_marker": "129615206",
+      "parent_pid": 3673824,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674120,
+      "birth_marker": "129615206",
+      "parent_pid": 3673824,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674135,
+      "birth_marker": "129615279",
+      "parent_pid": 3672092,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3674128,
+      "birth_marker": "129615258",
+      "parent_pid": 3672068,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3674130,
+      "birth_marker": "129615259",
+      "parent_pid": 3672064,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3674132,
+      "birth_marker": "129615271",
+      "parent_pid": 3672064,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3674162,
+      "birth_marker": "129615300",
+      "parent_pid": 3672130,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3674152,
+      "birth_marker": "129615295",
+      "parent_pid": 3672092,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3674160,
+      "birth_marker": "129615300",
+      "parent_pid": 3672092,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3674143,
+      "birth_marker": "129615289",
+      "parent_pid": 3672092,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3674161,
+      "birth_marker": "129615300",
+      "parent_pid": 3672124,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3674154,
+      "birth_marker": "129615296",
+      "parent_pid": 3672124,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3674158,
+      "birth_marker": "129615300",
+      "parent_pid": 3672112,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3674145,
+      "birth_marker": "129615290",
+      "parent_pid": 3672098,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3674150,
+      "birth_marker": "129615294",
+      "parent_pid": 3672098,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3674156,
+      "birth_marker": "129615299",
+      "parent_pid": 3672098,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3674170,
+      "birth_marker": "129615304",
+      "parent_pid": 3672098,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3674168,
+      "birth_marker": "129615301",
+      "parent_pid": 3672068,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3674147,
+      "birth_marker": "129615290",
+      "parent_pid": 3672068,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3674172,
+      "birth_marker": "129615305",
+      "parent_pid": 3672068,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3674190,
+      "birth_marker": "129615311",
+      "parent_pid": 3672176,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674178,
+      "birth_marker": "129615306",
+      "parent_pid": 3672130,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3674211,
+      "birth_marker": "129615327",
+      "parent_pid": 3672130,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3674189,
+      "birth_marker": "129615311",
+      "parent_pid": 3672130,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3674199,
+      "birth_marker": "129615316",
+      "parent_pid": 3672130,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3674203,
+      "birth_marker": "129615322",
+      "parent_pid": 3672130,
+      "process_group_id": 3671044,
+      "session_id": 3671044
+    },
+    {
+      "pid": 3674174,
+      "birth_marker": "129615306",
+      "parent_pid": 3672092,
+      "process_group_id": 3671040,
+      "session_id": 3671040
+    },
+    {
+      "pid": 3674187,
+      "birth_marker": "129615311",
+      "parent_pid": 3672124,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3674197,
+      "birth_marker": "129615316",
+      "parent_pid": 3672124,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3674207,
+      "birth_marker": "129615325",
+      "parent_pid": 3672124,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3674175,
+      "birth_marker": "129615306",
+      "parent_pid": 3672124,
+      "process_group_id": 3671042,
+      "session_id": 3671042
+    },
+    {
+      "pid": 3674193,
+      "birth_marker": "129615313",
+      "parent_pid": 3672112,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3674201,
+      "birth_marker": "129615319",
+      "parent_pid": 3672112,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3674205,
+      "birth_marker": "129615325",
+      "parent_pid": 3672112,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3674182,
+      "birth_marker": "129615309",
+      "parent_pid": 3672098,
+      "process_group_id": 3671039,
+      "session_id": 3671039
+    },
+    {
+      "pid": 3674184,
+      "birth_marker": "129615309",
+      "parent_pid": 3672068,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3674195,
+      "birth_marker": "129615313",
+      "parent_pid": 3672068,
+      "process_group_id": 3671043,
+      "session_id": 3671043
+    },
+    {
+      "pid": 3674209,
+      "birth_marker": "129615326",
+      "parent_pid": 3672064,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3674213,
+      "birth_marker": "129615331",
+      "parent_pid": 3672112,
+      "process_group_id": 3671046,
+      "session_id": 3671046
+    },
+    {
+      "pid": 3674215,
+      "birth_marker": "129615331",
+      "parent_pid": 3672064,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3674217,
+      "birth_marker": "129615337",
+      "parent_pid": 3672064,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3674219,
+      "birth_marker": "129615342",
+      "parent_pid": 3672064,
+      "process_group_id": 3671045,
+      "session_id": 3671045
+    },
+    {
+      "pid": 3674226,
+      "birth_marker": "129615372",
+      "parent_pid": 3672176,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674224,
+      "birth_marker": "129615366",
+      "parent_pid": 3672176,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674228,
+      "birth_marker": "129615377",
+      "parent_pid": 3672176,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    },
+    {
+      "pid": 3674230,
+      "birth_marker": "129615384",
+      "parent_pid": 3672176,
+      "process_group_id": 3671041,
+      "session_id": 3671041
+    }
+  ],
+  "live_processes": [],
+  "errors": [],
+  "launcher_exit_code": 0,
+  "orphaned_workers": false,
+  "stop_requested": false,
+  "completed_at_utc": "2026-09-11T07:44:54.251785+00:00"
+}

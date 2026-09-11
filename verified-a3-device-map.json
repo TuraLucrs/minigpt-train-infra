@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "description": "Atlas A3 node-21-123: 8 physical cards x 2 chips per card; logical ids verified against npu-smi info -m (Chip Logic ID = card*2 + chip) on 2026-09-11",
+  "verified_via": "npu-smi info -m",
+  "devices": [
+    {"logical_device_id": 0, "physical_card_id": 0, "chip_id": 0},
+    {"logical_device_id": 1, "physical_card_id": 0, "chip_id": 1},
+    {"logical_device_id": 2, "physical_card_id": 1, "chip_id": 0},
+    {"logical_device_id": 3, "physical_card_id": 1, "chip_id": 1},
+    {"logical_device_id": 4, "physical_card_id": 2, "chip_id": 0},
+    {"logical_device_id": 5, "physical_card_id": 2, "chip_id": 1},
+    {"logical_device_id": 6, "physical_card_id": 3, "chip_id": 0},
+    {"logical_device_id": 7, "physical_card_id": 3, "chip_id": 1},
+    {"logical_device_id": 8, "physical_card_id": 4, "chip_id": 0},
+    {"logical_device_id": 9, "physical_card_id": 4, "chip_id": 1},
+    {"logical_device_id": 10, "physical_card_id": 5, "chip_id": 0},
+    {"logical_device_id": 11, "physical_card_id": 5, "chip_id": 1},
+    {"logical_device_id": 12, "physical_card_id": 6, "chip_id": 0},
+    {"logical_device_id": 13, "physical_card_id": 6, "chip_id": 1},
+    {"logical_device_id": 14, "physical_card_id": 7, "chip_id": 0},
+    {"logical_device_id": 15, "physical_card_id": 7, "chip_id": 1}
+  ]
+}

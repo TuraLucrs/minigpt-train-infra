@@ -1,0 +1,698 @@
+{
+  "schema_version": 2,
+  "created_at_utc": "2026-09-11T07:39:11.222395+00:00",
+  "backend": "npu",
+  "collector": "torch_npu.profiler",
+  "trace_format": "ascend_level1",
+  "layout_id": "tp8",
+  "workload_class": "short_short",
+  "mode": "single_request",
+  "source_workload_sha256": "d083a2334012f6ddf0100f56caf7882b80addcb193f5ae3cf760d039b3daf0ab",
+  "source_workload_file_sha256": "8531f94cfaaa6cb6b807ddd14bd51b44bb364909186a8e93af403c10fe20ce3e",
+  "git_commit": "51d87402a17b182caa092aa866a3996d7add3830",
+  "selected_ranks": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "logical_device_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "global_world_size": 8,
+  "protocol": {
+    "skip_steps": 0,
+    "warmup_steps": 0,
+    "active_steps": 4,
+    "record_shapes": true,
+    "profile_memory": false,
+    "with_stack": false,
+    "ascend_profiler_level": "level1",
+    "ascend_aic_metrics": "pipe_utilization",
+    "ascend_sys_interconnection": true
+  },
+  "required_artifact_kinds": [
+    "capture_metadata",
+    "communication",
+    "kernel_details",
+    "operator_details",
+    "profiler_info",
+    "step_trace_time",
+    "trace_view"
+  ],
+  "complete": true,
+  "incomplete_reasons": [],
+  "ranks": [
+    {
+      "global_rank": 0,
+      "logical_device_id": 0,
+      "complete": true,
+      "missing": [],
+      "artifacts": [
+        {
+          "kind": "capture_metadata",
+          "path": "profiler/rank_000/capture.json",
+          "sha256": "0ec54eef31fe2c201f6144e91397260b280eb2c54140bad0dfc2deb574827fed",
+          "size_bytes": 1203
+        },
+        {
+          "kind": "api_statistic",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/api_statistic.csv",
+          "sha256": "68d4eb2c57cf2a9de9039556a19b68dc842a9701fc0829313013655a418dd894",
+          "size_bytes": 5335
+        },
+        {
+          "kind": "communication",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/communication.json",
+          "sha256": "e9d36af28d089b82ddcf69a1b6d97abc4fc693a8cbede67d4a97a70fb451277b",
+          "size_bytes": 596087
+        },
+        {
+          "kind": "communication_matrix",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/communication_matrix.json",
+          "sha256": "f733ff19c5dc0ab7fea8c93301e908986e80b3f58dbe12f8955f3e17e14b1e29",
+          "size_bytes": 34604
+        },
+        {
+          "kind": "hccs",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/hccs.csv",
+          "sha256": "b40625b0a5f24530fdcaf4b884d2703af082ae06477937db2150ad729480e1ec",
+          "size_bytes": 112
+        },
+        {
+          "kind": "kernel_details",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/kernel_details.csv",
+          "sha256": "0830efdcc549df0bc8ecb9b84bef7fdfcaf3d00a0a5e4f39fd892ee7b3a07835",
+          "size_bytes": 7458556
+        },
+        {
+          "kind": "op_statistic",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/op_statistic.csv",
+          "sha256": "7756214cf2449612fbc46430a436253d4fa009f3d2c7f2e8b59271415331dc33",
+          "size_bytes": 2962
+        },
+        {
+          "kind": "operator_details",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/operator_details.csv",
+          "sha256": "af7a139bcc524e1debe3d60aa451aa1b2bc0d7e53038e904bc01b6dcb13503f0",
+          "size_bytes": 5087181
+        },
+        {
+          "kind": "pcie",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/pcie.csv",
+          "sha256": "c7f9ce8e5e103588a34083a4e078dfe0e3fe291709b837222b740c796cc07851",
+          "size_bytes": 256
+        },
+        {
+          "kind": "step_trace_time",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/step_trace_time.csv",
+          "sha256": "d65bf0181528987d864ea42b6828b8a28c1a0a5302902eb459c1b4dff8f0728f",
+          "size_bytes": 584
+        },
+        {
+          "kind": "trace_view",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+          "sha256": "2b915816e206aec60178e684369b77d85f09697ac54d78ba30a43dae2a2e6887",
+          "size_bytes": 122533110
+        },
+        {
+          "kind": "profiler_info",
+          "path": "profiler/rank_000/rank_000_3666663_20260911153752436_ascend_pt/profiler_info_0.json",
+          "sha256": "54114abd7703d0c305d0eae7e3958f9c5de6f8281f35b386509fd24eb522d25a",
+          "size_bytes": 1601
+        }
+      ]
+    },
+    {
+      "global_rank": 1,
+      "logical_device_id": 1,
+      "complete": true,
+      "missing": [],
+      "artifacts": [
+        {
+          "kind": "capture_metadata",
+          "path": "profiler/rank_001/capture.json",
+          "sha256": "164b77a90ef4f9dd1670bb84da5ccde11cf1a11744bca1f320b7caeb34077eaf",
+          "size_bytes": 1203
+        },
+        {
+          "kind": "api_statistic",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/ASCEND_PROFILER_OUTPUT/api_statistic.csv",
+          "sha256": "67636799810dbdcb23b6378d2a3919ea6e4dd810472c2b6c848f3af42b9aac25",
+          "size_bytes": 5248
+        },
+        {
+          "kind": "communication",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/ASCEND_PROFILER_OUTPUT/communication.json",
+          "sha256": "c8f9e2b14eb40c9e3d7af289b410037bff1e945c78239587a61602a30a2fd2bc",
+          "size_bytes": 600338
+        },
+        {
+          "kind": "communication_matrix",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/ASCEND_PROFILER_OUTPUT/communication_matrix.json",
+          "sha256": "9bb75b29aa5d198a315067604605206ff9dd8b633c24d7c280c46c86c7a8601e",
+          "size_bytes": 34474
+        },
+        {
+          "kind": "hccs",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/ASCEND_PROFILER_OUTPUT/hccs.csv",
+          "sha256": "54531bd88112263e41cad1a0d7cd4b4eedce608d2bafd28112b564a549808199",
+          "size_bytes": 114
+        },
+        {
+          "kind": "kernel_details",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/ASCEND_PROFILER_OUTPUT/kernel_details.csv",
+          "sha256": "e3c57ade14591dd17a8548a2db3e51ec6b5c14a0127a3712f23196b5ba826133",
+          "size_bytes": 7458318
+        },
+        {
+          "kind": "op_statistic",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/ASCEND_PROFILER_OUTPUT/op_statistic.csv",
+          "sha256": "1cb9538124ff495a910633218a8e74973ef420d4f527a7f8d79991f0168ff41a",
+          "size_bytes": 2958
+        },
+        {
+          "kind": "operator_details",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/ASCEND_PROFILER_OUTPUT/operator_details.csv",
+          "sha256": "a2d0f636452214f85050664734a91972caa38d33f3ddc68c1bb4b4fec7bed9eb",
+          "size_bytes": 5199069
+        },
+        {
+          "kind": "pcie",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/ASCEND_PROFILER_OUTPUT/pcie.csv",
+          "sha256": "fb6b28106eb6db7731fcb04b9e95524fbb12f78715b1a1d3a7fe221fbf8c063c",
+          "size_bytes": 256
+        },
+        {
+          "kind": "step_trace_time",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/ASCEND_PROFILER_OUTPUT/step_trace_time.csv",
+          "sha256": "5e66031e725655fcbc29c75dff8a1c378c302cf00a156d1989204cfa33490e7e",
+          "size_bytes": 636
+        },
+        {
+          "kind": "trace_view",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+          "sha256": "b0dedf1e348f9c1c26a0fc11036a9f9a8c2d72ec3f26f856168cb72b61aab10d",
+          "size_bytes": 122484681
+        },
+        {
+          "kind": "profiler_info",
+          "path": "profiler/rank_001/rank_001_3666664_20260911153752437_ascend_pt/profiler_info_1.json",
+          "sha256": "790976e0dce4256bbe21bbf4cda0f0aac24d0a6cf18d9e378aacd1c7a7fa8048",
+          "size_bytes": 1601
+        }
+      ]
+    },
+    {
+      "global_rank": 2,
+      "logical_device_id": 2,
+      "complete": true,
+      "missing": [],
+      "artifacts": [
+        {
+          "kind": "capture_metadata",
+          "path": "profiler/rank_002/capture.json",
+          "sha256": "a075ca2cae645f462e048b1cf0281d99c2cdce0b33765426400326ef4c401ea2",
+          "size_bytes": 1203
+        },
+        {
+          "kind": "api_statistic",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/api_statistic.csv",
+          "sha256": "1e1df0dfc026083c28289642a84c99969036fec02f2e0135c3678b25ea2a8872",
+          "size_bytes": 5267
+        },
+        {
+          "kind": "communication",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/communication.json",
+          "sha256": "c8fa63503b129db7345868c7d940dca67bebbf0b6602b1ecdafc07b1610e636d",
+          "size_bytes": 599853
+        },
+        {
+          "kind": "communication_matrix",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/communication_matrix.json",
+          "sha256": "f49d7ed7286445bc67bd94cebbfa011e238021367798500ccc52b83dab9f6295",
+          "size_bytes": 34677
+        },
+        {
+          "kind": "hccs",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/hccs.csv",
+          "sha256": "2b27529b25f3a565fb41e360ca9d59f7816632159ea5edd77bd1905a3824e823",
+          "size_bytes": 113
+        },
+        {
+          "kind": "kernel_details",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/kernel_details.csv",
+          "sha256": "85d1415486446004ddb85aafa7108b86c71a303de14491a769c023e13fbadd94",
+          "size_bytes": 7461105
+        },
+        {
+          "kind": "op_statistic",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/op_statistic.csv",
+          "sha256": "80c3ed08aa996ad2d9bd9a328e838fe9404dd36289eae85b33b24eefabf62f21",
+          "size_bytes": 2965
+        },
+        {
+          "kind": "operator_details",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/operator_details.csv",
+          "sha256": "028c93785c735717b87ebe81868a859675de2956357ed8b078b8fc83aa5bb120",
+          "size_bytes": 5201161
+        },
+        {
+          "kind": "pcie",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/pcie.csv",
+          "sha256": "8c608841ae1c7788eb0beea7e5275ce60ca2e68f40a6e446db43fce4994350bc",
+          "size_bytes": 256
+        },
+        {
+          "kind": "step_trace_time",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/step_trace_time.csv",
+          "sha256": "7bed0c9fa94a1bf9e177e7963842c6a176ee41c7a19f1d7457162fd6871eaeef",
+          "size_bytes": 634
+        },
+        {
+          "kind": "trace_view",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+          "sha256": "d3555f8af02935a7a90e006fa588a822e22faffaefa9a7cfecf6f83f550f14bf",
+          "size_bytes": 122437088
+        },
+        {
+          "kind": "profiler_info",
+          "path": "profiler/rank_002/rank_002_3666665_20260911153752436_ascend_pt/profiler_info_2.json",
+          "sha256": "7d8147506b27b26745e371ac5abb241ea6c3e24ff4d10d2a473031f0742d1c75",
+          "size_bytes": 1601
+        }
+      ]
+    },
+    {
+      "global_rank": 3,
+      "logical_device_id": 3,
+      "complete": true,
+      "missing": [],
+      "artifacts": [
+        {
+          "kind": "capture_metadata",
+          "path": "profiler/rank_003/capture.json",
+          "sha256": "a19898bfc8489eedb9cc7ed6f0e495d9f483c8357da19701a01dee0b456b960e",
+          "size_bytes": 1203
+        },
+        {
+          "kind": "api_statistic",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/api_statistic.csv",
+          "sha256": "8f540fb88682639a7816624ae83b00774bd13249e965e78d2f6af545f7c831af",
+          "size_bytes": 5306
+        },
+        {
+          "kind": "communication",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/communication.json",
+          "sha256": "25d95dc38b8c744ff4d2593457e74ae73b35b9540700c8ffbf96aaf5fabf9025",
+          "size_bytes": 601215
+        },
+        {
+          "kind": "communication_matrix",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/communication_matrix.json",
+          "sha256": "a2375caf54b4f5a9f34343588c35ff5e0b948748c5da092465dcd625b54d65c3",
+          "size_bytes": 36839
+        },
+        {
+          "kind": "hccs",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/hccs.csv",
+          "sha256": "61b56722ffe52e4486c7e933844505023a883933eedce3ebc62172160d643ba7",
+          "size_bytes": 114
+        },
+        {
+          "kind": "kernel_details",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/kernel_details.csv",
+          "sha256": "68448cb6a2977b84b9a5539a9c108c398a9fc11f7e740b7aaf38962455c1f040",
+          "size_bytes": 7457444
+        },
+        {
+          "kind": "op_statistic",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/op_statistic.csv",
+          "sha256": "2f0263e389ffd3b1df3ff3db684acdbf48cdc77dce5f5e10aa44e089bd0f0fce",
+          "size_bytes": 2962
+        },
+        {
+          "kind": "operator_details",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/operator_details.csv",
+          "sha256": "628e6c31def8ced47710e8f40da08a8067ab5ea26820549de24824cd4fec54d6",
+          "size_bytes": 5199392
+        },
+        {
+          "kind": "pcie",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/pcie.csv",
+          "sha256": "7365f7646431ce0df3b55d6386b4c5c41e6fdfd6077a6ca3980ea791c822fba9",
+          "size_bytes": 256
+        },
+        {
+          "kind": "step_trace_time",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/step_trace_time.csv",
+          "sha256": "1d19841280d5ab0e59eb113336c41a62b41d8bf7b25220ce49eccdfd87c70a1f",
+          "size_bytes": 613
+        },
+        {
+          "kind": "trace_view",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+          "sha256": "2483dd74323a858c0425f257cca29978b061e2cbbe974308468974008d130d3b",
+          "size_bytes": 122568941
+        },
+        {
+          "kind": "profiler_info",
+          "path": "profiler/rank_003/rank_003_3666666_20260911153752435_ascend_pt/profiler_info_3.json",
+          "sha256": "16d7a0aaf3966f73a9301e2b78e75782a73054d1ca08d624d7e3d7ca779b9e3f",
+          "size_bytes": 1601
+        }
+      ]
+    },
+    {
+      "global_rank": 4,
+      "logical_device_id": 4,
+      "complete": true,
+      "missing": [],
+      "artifacts": [
+        {
+          "kind": "capture_metadata",
+          "path": "profiler/rank_004/capture.json",
+          "sha256": "064d344ff9d2ab365997eb60e9d544f27b97b658f512e44d0b5e780348956a4b",
+          "size_bytes": 1203
+        },
+        {
+          "kind": "api_statistic",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/api_statistic.csv",
+          "sha256": "7918d98dd950b6d4de7e5383eb3464bf4b3cd77048cca7e0182c2c256fa704fd",
+          "size_bytes": 5264
+        },
+        {
+          "kind": "communication",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/communication.json",
+          "sha256": "b746732d43fa47c8d89a93144268081f49b590b61544549e975f7431feba0e72",
+          "size_bytes": 601192
+        },
+        {
+          "kind": "communication_matrix",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/communication_matrix.json",
+          "sha256": "81bb74053ad7d46cbbbca7e6b1a59fc36b476d6efa27103f8ce61c1afe4c0634",
+          "size_bytes": 36846
+        },
+        {
+          "kind": "hccs",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/hccs.csv",
+          "sha256": "d25ddbf9680fa354f28964affb4af0636b65a1e138cbc930d8a5854252aa6af7",
+          "size_bytes": 114
+        },
+        {
+          "kind": "kernel_details",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/kernel_details.csv",
+          "sha256": "fef1c855d1e50b68e2acad9a7431e7f70fdee5fb3d098773baf006195d3455c1",
+          "size_bytes": 7456951
+        },
+        {
+          "kind": "op_statistic",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/op_statistic.csv",
+          "sha256": "b9c4d721dd9779b7ef2ebdf8ef9e2fecb4cad79c540d77ae33dbd04170b6902d",
+          "size_bytes": 2973
+        },
+        {
+          "kind": "operator_details",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/operator_details.csv",
+          "sha256": "9eca68eafef3cf318ade0569b9cf77c9a4a8976e2732ff96318a0e832838c00e",
+          "size_bytes": 5198477
+        },
+        {
+          "kind": "pcie",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/pcie.csv",
+          "sha256": "cd278110bfe2dfd3aadb1c9f9fe0ac89d534df8d775c4c06f42e77f79f78951a",
+          "size_bytes": 256
+        },
+        {
+          "kind": "step_trace_time",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/step_trace_time.csv",
+          "sha256": "6de6fdd939d74152535709feee2fc0f3243725812a3ef5b5ee6b338265aa5df2",
+          "size_bytes": 639
+        },
+        {
+          "kind": "trace_view",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+          "sha256": "ef498740ffbca05654188305e425771395699b5094945b76fbe7764e01cc38d9",
+          "size_bytes": 122445435
+        },
+        {
+          "kind": "profiler_info",
+          "path": "profiler/rank_004/rank_004_3666667_20260911153752434_ascend_pt/profiler_info_4.json",
+          "sha256": "da277acb5911dc6730aa8d733c1738ae3960c68b387d8cc7d691eb8958718ef2",
+          "size_bytes": 1601
+        }
+      ]
+    },
+    {
+      "global_rank": 5,
+      "logical_device_id": 5,
+      "complete": true,
+      "missing": [],
+      "artifacts": [
+        {
+          "kind": "capture_metadata",
+          "path": "profiler/rank_005/capture.json",
+          "sha256": "2555b2f7ca8b922b728b1dc56abfbb032c5015c4aea877df378c52c5216414be",
+          "size_bytes": 1203
+        },
+        {
+          "kind": "api_statistic",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/api_statistic.csv",
+          "sha256": "131966ce954e441effd8f31d92f7a52b95d18f67b327f72658f7c2204b01deba",
+          "size_bytes": 5286
+        },
+        {
+          "kind": "communication",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/communication.json",
+          "sha256": "db8e159def7cd5217b0596995a253ccb3e78b4e7a5b2358de3208e2718bc9233",
+          "size_bytes": 601342
+        },
+        {
+          "kind": "communication_matrix",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/communication_matrix.json",
+          "sha256": "df54bd3ccb25c271277774032bcd83d73b9fe7b471e898fa6b6e50b3fd9285e7",
+          "size_bytes": 34740
+        },
+        {
+          "kind": "hccs",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/hccs.csv",
+          "sha256": "a4466bba58cb2a479261925dc7fa2e1d66bafebc8b317ba7ab8ec4348683becf",
+          "size_bytes": 113
+        },
+        {
+          "kind": "kernel_details",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/kernel_details.csv",
+          "sha256": "d906d41974b3d428f560420bf44f02d3b33286756835f8b1ff83ce771f6f1114",
+          "size_bytes": 7457791
+        },
+        {
+          "kind": "op_statistic",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/op_statistic.csv",
+          "sha256": "2bab0284e53dec67d83d5fee994a1e0040dcfccc232724f734ef12a28543ce6c",
+          "size_bytes": 2972
+        },
+        {
+          "kind": "operator_details",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/operator_details.csv",
+          "sha256": "b47ceff0ccc09f25d12e4d8a712bf2970014389890f6fda2514c9e5f2c6aac9a",
+          "size_bytes": 5200010
+        },
+        {
+          "kind": "pcie",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/pcie.csv",
+          "sha256": "70bcf5956df25d36071e8e890a1a2f55c3fea18754aadacc066a58faed27459b",
+          "size_bytes": 256
+        },
+        {
+          "kind": "step_trace_time",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/step_trace_time.csv",
+          "sha256": "98fc6efe3835a79538e3c0a21685006e017351b354be2171af19c8d7ef897ac0",
+          "size_bytes": 605
+        },
+        {
+          "kind": "trace_view",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+          "sha256": "0418fd45f8bc8ee3ad36acaade9bbf82f1523c095505fdade4d8fe9e79d90dd6",
+          "size_bytes": 122530310
+        },
+        {
+          "kind": "profiler_info",
+          "path": "profiler/rank_005/rank_005_3666668_20260911153752434_ascend_pt/profiler_info_5.json",
+          "sha256": "a2884f8f4e58e0fa0747b9a9b9feac5bc480e7a82a2467d618ebe9836b840a90",
+          "size_bytes": 1601
+        }
+      ]
+    },
+    {
+      "global_rank": 6,
+      "logical_device_id": 6,
+      "complete": true,
+      "missing": [],
+      "artifacts": [
+        {
+          "kind": "capture_metadata",
+          "path": "profiler/rank_006/capture.json",
+          "sha256": "a5fdff795618fbba73426c9bb6f5611fc0bd943669ffc176392d081c1b869ff7",
+          "size_bytes": 1203
+        },
+        {
+          "kind": "api_statistic",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/api_statistic.csv",
+          "sha256": "05b427295cad4a8f0d6e20d7d66d9af4081c20b5427a18c1fdf3f3b6b5c69050",
+          "size_bytes": 5284
+        },
+        {
+          "kind": "communication",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/communication.json",
+          "sha256": "deeb97ed4fa5fdd9ec2223d968c92c09186faf282106c7f551712595f2dfd821",
+          "size_bytes": 601153
+        },
+        {
+          "kind": "communication_matrix",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/communication_matrix.json",
+          "sha256": "873b751301b10a60bed65f01bd60ef5ba0dc4056eaa3f274d0be680d5546ccd5",
+          "size_bytes": 36943
+        },
+        {
+          "kind": "hccs",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/hccs.csv",
+          "sha256": "c45bae7322737a8e010923c02b2ecb569497a61ded29f5cdb8f1b083dea770a2",
+          "size_bytes": 113
+        },
+        {
+          "kind": "kernel_details",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/kernel_details.csv",
+          "sha256": "3591095dba44497c3fd9561a6f4c4fb73e7dbe5e3cd2bfe54e83c6fc95e57e96",
+          "size_bytes": 7457005
+        },
+        {
+          "kind": "op_statistic",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/op_statistic.csv",
+          "sha256": "5ee539f1dbf6347e6aa9f09398caf4b56dfd95b2c610171dfe8f8b0d9795f43a",
+          "size_bytes": 2972
+        },
+        {
+          "kind": "operator_details",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/operator_details.csv",
+          "sha256": "2a9eb2dd8ae52df87f6f5d3a2dc8a4a60c11d3788df28439bb2d743a6b0c56b5",
+          "size_bytes": 5200831
+        },
+        {
+          "kind": "pcie",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/pcie.csv",
+          "sha256": "44a592b7b7b3407b27fbd01016df24a2bca9191d1c875073f737272cf1497c01",
+          "size_bytes": 256
+        },
+        {
+          "kind": "step_trace_time",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/step_trace_time.csv",
+          "sha256": "4e27db084f96cf190e24b3ea383662b84013a72d131225aed21b5dedf8773fab",
+          "size_bytes": 638
+        },
+        {
+          "kind": "trace_view",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+          "sha256": "d91576122db86df3b5e878a9e742b4834669b66b19743321673e94314ea1edd5",
+          "size_bytes": 122473122
+        },
+        {
+          "kind": "profiler_info",
+          "path": "profiler/rank_006/rank_006_3666669_20260911153752436_ascend_pt/profiler_info_6.json",
+          "sha256": "e40b99b2f85a28cf0836f6b2db5d9abb59e8f7826de52bdd3ee8393411257728",
+          "size_bytes": 1601
+        }
+      ]
+    },
+    {
+      "global_rank": 7,
+      "logical_device_id": 7,
+      "complete": true,
+      "missing": [],
+      "artifacts": [
+        {
+          "kind": "capture_metadata",
+          "path": "profiler/rank_007/capture.json",
+          "sha256": "d43602a413481484257def70848514c399efc822a9cb7dd06700b68d82e0518c",
+          "size_bytes": 1203
+        },
+        {
+          "kind": "api_statistic",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/api_statistic.csv",
+          "sha256": "623d1f1e9a5a9b4e914100ff0c7e08de9166e198709fb79392bb493d312767fc",
+          "size_bytes": 5309
+        },
+        {
+          "kind": "communication",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/communication.json",
+          "sha256": "5b267465791421c905aaeba3a2f2fd07edb3f500afb066f3d5eaaf55f8f6eb9a",
+          "size_bytes": 600681
+        },
+        {
+          "kind": "communication_matrix",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/communication_matrix.json",
+          "sha256": "c08853a5edb7b88aa56875a4e448250f0fbb6ca94ee4735d6865bcaf2f3a51eb",
+          "size_bytes": 34690
+        },
+        {
+          "kind": "hccs",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/hccs.csv",
+          "sha256": "59eba4cf57ff6a022f8c08ac80879531c738480927ea1c1d2f72ae47b7276874",
+          "size_bytes": 114
+        },
+        {
+          "kind": "kernel_details",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/kernel_details.csv",
+          "sha256": "0329b911c7b796e6389b6807f53a4a669a196d7b10dad73b4e3df5d57341bf46",
+          "size_bytes": 7457908
+        },
+        {
+          "kind": "op_statistic",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/op_statistic.csv",
+          "sha256": "358183003fe7c218ea6a1507d317edbbb167db381abb96215d382b20ad387739",
+          "size_bytes": 2962
+        },
+        {
+          "kind": "operator_details",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/operator_details.csv",
+          "sha256": "5781df5fb2416b734b484820388616623973e3829b0b13ce1db658f20b6d9920",
+          "size_bytes": 5200872
+        },
+        {
+          "kind": "pcie",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/pcie.csv",
+          "sha256": "9d6540cc0176a6e381d1bbf0819396424f16e699ca42541a6713f7366b9507a5",
+          "size_bytes": 256
+        },
+        {
+          "kind": "step_trace_time",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/step_trace_time.csv",
+          "sha256": "d3318661bbd14e7a6d69af6f5c4f11acc002a8a4a19ac854ad45ea0514997f93",
+          "size_bytes": 592
+        },
+        {
+          "kind": "trace_view",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+          "sha256": "f6e722829ae3b49f994376de73c8ba8d094654e25d9f0ab04e78ae677552e267",
+          "size_bytes": 122419693
+        },
+        {
+          "kind": "profiler_info",
+          "path": "profiler/rank_007/rank_007_3666670_20260911153752435_ascend_pt/profiler_info_7.json",
+          "sha256": "e8da8a4bf7646e308a351dc1c45620bf022a34587ef78dc8aa8018985554489b",
+          "size_bytes": 1601
+        }
+      ]
+    }
+  ]
+}

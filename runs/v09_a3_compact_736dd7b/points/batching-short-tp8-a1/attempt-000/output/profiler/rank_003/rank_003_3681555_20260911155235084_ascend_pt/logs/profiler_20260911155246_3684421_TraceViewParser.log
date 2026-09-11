@@ -1,0 +1,3 @@
+[2026-09-11-15:52:46.892] [INFO] [AscendProfiler_TraceViewParser:97] Profiler logger initialized at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-a1/attempt-000/output/profiler/rank_003/rank_003_3681555_20260911155235084_ascend_pt/logs/profiler_20260911155246_3684421_TraceViewParser.log
+[2026-09-11-15:52:46.892] [INFO] [AscendProfiler_TraceViewParser:53] TraceViewParser start.
+[2026-09-11-15:52:49.835] [INFO] [AscendProfiler_TraceViewParser:68] TraceViewParser finish.

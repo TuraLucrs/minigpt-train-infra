@@ -1,0 +1,3 @@
+[2026-09-11-15:49:49.778] [INFO] [AscendProfiler_OperatorViewParser:97] Profiler logger initialized at: /root/minigpt-v09/runs/v09_a3_compact_736dd7b/points/batching-short-tp8-b1/attempt-000/output/profiler/rank_001/rank_001_3678066_20260911154935878_ascend_pt/logs/profiler_20260911154949_3681226_OperatorViewParser.log
+[2026-09-11-15:49:49.779] [INFO] [AscendProfiler_OperatorViewParser:30] OperatorViewParser start.
+[2026-09-11-15:49:50.697] [INFO] [AscendProfiler_OperatorViewParser:39] OperatorViewParser finish.

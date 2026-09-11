@@ -1,0 +1,26 @@
+<frozen runpy>:128: RuntimeWarning: 'torch.distributed.run' found in sys.modules after import of package 'torch.distributed', but prior to execution of 'torch.distributed.run'; this may result in unpredictable behaviour
+[W911 15:16:01.898867790 ProcessGroupHCCL.cpp:1302] Warning: The watchdog timeout 600000ms(which is set by init_process_group) is less than or equal to HCCL execution timeout 1836000ms! The plog may not be recorded. (function ProcessGroupHCCL)
+[rank0]:[W911 15:16:01.907099000 NPUCachingAllocator.cpp:204] Warning: The current CANN and HDK(driver) versions require processing for 32 padding size, with memory allocation. (function operator())
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[2026-09-11 15:16:42] [WARNING] [3653912] profiler.py: Profiler won't be using warmup, this can skew profiler results
+[2026-09-11 15:16:44] [INFO] [3654161] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/tp-short-2-vs-8-a0/attempt-000/output/profiler/rank_000/rank_000_3653912_20260911151642942_ascend_pt
+|[2026-09-11 15:16:44] [INFO] [3654170] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/tp-short-2-vs-8-a0/attempt-000/output/profiler/rank_001/rank_001_3653913_20260911151642942_ascend_pt
+|//--\\||//--\\||//--[2026-09-11 15:16:55] [INFO] [3654184] profiler.py: CANN profiling data parsed in a total time of 0:00:11.025201
+[2026-09-11 15:16:55] [INFO] [3654175] profiler.py: CANN profiling data parsed in a total time of 0:00:11.085243
+\\||[2026-09-11 15:16:58] [INFO] [3654161] profiler.py: All profiling data parsed in a total time of 0:00:13.610948
+[2026-09-11 15:16:58] [INFO] [3654170] profiler.py: All profiling data parsed in a total time of 0:00:13.847432
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+================================================================================
+Qwen3 Tensor Parallel Benchmark（中位数）
+world size       : 2
+backend          : hccl
+evidence class   : qwen3_32b_tp_incomplete_evidence
+TTFT             : 140.644 ms
+TPOT             : 161.073 ms
+E2E latency      : 5139.114 ms
+output tok/s     : 6.227
+model load       : 19.090 s
+max rank peak MB : 31459.396
+报告              : /root/minigpt-v09/runs/v09_a3_compact_4a85f42/points/tp-short-2-vs-8-a0/attempt-000/output/report.json

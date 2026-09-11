@@ -1,0 +1,30 @@
+{
+  "environment": {
+    "device": "npu:0",
+    "device_type": "npu",
+    "device_name": "Ascend910_9382",
+    "precision": "bf16",
+    "supports_bf16": true,
+    "supports_memory_stats": true,
+    "supports_device_events": true,
+    "memory_statistics_source": "pytorch_allocator",
+    "total_memory_mb": 62732.0,
+    "torch": "2.10.0+cpu",
+    "torch_npu": "2.10.0.post5.dev20260821",
+    "cann_version": "26.2.rc1.b021",
+    "hccl_version": null
+  },
+  "visible_device_count": 2,
+  "expected_process_count": 2,
+  "memory": {
+    "supported": true,
+    "allocated_bytes": 0,
+    "peak_allocated_bytes": 0,
+    "reserved_bytes": 0,
+    "peak_reserved_bytes": 0,
+    "total_bytes": 65779269632,
+    "unit": "bytes",
+    "source": "pytorch_allocator"
+  },
+  "visibility_count_verified": true
+}
