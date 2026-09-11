@@ -505,7 +505,7 @@ def fake_layout_report(
             "total_memory_mb": 65536.0,
         },
         "engine": {
-            "runner": "SlotCachedTensorParallelQwen3ModelRunner",
+            "runner": "qwen3_tp_slot_kv_cache",
             "max_slots": max_slots,
             "max_seq_len": 4096,
             "max_queue_size": max_queue_size,

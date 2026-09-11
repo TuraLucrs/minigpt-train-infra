@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from minigpt.decode_critical_path import (  # noqa: E402
-    FORMAL_CASES, FORMAL_PATH_SEQUENCE, FORMAL_PROTOCOL,
+    FORMAL_CAPACITY, FORMAL_CASES, FORMAL_PATH_SEQUENCE, FORMAL_PROTOCOL,
     _compare_case, _load_session, summarize_decode_ab,
     summarize_npu_preflight, write_markdown_report,
 )
@@ -229,6 +229,9 @@ def check_evidence_gate(root: Path) -> None:
     summary = summarize_decode_ab(root)
     assert summary["complete"], summary["incomplete_reasons"]
     assert summary["decision"]["status"] == "full_vocab_gather_not_end_to_end_bottleneck"
+    assert summary["sessions"][0]["service"]["scheduler_capacity"]["runner"] == (
+        FORMAL_CAPACITY["runner"]
+    )
     first = directories[0]
     report_path = first / "replica-00.json"
     manifest_path = first / "layout_manifest.json"
@@ -236,6 +239,12 @@ def check_evidence_gate(root: Path) -> None:
     mutations = (
         lambda r: r["protocol"].update(ttft_slo_ms=14000),
         lambda r: r["engine"].update(max_queue_size=127),
+        # The report contract uses implementation_name. Reintroducing the
+        # Python class name must fail instead of letting synthetic fixtures
+        # diverge from real serving reports again.
+        lambda r: r["engine"].update(
+            runner="SlotCachedTensorParallelQwen3ModelRunner"
+        ),
         lambda r: r["runs"][0]["serving"]["token_selection"]["actual_rows_by_path"].update(full_gather=1),
         lambda r: r["engine"]["token_selection"].update(measurement_type="measured"),
         lambda r: r["engine"].update(token_selection=None),

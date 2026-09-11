@@ -53,7 +53,10 @@ FORMAL_PROTOCOL = {
     "e2e_slo_ms": 30000.0,
 }
 FORMAL_CAPACITY = {
-    "runner": "SlotCachedTensorParallelQwen3ModelRunner",
+    # Serving reports the runner's stable implementation_name, not its Python
+    # class name. Keep this contract aligned with the value emitted by
+    # ContinuousBatchingEngine._build_report().
+    "runner": "qwen3_tp_slot_kv_cache",
     "total_max_slots": 32,
     "total_max_queue_size": 128,
     "max_seq_len": 4096,
