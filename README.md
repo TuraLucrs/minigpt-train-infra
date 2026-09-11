@@ -57,6 +57,7 @@ TP8 慢态受到同设备并发负载污染，干净环境下 mixed workload 的
 v0.9 紧凑矩阵完成后，独立的 A3 SLO/布局科研先导实验见
 [`SLO_LAYOUT_RESEARCH_PILOT_A3.md`](docs/SLO_LAYOUT_RESEARCH_PILOT_A3.md)；它不重复
 v0.9 的 KV、单请求 TP 或 Batching A/B。
+该先导固定现有 `least_projected_load` Router，只验证是否存在值得继续做自适应控制器的稳定布局翻转。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 
