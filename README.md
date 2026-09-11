@@ -54,6 +54,9 @@ TP8 慢态受到同设备并发负载污染，干净环境下 mixed workload 的
 边界见 [`docs/V0_9_BACKENDS_PROFILER_MATRIX.md`](docs/V0_9_BACKENDS_PROFILER_MATRIX.md)。
 精确提交、已通过的 Linux CPU/Gloo CI、恢复材料和真机待跑清单见
 [`v0.8 / v0.9 软件交接`](docs/MINIGPT_HANDOFF_2026-09-11_V08_V09_SOFTWARE_READY.md)。
+v0.9 紧凑矩阵完成后，独立的 A3 SLO/布局科研先导实验见
+[`SLO_LAYOUT_RESEARCH_PILOT_A3.md`](docs/SLO_LAYOUT_RESEARCH_PILOT_A3.md)；它不重复
+v0.9 的 KV、单请求 TP 或 Batching A/B。
 
 项目第一阶段没有直接堆叠 DDP、FSDP、DeepSpeed，而是先把**单卡训练系统的完整闭环**吃透：
 
