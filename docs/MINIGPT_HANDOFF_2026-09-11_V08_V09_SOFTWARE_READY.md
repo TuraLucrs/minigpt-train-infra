@@ -1,5 +1,10 @@
 # MiniGPT 推理 Infra 交接：v0.8 / v0.9 软件就绪
 
+> **后续状态提示：**本文是软件就绪时的历史交接快照。此后 v0.8 已完成 Atlas A3 验收并冻结；
+> v0.9 的 88-session/硬件方案也已降为可选全扫描，不再是 release gate。当前正式运行入口以
+> `docs/V0_9_BACKENDS_PROFILER_MATRIX.md` 和主配置 `configs/v09_*.json` 为准：每种硬件
+> 3 个 ABBA case、12 sessions；`configs/v09_*_full.json` 仅供异常追踪或科研扩展。
+
 > 日期：2026-09-11（Asia/Shanghai）
 >
 > 仓库：https://github.com/TuraLucrs/minigpt-train-infra

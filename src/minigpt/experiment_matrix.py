@@ -112,7 +112,7 @@ def validate_matrix_config(raw: object) -> dict[str, Any]:
                 "device_counts", "chips_per_card", "batch_size", "sessions_per_variant",
                 "warmup", "repeats", "timeout_seconds", "max_seq_len", "profile", "slo",
                 "workloads", "seed"}
-    allowed = required | {"description", "max_session_cv"}
+    allowed = required | {"description", "max_session_cv", "case_selection"}
     if required - set(raw) or set(raw) - allowed:
         raise ValueError(f"invalid matrix fields: missing={sorted(required - set(raw))}, unknown={sorted(set(raw) - allowed)}")
     config = json.loads(json.dumps(raw))
@@ -184,6 +184,14 @@ def validate_matrix_config(raw: object) -> dict[str, Any]:
             raise ValueError("fixed output length is shorter than the requested profile window")
     if family != "cpu" and not {"short_short", "long_prefill_short_decode"}.issubset({row["workload_class"] for row in workloads}):
         raise ValueError("hardware matrix needs both short and long-prefill workloads")
+    selection = config.get("case_selection")
+    if selection is not None:
+        if not isinstance(selection, list) or not selection:
+            raise ValueError("case_selection must be a nonempty list")
+        for case_id in selection:
+            _identifier(case_id, "case_selection")
+        if len(set(selection)) != len(selection):
+            raise ValueError("case_selection contains duplicate case IDs")
     return config
 
 
@@ -242,8 +250,18 @@ def expand_matrix(config: Mapping[str, Any]) -> dict[str, Any]:
         for size in config["device_counts"][1:]:
             add_case(f"tp-{name}-{baseline_size}-vs-{size}", "tp", name, 1,
                      (baseline_size, "tp", "kv_cache"), (size, "tp", "kv_cache"))
+    if "case_selection" in config:
+        cases_by_id = {case["case_id"]: case for case in cases}
+        unknown = set(config["case_selection"]) - set(cases_by_id)
+        if unknown:
+            raise ValueError(f"unknown case_selection IDs: {sorted(unknown)}")
+        cases = [cases_by_id[case_id] for case_id in config["case_selection"]]
+        points_by_id = {point.point_id: point for point in points}
+        points = [points_by_id[point_id] for case in cases for point_id in case["point_ids"]]
+    required_counts = sorted({point.tp_size for point in points})
     return {"schema_version": MATRIX_SCHEMA_VERSION, "matrix_id": config["matrix_id"],
             "hardware_family": config["hardware_family"], "device_counts": config["device_counts"],
+            "required_device_counts": required_counts,
             "session_order": list(order), "cases": cases, "points": [asdict(point) for point in points]}
 
 
@@ -263,7 +281,8 @@ def make_workload(config: Mapping[str, Any], point: MatrixPoint) -> WorkloadTrac
 
 
 def load_device_map(path: str | Path | None, config: Mapping[str, Any]) -> list[dict[str, int | None]]:
-    count = max(config["device_counts"])
+    required_counts = expand_matrix(config)["required_device_counts"]
+    count = max(required_counts)
     if config["device"] == "cpu":
         if path is not None:
             raise ValueError("CPU correctness runs use process ranks, not a physical device map")
@@ -274,8 +293,11 @@ def load_device_map(path: str | Path | None, config: Mapping[str, Any]) -> list[
     if not isinstance(raw, dict) or type(raw.get("schema_version")) is not int or raw.get("schema_version") != 1 or not isinstance(raw.get("devices"), list):
         raise ValueError("invalid device-map schema")
     devices = raw["devices"]
-    if len(devices) != count:
-        raise ValueError(f"device map must contain exactly {count} logical devices in launch order")
+    if len(devices) < count:
+        raise ValueError(f"device map must contain at least {count} logical devices in launch order")
+    # A verified full-machine map may be reused by a compact acceptance preset.
+    # Only the prefix required by this plan becomes part of the run identity.
+    devices = devices[:count]
     logical: set[int] = set()
     targets: set[tuple[int, int]] = set()
     for entry in devices:
@@ -289,7 +311,7 @@ def load_device_map(path: str | Path | None, config: Mapping[str, Any]) -> list[
             raise ValueError("device map contains duplicate logical or physical targets")
         logical.add(entry["logical_device_id"])
         targets.add((entry["physical_card_id"], entry["chip_id"]))
-    for size in config["device_counts"]:
+    for size in required_counts:
         selected = devices[:size]
         cards = {entry["physical_card_id"] for entry in selected}
         if len(cards) * config["chips_per_card"] != size:
@@ -1283,7 +1305,7 @@ def _run_matrix(config_path: str | Path, model_dir: str | Path, output_dir: str 
     if not selected:
         raise ValueError("selection contains no matrix points")
     model_config = Qwen3Config.from_json(model / "config.json")
-    for size in config["device_counts"]:
+    for size in plan["required_device_counts"]:
         for rank in range(size):
             Qwen3TensorParallelPlan.create(model_config, rank, size)
     model_identity = _model_identity(project, model)

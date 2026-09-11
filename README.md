@@ -47,9 +47,10 @@ Ascend 8 卡上的 TP8、2×TP4、4×TP2 共 18 组正式验收。完整与精�
 
 `v0.7.1` Ascend Profiling Gate 已完成并冻结；后续 ABBA+BAAB 复现确认，v0.7 的历史
 TP8 慢态受到同设备并发负载污染，干净环境下 mixed workload 的 4×TP2/TP8 goodput 稳定
-倍率为 1.334×。`v0.8` Decode 候选算法、完整证据门禁与失败恢复已补全；`v0.9` 进一步
-交付真实后端/Profiler 适配、统一测量入口及可恢复 A3/A5/CUDA 矩阵。两版当前为软件就绪、
-真实硬件验证待执行，尚不声称 Decode 加速或新的跨硬件性能结果。软件状态、完整命令与
+倍率为 1.334×。`v0.8` 的 Atlas A3 真机验收已完成：distributed argmax 虽把理论输入 payload
+缩小 4748×，但 short/mixed 均无端到端收益，因此保留实验实现并继续以 `full_gather` 为默认。
+`v0.9` 进一步交付真实后端/Profiler 适配、统一测量入口及可恢复 A3/A5/CUDA 矩阵，当前等待
+紧凑真机验收，尚不声称新的跨硬件性能结果。软件状态、完整命令与
 边界见 [`docs/V0_9_BACKENDS_PROFILER_MATRIX.md`](docs/V0_9_BACKENDS_PROFILER_MATRIX.md)。
 精确提交、已通过的 Linux CPU/Gloo CI、恢复材料和真机待跑清单见
 [`v0.8 / v0.9 软件交接`](docs/MINIGPT_HANDOFF_2026-09-11_V08_V09_SOFTWARE_READY.md)。
@@ -408,8 +409,8 @@ collective 输入从每 rank 每请求 37984 bytes 降为 8 bytes。
 
 v0.8 软件补全还验证首次运行时各 rank 的路径配置一致性，重算逐 step 实际路径和通信
 估算口径，固定源 workload/容量/协议，并检查多样本 NPU preflight、真实 ABBA 时间顺序
-和跨 session 稳定性。证据不足会输出 `incomplete`；失败退出时仍保留原始报告与归档。
-当前属于软件就绪阶段，端到端收益与硬件验收待 Atlas 真机执行。
+和跨 session 稳定性。Atlas A3 的 8 个 session 已完成，最终判定 full-vocab AllGather 不是
+当前端到端主瓶颈；原始 checker 字段错误保留在证据中，代码契约已修复并通过回归。
 
 ## v0.9 后端、Profiler 与可恢复矩阵
 
@@ -417,10 +418,11 @@ v0.8 软件补全还验证首次运行时各 rank 的路径配置一致性，重
 portable Profiler 使用真实 torch/torch_npu collector，写带 rank、实际窗口、源文件摘要和
 artifact 校验的 schema v2；历史 v0.7.1/v0.8 的 schema v1 继续兼容。
 
-新矩阵直接启动真实推理子进程，覆盖 A3 2/4/8/16 logical devices、A5/CUDA 1/2/4/8：
-KV recompute/cached、TP scaling、固定 batch 的 static/continuous A/B。每个硬件预设含
-22 cases/88 个独立进程，使用 ABBA、单独 warmup/measured/profile、真实设备映射与空闲
-检查，并保存失败、中断、恢复记录。tiny CPU 只验证执行链与数值；缺失设备计量为 `null`。
+新矩阵直接启动真实推理子进程，正式紧凑预设用 3 个 ABBA case/12 sessions 覆盖 KV
+recompute/cached、最小 TP/TP8、固定 batch 的 static/continuous、short/long-prefill 与
+Profiler。原 22 cases/88 sessions 全扫描保留为 `_full.json` 可选扩展，不阻塞 v0.9 验收。
+执行仍使用单独 warmup/measured/profile、真实设备映射与空闲检查，并保存失败、中断、恢复
+记录。tiny CPU 只验证执行链与数值；缺失设备计量为 `null`。
 
 ```bash
 python benchmarks/run_v09_matrix.py --config configs/v09_ascend_a3.json --list-points

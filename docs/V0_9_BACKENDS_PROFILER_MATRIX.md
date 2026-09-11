@@ -72,18 +72,27 @@ time base、来源和能力解释。不能直接拿两个不同分母的占比�
 覆盖 Prefill 与 Decode。CPU 预设 active=3。普通 benchmark 已有独立 warmup，不能为了
 Profiler warmup 跳过唯一的 Prefill 后又声称采到了 Prefill。
 
-## 4. 严格 A/B 矩阵
+## 4. 紧凑正式验收与可选全矩阵
 
-| 预设 | logical devices | 物理卡关系 | 完整点数 |
+| 正式紧凑预设 | 实际使用的 logical devices | 物理卡关系 | cases / sessions |
 |---|---|---|---:|
-| `v09_ascend_a3.json` | 2 / 4 / 8 / 16 | 每卡 2 个 logical devices，即 1 / 2 / 4 / 8 卡 | 88 |
-| `v09_ascend_a5.json` | 1 / 2 / 4 / 8 | 每卡 1 个 device | 88 |
-| `v09_cuda.json` | 1 / 2 / 4 / 8 | 每个完整 GPU 对应一个 device | 88 |
-| `v09_cpu_correctness.json` | 1 / 2 / 4 个进程 | 0 张 accelerator 卡 | 16 |
+| `v09_ascend_a3.json` | 2 / 8 | 每卡 2 个 logical devices，即 1 / 4 卡 | 3 / 12 |
+| `v09_ascend_a5.json` | 1 / 8 | 每卡 1 个 device | 3 / 12 |
+| `v09_cuda.json` | 1 / 8 | 每个完整 GPU 对应一个 device | 3 / 12 |
+| `v09_cpu_correctness.json` | 1 / 2 / 4 个进程 | 0 张 accelerator 卡 | 8 / 16 |
 
-硬件预设各有 short 和 long-prefill 两类输入，每个 case 都是 A/B/B/A 四个独立进程，
-每进程 1 次 warmup、3 次 measured、1 次独立 profile replay。CPU 使用每变体 1 个 session、
-2 次 measured，仅用于验证执行链。可以分 case 运行，但未完成的点在全矩阵报告中仍为缺失。
+每个硬件紧凑预设只保留三个能区分问题的 case：最小可运行 TP 上的 long-prefill
+recompute/cache、short workload 上最小 TP/TP8、TP8 short workload 上 static/continuous。
+每个 case 是 A/B/B/A 四个独立进程，每进程 1 次 warmup、3 次 measured、1 次独立 profile
+replay，共 12 个 session。它仍覆盖 KV、TP、Batching、Prefill、Decode、Profiler 和稳定性，
+但不把所有中间 TP 与重复 workload 组合设为版本阻塞项。
+
+`v09_ascend_a3_full.json`、`v09_ascend_a5_full.json` 和 `v09_cuda_full.json` 保留原 22 case、
+88 session 的完整设计空间扫描，只用于紧凑验收暴露异常后的定向扩展或后续论文实验，不是
+v0.9 release gate。不得将紧凑矩阵没有测到的 TP4/TP16 曲线写成已验证结论。
+
+v0.8 已证明减少 vocab gather payload 没有产生端到端收益，所以 v0.9 不重复该 A/B，也不把
+88 点扫描当作弥补负结果的手段。v0.9 的目标是验证后端、Profiler、统一指标和可恢复执行链。
 
 | axis | A | B | 固定条件与用途 |
 |---|---|---|---|
@@ -106,9 +115,10 @@ Batching case 包括静态 cache 与 fixed-slot cache、调度 book-keeping 的�
 CV 上限 10%。CPU 时延只验证有限、定义明确和可以贯通执行，不用于硬件稳定性结论。
 固定 batch 的 greedy 输出不一致会阻断比较；先查数值和 TP 归约顺序，再考虑性能。
 
-Qwen3 TP 计划支持 KV heads 复制，因此 TP16 不是仅因 KV heads 少于 TP 就静态拒绝；
+可选 A3 full 预设中的 TP16 支持 KV heads 复制，因此不因 KV heads 少于 TP 而静态拒绝；
 启动前仍用真实 config 校验维度和分片约束。内存不足、SDK/collective 不支持等由真实运行
-保留失败记录，不会用理论模型容量或 dry-run 宣布成功。
+保留失败记录，不会用理论模型容量或 dry-run 宣布成功。A5 96GB HBM 使 Qwen3-32B BF16 的
+TP1 具备容量可行性，但正式运行仍必须通过现场 preflight 和 allocator 峰值检查。
 
 ## 5. 实际运行
 
@@ -119,7 +129,7 @@ python -m pip install --no-deps -e .
 python benchmarks/run_v09_matrix.py --config configs/v09_ascend_a3.json --list-points
 ```
 
-Ascend A3 完整执行示例：
+Ascend A3 紧凑执行示例（12 sessions）：
 
 ```bash
 export CANN_VERSION='填写目标机器确认的完整 CANN 版本'
@@ -132,8 +142,10 @@ python benchmarks/run_v09_matrix.py \
 ```
 
 A5 使用 `configs/v09_ascend_a5.json` 及 A5 实际映射；CUDA 使用 `configs/v09_cuda.json` 及
-GPU 实际映射。CUDA preflight 查询 `nvidia-smi`，NPU preflight 查询 `npu-smi`。至少三轮、
-跨度至少 1 秒，检查整个窗口的设备内存占用 ≤10%、计算利用率 ≤5%。任何缺设备、缺值、
+GPU 实际映射。A5 是优先正式验收环境：它补充 v0.8 尚未覆盖的硬件，同时 TP1 可验证
+96GB HBM 容量边界；完成 A5 的 12 sessions 即可审查 v0.9 的主验收。A3/CUDA 紧凑矩阵用于
+增加跨硬件证据，不能在未运行时声称已验证。CUDA preflight 查询 `nvidia-smi`，NPU preflight
+查询 `npu-smi`。至少三轮、跨度至少 1 秒，检查整个窗口的设备内存占用 ≤10%、计算利用率 ≤5%。任何缺设备、缺值、
 命令失败或超时均不能视为空闲，原始采集留在 attempt 目录供审计。
 
 设备窗口有限时，先完成一个 case 的整个 ABBA，随后恢复：
@@ -145,7 +157,7 @@ python benchmarks/run_v09_matrix.py \
   --device-map /path/to/verified-a3-device-map.json \
   --interconnect-topology '与首次执行完全相同的拓扑说明' \
   --output-dir runs/v09_a3 \
-  --case kv-short-tp2
+  --case kv-long-tp2
 
 # 相同命令加 --resume，并去掉 --case，继续其余点。
 ```
@@ -155,6 +167,9 @@ python benchmarks/run_v09_matrix.py \
 具备完整 ABBA。`--dry-run` 只保存 pending 计划，不采集、不改变点的执行状态。
 `--resume` 要求相同配置、代码内容、模型、设备映射和
 执行环境；已成功产物先校验再复用。新代码或新协议使用新的输出目录，避免混成同一矩阵。
+
+只有发现端点行为异常、需要估计非线性 scaling 曲线或准备科研矩阵时，才改用 `_full.json`。
+完整预设必须使用新的输出目录，并准备相应的最大设备映射；不能与紧凑验收目录 resume 混用。
 
 CPU 实际执行链：
 

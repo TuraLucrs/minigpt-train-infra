@@ -1,21 +1,11 @@
 {
   "schema_version": 1,
-  "matrix_id": "v09-ascend-a5",
-  "description": "Compact Qwen3-32B v0.9 acceptance: three ABBA cases and 12 independent benchmark processes. Use v09_ascend_a5_full.json only for optional exhaustive follow-up.",
-  "hardware_family": "ascend_a5",
-  "device": "npu",
+  "matrix_id": "v09-cuda-full",
+  "description": "Optional exhaustive Qwen3-32B matrix with 22 ABBA cases and 88 independent processes. It is not required for v0.9 acceptance.",
+  "hardware_family": "cuda",
+  "device": "cuda",
   "precision": "bf16",
-  "device_counts": [
-    1,
-    2,
-    4,
-    8
-  ],
-  "case_selection": [
-    "kv-long-tp1",
-    "tp-short-1-vs-8",
-    "batching-short-tp8"
-  ],
+  "device_counts": [1, 2, 4, 8],
   "chips_per_card": 1,
   "batch_size": 4,
   "sessions_per_variant": 2,

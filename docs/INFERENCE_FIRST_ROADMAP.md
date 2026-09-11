@@ -201,13 +201,15 @@ TP/Replica/SLO 联合决策继续作为 v1.0 后的长期研究候选，但当�
 
 - 将 v0.7.1 的最小 Ascend Profiler collector 收敛到稳定后端抽象；
 - `torch_npu`、CANN、HCCL 和 Ascend profiler 限制在后端目录；
-- A3 测试 2/4/8/16 个 logical devices，并同时记录物理卡数；
-- A5 测试 1/2/4/8 个 devices；
-- 对 Prefill/Decode、KV Cache、TP、Batching 做严格 A/B Benchmark；
+- 正式验收使用 3 个 ABBA case/12 sessions：长 Prefill 的 KV A/B、短 Decode 的最小 TP/TP8、
+  TP8 下 static/continuous；
+- A3 使用 2/8 logical devices，A5/CUDA 使用 1/8 devices；2/4/8/16 或 1/2/4/8 的 88 点
+  扫描保留为异常追踪与科研扩展，不阻塞版本冻结；
+- 对 Prefill/Decode、KV Cache、TP、Batching 做严格但有辨识度的 A/B Benchmark；
 - 对比通用指标下的 CUDA/NCCL 与 Ascend/HCCL 行为。
 
 交付包含实际 runtime adapter、真实 CPU/CUDA/Ascend profiler、逐请求测量、A3/A5/CUDA
-ABBA 执行器与可恢复证据链。当前多设备 launcher 明确为单机 torchrun；CPU/tiny 结果不
+紧凑 ABBA 执行器、可选全矩阵与可恢复证据链。当前多设备 launcher 明确为单机 torchrun；CPU/tiny 结果不
 作为硬件性能证据。Batching 对照使用固定同时到达的同批请求，不冒充随机持续到达负载。
 
 ### v1.0——推理 Infra 完整交付

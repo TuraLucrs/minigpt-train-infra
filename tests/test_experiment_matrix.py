@@ -36,6 +36,12 @@ CONFIG_NAMES = {
     "ascend_a5": "v09_ascend_a5.json",
 }
 
+FULL_CONFIG_NAMES = {
+    "cuda": "v09_cuda_full.json",
+    "ascend_a3": "v09_ascend_a3_full.json",
+    "ascend_a5": "v09_ascend_a5_full.json",
+}
+
 
 def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -74,12 +80,14 @@ def check_plans_and_fixed_work() -> None:
         plan = matrix.expand_matrix(config)
         assert config == original, "planning must not rewrite the provided configuration"
         assert plan["device_counts"] == counts
-        assert {row["tp_size"] for row in plan["points"]} == set(counts)
+        expected_required = counts if family == "cpu" else ([2, 8] if family == "ascend_a3" else [1, 8])
+        assert {row["tp_size"] for row in plan["points"]} == set(expected_required)
         session_order = ["baseline", "candidate"] if family == "cpu" else ["baseline", "candidate", "candidate", "baseline"]
         assert plan["session_order"] == session_order
-        expected_cases = 8 if family == "cpu" else 11 * len(config["workloads"])
+        expected_cases = 8 if family == "cpu" else 3
         assert len(plan["cases"]) == expected_cases
         assert len(plan["points"]) == expected_cases * len(session_order)
+        assert plan["required_device_counts"] == expected_required
         assert len({row["point_id"] for row in plan["points"]}) == len(plan["points"])
         by_id = {row["point_id"]: row for row in plan["points"]}
         for case in plan["cases"]:
@@ -106,6 +114,12 @@ def check_plans_and_fixed_work() -> None:
                 assert request.config.eos_token_ids is None
                 assert request.config.max_new_tokens >= config["profile"]["active_steps"]
     assert len(matrix.expand_matrix(load_config())["points"]) == 16
+    for filename in FULL_CONFIG_NAMES.values():
+        full = matrix.load_matrix_config(PROJECT_ROOT / "configs" / filename)
+        full_plan = matrix.expand_matrix(full)
+        assert len(full_plan["cases"]) == 22
+        assert len(full_plan["points"]) == 88
+        assert full_plan["required_device_counts"] == full["device_counts"]
     abba_cpu = load_config()
     abba_cpu["sessions_per_variant"] = 2
     assert len(matrix.expand_matrix(abba_cpu)["points"]) == 32
@@ -153,6 +167,12 @@ def check_invalid_configurations() -> None:
     invalid = load_config("cuda")
     invalid["workloads"] = [row for row in invalid["workloads"] if row["workload_class"] == "short_short"]
     expect_error(lambda: matrix.validate_matrix_config(invalid), "both short and long")
+    invalid = load_config("cuda")
+    invalid["case_selection"] = ["not-a-real-case"]
+    expect_error(lambda: matrix.expand_matrix(invalid), "unknown case_selection")
+    invalid = load_config("cuda")
+    invalid["case_selection"] = ["kv-long-tp1", "kv-long-tp1"]
+    expect_error(lambda: matrix.validate_matrix_config(invalid), "duplicate")
 
 
 def _option(command: list[str], name: str) -> str:
@@ -165,7 +185,7 @@ def check_mapping_environment_and_commands(directory: Path) -> None:
         config = load_config(family)
         map_path = PROJECT_ROOT / "configs" / f"v09_{family}.devices.example.json"
         devices = matrix.load_device_map(map_path, config)
-        assert len(devices) == max(config["device_counts"])
+        assert len(devices) == max(matrix.expand_matrix(config)["required_device_counts"])
         expect_error(lambda: matrix.load_device_map(None, config), "explicit")
         invalid_maps = []
         invalid_maps.append(devices[:-1])
