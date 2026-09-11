@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "layout_id": "tp8",
+  "tp_size": 8,
+  "replica_count": 1,
+  "global_world_size": 8,
+  "global_logical_device_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "source_workload_sha256": "f376a6dcbfc41c465c023864a8a676672c539e9ac1086a0dd76db51e3f5668f8",
+  "source_workload_file_sha256": "0024963d8a4697a7ad3039a2560beb2be8efae07140b77a147f83a9c42a0f50a",
+  "workload_class": "mixed",
+  "source_workload": {
+    "name": "source_workload.json",
+    "sha256": "0024963d8a4697a7ad3039a2560beb2be8efae07140b77a147f83a9c42a0f50a",
+    "size_bytes": 92410
+  },
+  "routing_assignment_sha256": "b4867db1be1fc4669d50e3ae841e143a3b23af7d740c7ad73db5b432d2110bfa",
+  "reports": [
+    {
+      "replica_index": 0,
+      "name": "replica-00.json",
+      "sha256": "2a8949976c27ac802630becdabc1be0fd88eab8b0631db780287d145bec3f9e6",
+      "size_bytes": 1632496
+    }
+  ],
+  "profile": {
+    "name": "profile_manifest.json",
+    "sha256": "38c4db3c52d8422d9c7f47d28e9d003800e6f8981459584d9906e5b7e2530660",
+    "size_bytes": 28314
+  }
+}

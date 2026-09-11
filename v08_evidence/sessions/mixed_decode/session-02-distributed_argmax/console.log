@@ -1,0 +1,46 @@
+W0911 09:48:58.932000 3564926 site-packages/torch/distributed/run.py:852] 
+W0911 09:48:58.932000 3564926 site-packages/torch/distributed/run.py:852] *****************************************
+W0911 09:48:58.932000 3564926 site-packages/torch/distributed/run.py:852] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0911 09:48:58.932000 3564926 site-packages/torch/distributed/run.py:852] *****************************************
+[rank0]:[W911 09:49:03.739985580 NPUCachingAllocator.cpp:204] Warning: The current CANN and HDK(driver) versions require processing for 32 padding size, with memory allocation. (function operator())
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[2026-09-11 09:50:37] [INFO] [3580636] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/profiler/rank_005/rank_005_3565160_20260911095032764_ascend_pt
+|[2026-09-11 09:50:37] [INFO] [3580739] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/profiler/rank_002/rank_002_3565157_20260911095032764_ascend_pt
+|[2026-09-11 09:50:38] [INFO] [3580756] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/profiler/rank_004/rank_004_3565159_20260911095032764_ascend_pt
+|[2026-09-11 09:50:38] [INFO] [3580780] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/profiler/rank_007/rank_007_3565162_20260911095032764_ascend_pt
+|/[2026-09-11 09:50:38] [INFO] [3580927] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/profiler/rank_006/rank_006_3565161_20260911095032764_ascend_pt
+|[2026-09-11 09:50:38] [INFO] [3580958] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/profiler/rank_000/rank_000_3565155_20260911095032765_ascend_pt
+|[2026-09-11 09:50:38] [INFO] [3581074] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/profiler/rank_003/rank_003_3565158_20260911095032766_ascend_pt
+[2026-09-11 09:50:38] [INFO] [3581082] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/profiler/rank_001/rank_001_3565156_20260911095032764_ascend_pt
+||///-////---\----\\\|\\\\|||/||||///-////---\----\\\|\\\\|||/||||///-////---\----\\\|\\\\|||/||||///-////---\----\\\|\\\\|||/||||///-////---\----\\\|\\\\|||/||||///-////---\----\\\|\\\\|||/||||///-////----\-[2026-09-11 09:51:05] [INFO] [3580970] profiler.py: CANN profiling data parsed in a total time of 0:00:27.108025
+[2026-09-11 09:51:05] [INFO] [3580733] profiler.py: CANN profiling data parsed in a total time of 0:00:28.177961
+-[2026-09-11 09:51:05] [INFO] [3581055] profiler.py: CANN profiling data parsed in a total time of 0:00:27.149543
+-[2026-09-11 09:51:06] [INFO] [3581159] profiler.py: CANN profiling data parsed in a total time of 0:00:27.094411
+\[2026-09-11 09:51:06] [INFO] [3580797] profiler.py: CANN profiling data parsed in a total time of 0:00:28.147132
+\[2026-09-11 09:51:06] [INFO] [3580804] profiler.py: CANN profiling data parsed in a total time of 0:00:28.169149
+\[2026-09-11 09:51:06] [INFO] [3580770] profiler.py: CANN profiling data parsed in a total time of 0:00:28.169331
+\|\\[2026-09-11 09:51:06] [INFO] [3581101] profiler.py: CANN profiling data parsed in a total time of 0:00:28.113129
+\||||/|||////-///----\---\\\\|\\\||||/[2026-09-11 09:51:12] [INFO] [3580636] profiler.py: All profiling data parsed in a total time of 0:00:35.292921
+||[2026-09-11 09:51:12] [INFO] [3581082] profiler.py: All profiling data parsed in a total time of 0:00:34.255441
+///[2026-09-11 09:51:13] [INFO] [3580927] profiler.py: All profiling data parsed in a total time of 0:00:34.912333
+[2026-09-11 09:51:13] [INFO] [3580780] profiler.py: All profiling data parsed in a total time of 0:00:35.366545
+[2026-09-11 09:51:13] [INFO] [3580756] profiler.py: All profiling data parsed in a total time of 0:00:35.473797
+[2026-09-11 09:51:13] [INFO] [3580958] profiler.py: All profiling data parsed in a total time of 0:00:35.234687
+[2026-09-11 09:51:13] [INFO] [3580739] profiler.py: All profiling data parsed in a total time of 0:00:35.876090
+/[2026-09-11 09:51:14] [INFO] [3581074] profiler.py: All profiling data parsed in a total time of 0:00:35.408678
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+================================================================================
+Qwen3 Continuous Batching Benchmark（measured repeats 中位数）
+layout / replica : tp8 / 0
+TP size          : 8
+workload         : mixed-n64-interval50-seed2026
+mode             : open_loop
+request/s        : 3.804
+goodput request/s: 3.804
+output token/s   : 74.003
+evidence class   : qwen3_32b_ascend_continuous_batching_candidate
+report           : /root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/replica-00.json

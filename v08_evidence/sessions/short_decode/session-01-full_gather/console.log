@@ -1,0 +1,46 @@
+W0911 09:33:24.979000 3445079 site-packages/torch/distributed/run.py:852] 
+W0911 09:33:24.979000 3445079 site-packages/torch/distributed/run.py:852] *****************************************
+W0911 09:33:24.979000 3445079 site-packages/torch/distributed/run.py:852] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0911 09:33:24.979000 3445079 site-packages/torch/distributed/run.py:852] *****************************************
+[rank0]:[W911 09:33:29.453923600 NPUCachingAllocator.cpp:204] Warning: The current CANN and HDK(driver) versions require processing for 32 padding size, with memory allocation. (function operator())
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[2026-09-11 09:34:24] [INFO] [3457110] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-01-full_gather/profiler/rank_002/rank_002_3445310_20260911093420725_ascend_pt
+|[2026-09-11 09:34:24] [INFO] [3457119] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-01-full_gather/profiler/rank_000/rank_000_3445292_20260911093420725_ascend_pt
+|[2026-09-11 09:34:24] [INFO] [3457148] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-01-full_gather/profiler/rank_007/rank_007_3445315_20260911093420725_ascend_pt
+|[2026-09-11 09:34:24] [INFO] [3457237] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-01-full_gather/profiler/rank_006/rank_006_3445314_20260911093420727_ascend_pt
+|[2026-09-11 09:34:24] [INFO] [3457267] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-01-full_gather/profiler/rank_005/rank_005_3445313_20260911093420726_ascend_pt
+|[2026-09-11 09:34:25] [INFO] [3457323] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-01-full_gather/profiler/rank_003/rank_003_3445311_20260911093420725_ascend_pt
+|[2026-09-11 09:34:25] [INFO] [3457470] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-01-full_gather/profiler/rank_001/rank_001_3445299_20260911093420726_ascend_pt
+|/[2026-09-11 09:34:25] [INFO] [3457534] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-01-full_gather/profiler/rank_004/rank_004_3445312_20260911093420725_ascend_pt
+|//////-/------\-\\\\\\|\||||||/|//////-/------\-\\\\\\|\||||||/|//////-/------\-\\\\\\|\||[2026-09-11 09:34:36] [INFO] [3457134] profiler.py: CANN profiling data parsed in a total time of 0:00:12.103312
+|[2026-09-11 09:34:36] [INFO] [3457257] profiler.py: CANN profiling data parsed in a total time of 0:00:12.127241
+|[2026-09-11 09:34:36] [INFO] [3457241] profiler.py: CANN profiling data parsed in a total time of 0:00:12.166951
+|[2026-09-11 09:34:37] [INFO] [3457344] profiler.py: CANN profiling data parsed in a total time of 0:00:12.115019
+||[2026-09-11 09:34:37] [INFO] [3457542] profiler.py: CANN profiling data parsed in a total time of 0:00:12.088178
+/[2026-09-11 09:34:37] [INFO] [3457122] profiler.py: CANN profiling data parsed in a total time of 0:00:13.101301
+//[2026-09-11 09:34:38] [INFO] [3457317] profiler.py: CANN profiling data parsed in a total time of 0:00:13.100518//
+///-[2026-09-11 09:34:38] [INFO] [3457613] profiler.py: CANN profiling data parsed in a total time of 0:00:13.127014
+------\-\[2026-09-11 09:34:40] [INFO] [3457119] profiler.py: All profiling data parsed in a total time of 0:00:15.782527
+\\\\[2026-09-11 09:34:40] [INFO] [3457237] profiler.py: All profiling data parsed in a total time of 0:00:16.018274
+[2026-09-11 09:34:40] [INFO] [3457148] profiler.py: All profiling data parsed in a total time of 0:00:16.259205
+[2026-09-11 09:34:40] [INFO] [3457470] profiler.py: All profiling data parsed in a total time of 0:00:15.645763
+[2026-09-11 09:34:40] [INFO] [3457323] profiler.py: All profiling data parsed in a total time of 0:00:15.959026
+|\[2026-09-11 09:34:41] [INFO] [3457110] profiler.py: All profiling data parsed in a total time of 0:00:16.774302
+|[2026-09-11 09:34:41] [INFO] [3457267] profiler.py: All profiling data parsed in a total time of 0:00:17.010217
+|[2026-09-11 09:34:42] [INFO] [3457534] profiler.py: All profiling data parsed in a total time of 0:00:16.874700
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+================================================================================
+Qwen3 Continuous Batching Benchmark（measured repeats 中位数）
+layout / replica : tp8 / 0
+TP size          : 8
+workload         : short_short-n64-interval50-seed2026
+mode             : open_loop
+request/s        : 7.610
+goodput request/s: 7.610
+output token/s   : 121.757
+evidence class   : qwen3_32b_ascend_continuous_batching_candidate
+report           : /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-01-full_gather/replica-00.json

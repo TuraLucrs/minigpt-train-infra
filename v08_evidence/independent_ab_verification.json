@@ -1,0 +1,121 @@
+{
+  "document": "v0.8 decode A/B 独立复核数据（从原始产物直接计算，非官方 summarize 输出）",
+  "date": "2026-09-11",
+  "branch": "upgrade/v0.8-decode-critical-path",
+  "commit": "2a661b1372b521d04c26fefc91cfc6080c72054b",
+  "machine": "Atlas A3, 4 cards x 2 chips, TP8, logical devices 0-7",
+  "sessions_complete": true,
+  "session_exit_codes": "8/8 zero",
+  "preflight_hbm_max_percent": 4.0,
+  "preflight_aicore_max_percent": 0.0,
+  "per_session": {
+    "short_decode/session-01-full_gather": {
+      "greedy_token_path": "full_gather",
+      "goodput_median_rps": 7.61,
+      "goodput_runs": [7.506, 7.61, 7.902],
+      "completed_median_rps": 7.61,
+      "comm_not_overlapped_median": 0.5237,
+      "tpot_median_ms": 245.65
+    },
+    "short_decode/session-02-distributed_argmax": {
+      "greedy_token_path": "distributed_argmax",
+      "goodput_median_rps": 7.333,
+      "goodput_runs": [7.333, 7.207, 7.462],
+      "completed_median_rps": 7.333,
+      "comm_not_overlapped_median": 0.5495,
+      "tpot_median_ms": 250.83
+    },
+    "short_decode/session-03-distributed_argmax": {
+      "greedy_token_path": "distributed_argmax",
+      "goodput_median_rps": 7.823,
+      "goodput_runs": [7.823, 8.428, 7.678],
+      "completed_median_rps": 7.823,
+      "comm_not_overlapped_median": 0.5447,
+      "tpot_median_ms": 240.91
+    },
+    "short_decode/session-04-full_gather": {
+      "greedy_token_path": "full_gather",
+      "goodput_median_rps": 7.718,
+      "goodput_runs": [7.606, 7.718, 7.801],
+      "completed_median_rps": 7.718,
+      "comm_not_overlapped_median": 0.3942,
+      "tpot_median_ms": 240.87
+    },
+    "mixed_decode/session-01-full_gather": {
+      "greedy_token_path": "full_gather",
+      "goodput_median_rps": 3.668,
+      "goodput_runs": [3.668, 3.655, 3.914],
+      "completed_median_rps": 3.726,
+      "comm_not_overlapped_median": 0.4567,
+      "tpot_median_ms": 338.86
+    },
+    "mixed_decode/session-02-distributed_argmax": {
+      "greedy_token_path": "distributed_argmax",
+      "goodput_median_rps": 3.804,
+      "goodput_runs": [3.804, 3.847, 3.757],
+      "completed_median_rps": 3.804,
+      "comm_not_overlapped_median": 0.4251,
+      "tpot_median_ms": 335.22
+    },
+    "mixed_decode/session-03-distributed_argmax": {
+      "greedy_token_path": "distributed_argmax",
+      "goodput_median_rps": 3.834,
+      "goodput_runs": [3.714, 3.866, 3.834],
+      "completed_median_rps": 3.834,
+      "comm_not_overlapped_median": 0.4822,
+      "tpot_median_ms": 342.4
+    },
+    "mixed_decode/session-04-full_gather": {
+      "greedy_token_path": "full_gather",
+      "goodput_median_rps": 3.898,
+      "goodput_runs": [3.883, 3.898, 3.952],
+      "completed_median_rps": 3.898,
+      "comm_not_overlapped_median": 0.4327,
+      "tpot_median_ms": 325.86
+    }
+  },
+  "decision_gates": {
+    "note": "阈值来自 decode_critical_path.DECISION_THRESHOLDS；数值由 A/B 双 session 均值比较",
+    "short_decode": {
+      "cv_completed_full": 0.007,
+      "cv_completed_candidate": 0.032,
+      "completed_speedup": -0.0112,
+      "goodput_ratio_candidate_over_full": 0.9888,
+      "comm_fraction_delta_pp": 8.81,
+      "verdict": "fails gate2 (speedup) and gate3 (comm reduction); no regression beyond 2%"
+    },
+    "mixed_decode": {
+      "cv_completed_full": 0.023,
+      "cv_completed_candidate": 0.004,
+      "completed_speedup": 0.0017,
+      "goodput_ratio_candidate_over_full": 1.0094,
+      "comm_fraction_delta_pp": 0.89,
+      "verdict": "fails gate2 (speedup) and gate3 (comm reduction); no regression"
+    }
+  },
+  "path_row_accounting": {
+    "short_decode_total_token_rows": 1024,
+    "mixed_decode_total_token_rows": 1245,
+    "actual_rows_by_path_matches_configured_path": true,
+    "rows_equal_output_tokens": true
+  },
+  "study_status_per_doc_section5": "full_vocab_gather_not_end_to_end_bottleneck",
+  "checker_bug": {
+    "summary": "FORMAL_CAPACITY['runner'] 期望类名，而报告管线记录 implementation_name",
+    "expected_by_checker": "SlotCachedTensorParallelQwen3ModelRunner",
+    "recorded_by_pipeline": "qwen3_tp_slot_kv_cache",
+    "evidence": [
+      "src/minigpt/serving.py:1113 writes self.runner.implementation_name",
+      "src/minigpt/qwen3_tp.py:1040-1043 class SlotCachedTensorParallelQwen3ModelRunner implementation_name='qwen3_tp_slot_kv_cache'",
+      "src/minigpt/decode_critical_path.py:56 FORMAL_CAPACITY['runner']",
+      "8/8 sessions list this as the ONLY incomplete reason"
+    ],
+    "run_side_runner_correct": true
+  },
+  "official_archive": {
+    "path": "v0.8_decode_vocab_ab_evidence.tar.gz",
+    "sha256": "05526042bfeb713aa3047c15ab591104fb554e21c3bbf9a21ad4a86fabdc83b4",
+    "entries": 11869,
+    "exit_status": 2
+  }
+}

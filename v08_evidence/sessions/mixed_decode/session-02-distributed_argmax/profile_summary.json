@@ -1,0 +1,2503 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-11T01:52:50.735596+00:00",
+  "benchmark": "v0.7.1_profiling_point",
+  "evidence_class": "complete_v0.7.1_profiling_point",
+  "layout_id": "tp8",
+  "workload_class": "mixed",
+  "mode": "open_loop",
+  "source_workload_sha256": "f376a6dcbfc41c465c023864a8a676672c539e9ac1086a0dd76db51e3f5668f8",
+  "source_workload_file_sha256": "0024963d8a4697a7ad3039a2560beb2be8efae07140b77a147f83a9c42a0f50a",
+  "git_commit": "2a661b1372b521d04c26fefc91cfc6080c72054b",
+  "global_world_size": 8,
+  "logical_device_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "complete": true,
+  "incomplete_reasons": [],
+  "layout_manifest": {
+    "path": "/root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/layout_manifest.json",
+    "sha256": "50c6e072bdb2264190fcee3e6cbc6d8e503e22cbc93e78fcdb7cadf24e3cceeb",
+    "size_bytes": 1066
+  },
+  "profile_manifest": {
+    "path": "/root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/profile_manifest.json",
+    "sha256": "a568d9c23c8981d351f5cf5b49c8f6888be6015cb11b3c8cfe0e38161aeae378",
+    "size_bytes": 28314
+  },
+  "service": {
+    "summary": {
+      "completed_requests_per_second": {
+        "count": 3,
+        "min": 3.756533069569147,
+        "max": 3.846578548648253,
+        "mean": 3.8024267295632135,
+        "median": 3.8041685704722394,
+        "p50": 3.8041685704722394,
+        "p95": 3.8423375508306514,
+        "p99": 3.8457303490847328
+      },
+      "goodput_requests_per_second": {
+        "count": 3,
+        "min": 3.756533069569147,
+        "max": 3.846578548648253,
+        "mean": 3.8024267295632135,
+        "median": 3.8041685704722394,
+        "p50": 3.8041685704722394,
+        "p95": 3.8423375508306514,
+        "p99": 3.8457303490847328
+      },
+      "input_tokens_per_second": {
+        "count": 3,
+        "min": 847.8025571383869,
+        "max": 868.1246961980526,
+        "mean": 858.1601825282977,
+        "median": 858.5532942484535,
+        "p50": 858.5532942484535,
+        "p95": 867.1675560030926,
+        "p99": 867.9332681590605
+      },
+      "output_tokens_per_second": {
+        "count": 3,
+        "min": 73.0763073689623,
+        "max": 74.82797332917305,
+        "mean": 73.96908247353439,
+        "median": 74.00296672246778,
+        "p50": 74.00296672246778,
+        "p95": 74.74547266850252,
+        "p99": 74.81147319703894
+      },
+      "wall_time_ms": {
+        "count": 3,
+        "min": 16638.162770000003,
+        "max": 17036.98565,
+        "mean": 16832.932756666665,
+        "median": 16823.649849999998,
+        "p50": 16823.649849999998,
+        "p95": 17015.65207,
+        "p99": 17032.718934
+      },
+      "start_skew_ms": {
+        "count": 3,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "median": 0.0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      },
+      "queue_ms": {
+        "count": 192,
+        "min": 5.5454198736697435,
+        "max": 8987.016590079293,
+        "mean": 2993.566421190432,
+        "median": 1197.273620055057,
+        "p50": 1197.273620055057,
+        "p95": 8384.452211938333,
+        "p99": 8928.243939732201
+      },
+      "ttft_ms": {
+        "count": 192,
+        "min": 195.10382018052042,
+        "max": 9184.341680025682,
+        "mean": 3575.0202512402516,
+        "median": 1826.339015038684,
+        "p50": 1826.339015038684,
+        "p95": 8721.737910062075,
+        "p99": 9101.643473568838
+      },
+      "tpot_ms": {
+        "count": 192,
+        "min": 190.95856692785253,
+        "max": 471.58182858090316,
+        "mean": 319.10732817535126,
+        "median": 333.23166263795906,
+        "p50": 333.23166263795906,
+        "p95": 409.4628269239968,
+        "p99": 456.2995703438564
+      },
+      "e2e_latency_ms": {
+        "count": 192,
+        "min": 2780.9444000013173,
+        "max": 14552.41821007803,
+        "mean": 9456.66037906752,
+        "median": 10202.659909846261,
+        "p50": 10202.659909846261,
+        "p95": 13621.321459999308,
+        "p99": 14346.794146166649
+      }
+    },
+    "batching": {
+      "active_after": {
+        "count": 165,
+        "min": 0.0,
+        "max": 32.0,
+        "mean": 21.472727272727273,
+        "median": 26.0,
+        "p50": 26.0,
+        "p95": 32.0,
+        "p99": 32.0
+      },
+      "decode_batch_size": {
+        "count": 165,
+        "min": 0.0,
+        "max": 32.0,
+        "mean": 21.472727272727273,
+        "median": 26.0,
+        "p50": 26.0,
+        "p95": 32.0,
+        "p99": 32.0
+      },
+      "prefill_batch_size": {
+        "count": 165,
+        "min": 0.0,
+        "max": 16.0,
+        "mean": 1.1636363636363636,
+        "median": 0.0,
+        "p50": 0.0,
+        "p95": 3.0,
+        "p99": 16.0
+      }
+    },
+    "scheduler_phases": {
+      "available": true,
+      "sample_count": 165,
+      "totals_ms": {
+        "decode_phase_ms": 31515.28165047057,
+        "prefill_phase_ms": 18703.054499346763,
+        "scheduler_bookkeeping_ms": 17.56667741574347
+      },
+      "fractions": {
+        "decode_phase_ms": 0.6273457801456295,
+        "prefill_phase_ms": 0.37230453613362285,
+        "scheduler_bookkeeping_ms": 0.0003496837207476344
+      }
+    },
+    "kv_cache": {
+      "total_slot_capacity": 32,
+      "max_replica_peak_slots_used": 32,
+      "max_replica_peak_used_tokens": 6494,
+      "max_replica_internal_waste_tokens": 127477,
+      "max_replica_peak_internal_waste_capacity_ratio": 0.9725723266601562,
+      "mean_active_internal_waste_ratio": 0.9677668115330751,
+      "external_fragmentation_tokens": 0
+    },
+    "scheduler_capacity": {
+      "runner": "qwen3_tp_slot_kv_cache",
+      "total_max_slots": 32,
+      "total_max_queue_size": 128,
+      "per_replica_max_slots": 32,
+      "per_replica_max_queue_size": 128,
+      "max_seq_len": 4096
+    },
+    "max_rank_peak_device_memory_mb": 13105.138671875,
+    "sum_rank_peak_device_memory_mb": 104841.109375
+  },
+  "profile": {
+    "schema_version": 1,
+    "created_at_utc": "2026-09-11T01:52:50.735028+00:00",
+    "benchmark": "v0.7.1_ascend_profile_summary",
+    "evidence_class": "complete_v0.7.1_ascend_profile",
+    "layout_id": "tp8",
+    "workload_class": "mixed",
+    "mode": "open_loop",
+    "source_workload_sha256": "f376a6dcbfc41c465c023864a8a676672c539e9ac1086a0dd76db51e3f5668f8",
+    "source_workload_file_sha256": "0024963d8a4697a7ad3039a2560beb2be8efae07140b77a147f83a9c42a0f50a",
+    "git_commit": "2a661b1372b521d04c26fefc91cfc6080c72054b",
+    "global_world_size": 8,
+    "logical_device_ids": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "selected_ranks": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "protocol": {
+      "skip_steps": 14,
+      "warmup_steps": 1,
+      "active_steps": 4,
+      "profiler_level": "level1",
+      "aic_metrics": "pipe_utilization",
+      "record_shapes": true,
+      "profile_memory": false,
+      "with_stack": false,
+      "sys_interconnection": true
+    },
+    "profile_manifest": {
+      "path": "/root/minigpt-train-v07/runs/v08_decode_vocab_ab/mixed_decode/session-02-distributed_argmax/profile_manifest.json",
+      "sha256": "a568d9c23c8981d351f5cf5b49c8f6888be6015cb11b3c8cfe0e38161aeae378",
+      "size_bytes": 28314
+    },
+    "complete": true,
+    "incomplete_reasons": [],
+    "aggregate_step_fractions": {
+      "computing": {
+        "count": 8,
+        "min": 0.37427412936762516,
+        "max": 0.387448434541419,
+        "mean": 0.3776135007483261,
+        "median": 0.3764894785722036
+      },
+      "communication_not_overlapped": {
+        "count": 8,
+        "min": 0.2774208535900702,
+        "max": 0.4590084821918747,
+        "mean": 0.3940077337352784,
+        "median": 0.42509755138795624
+      },
+      "free": {
+        "count": 8,
+        "min": 0.16372115283150995,
+        "max": 0.34729401479076405,
+        "mean": 0.22837881992804265,
+        "median": 0.19363988609828853
+      },
+      "overlapped_of_communication": {
+        "count": 8,
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "median": 0.0
+      }
+    },
+    "ranks": [
+      {
+        "global_rank": 0,
+        "logical_device_id": 0,
+        "kernel": {
+          "rows": 43448,
+          "total_duration_us": 1686417.34,
+          "communication_duration_us": 932561.3,
+          "compute_duration_us": 753856.04,
+          "top": [
+            {
+              "name": "allreduceAicpuKernel",
+              "calls": 919,
+              "total_us": 248767.42,
+              "mean_us": 270.69360174102286
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexPut_IndexPut",
+              "calls": 896,
+              "total_us": 169712.72,
+              "mean_us": 189.41151785714285
+            },
+            {
+              "name": "aclnnIndex_IndexAiCpu_Index",
+              "calls": 384,
+              "total_us": 106096.46,
+              "mean_us": 276.29286458333337
+            },
+            {
+              "name": "aclnnMatmul_MatMulCommon_MatMulV2",
+              "calls": 3143,
+              "total_us": 101132.78,
+              "mean_us": 32.17714922048998
+            },
+            {
+              "name": "aclnnIndex_IndexAiCore_Index",
+              "calls": 2190,
+              "total_us": 63806.3,
+              "mean_us": 29.13529680365297
+            },
+            {
+              "name": "aclnnMul_MulAiCore_Mul",
+              "calls": 5845,
+              "total_us": 59868.66,
+              "mean_us": 10.242713430282294
+            },
+            {
+              "name": "aclnnFlashAttentionScore_FlashAttentionScore_FlashAttentionScore",
+              "calls": 448,
+              "total_us": 33091.46,
+              "mean_us": 73.86486607142857
+            },
+            {
+              "name": "aclnnPowTensorScalar_PowsAiCore_Pows",
+              "calls": 1799,
+              "total_us": 24652.74,
+              "mean_us": 13.703579766536967
+            },
+            {
+              "name": "aclnnInplaceCopy_CastAiCore_Cast",
+              "calls": 3661,
+              "total_us": 23827.76,
+              "mean_us": 6.508538650641901
+            },
+            {
+              "name": "aclnnMean_ReduceMeanAiCore_ReduceMean",
+              "calls": 1799,
+              "total_us": 23102.72,
+              "mean_us": 12.841978877153975
+            },
+            {
+              "name": "aclnnIndex_IndexCheck_IndexCheck",
+              "calls": 2574,
+              "total_us": 20448.36,
+              "mean_us": 7.944195804195805
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_NonZero",
+              "calls": 1024,
+              "total_us": 20083.82,
+              "mean_us": 19.61310546875
+            },
+            {
+              "name": "aclnnIndex_SliceAiCore_Slice",
+              "calls": 3200,
+              "total_us": 16178.34,
+              "mean_us": 5.05573125
+            },
+            {
+              "name": "aclnnAdd_AddAiCore_Add",
+              "calls": 1796,
+              "total_us": 15259.56,
+              "mean_us": 8.49641425389755
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexCheck_IndexCheck",
+              "calls": 903,
+              "total_us": 8692.36,
+              "mean_us": 9.626090808416391
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_MemSet",
+              "calls": 1024,
+              "total_us": 8527.32,
+              "mean_us": 8.3274609375
+            },
+            {
+              "name": "aclnnArange_ArangeAiCore_Range",
+              "calls": 518,
+              "total_us": 5340.78,
+              "mean_us": 10.3103861003861
+            },
+            {
+              "name": "hcom_allReduce__612_231_1",
+              "calls": 1,
+              "total_us": 5040.72,
+              "mean_us": 5040.72
+            },
+            {
+              "name": "hcom_allReduce__612_832_1",
+              "calls": 1,
+              "total_us": 5021.84,
+              "mean_us": 5021.84
+            },
+            {
+              "name": "hcom_broadcast__612_274_1",
+              "calls": 1,
+              "total_us": 4781.38,
+              "mean_us": 4781.38
+            }
+          ]
+        },
+        "operator": {
+          "rows": 186157,
+          "duration_field": "Device Self Duration(us)",
+          "top": [
+            {
+              "name": "wait_event",
+              "calls": 2352,
+              "total_us": 1005689.68,
+              "mean_us": 427.58914965986395
+            },
+            {
+              "name": "HcclAllreduce",
+              "calls": 1838,
+              "total_us": 912700.2,
+              "mean_us": 496.57247007616974
+            },
+            {
+              "name": "aclnnIndex",
+              "calls": 2574,
+              "total_us": 206529.46,
+              "mean_us": 80.23677544677544
+            },
+            {
+              "name": "aclnnIndexPutImpl",
+              "calls": 903,
+              "total_us": 178492.62,
+              "mean_us": 197.66624584717607
+            },
+            {
+              "name": "aclnnMatmul",
+              "calls": 3143,
+              "total_us": 101132.78,
+              "mean_us": 32.17714922048998
+            },
+            {
+              "name": "aclnnMul",
+              "calls": 5845,
+              "total_us": 63863.5,
+              "mean_us": 10.92617621899059
+            },
+            {
+              "name": "aclnnFlashAttentionScore",
+              "calls": 448,
+              "total_us": 33091.46,
+              "mean_us": 73.86486607142857
+            },
+            {
+              "name": "aclnnNonzeroV2",
+              "calls": 1024,
+              "total_us": 28611.14,
+              "mean_us": 27.94056640625
+            },
+            {
+              "name": "aclnnInplaceCopy",
+              "calls": 3930,
+              "total_us": 27345.44,
+              "mean_us": 6.9581272264631036
+            },
+            {
+              "name": "aclnnPowTensorScalar",
+              "calls": 1799,
+              "total_us": 24652.74,
+              "mean_us": 13.703579766536967
+            },
+            {
+              "name": "aclnnMean",
+              "calls": 1799,
+              "total_us": 23102.72,
+              "mean_us": 12.841978877153975
+            },
+            {
+              "name": "HcclBroadcast",
+              "calls": 52,
+              "total_us": 18971.260000000002,
+              "mean_us": 364.8319230769231
+            },
+            {
+              "name": "aclnnAdd",
+              "calls": 1796,
+              "total_us": 15259.56,
+              "mean_us": 8.49641425389755
+            },
+            {
+              "name": "aclnnCat",
+              "calls": 910,
+              "total_us": 7148.5199999999995,
+              "mean_us": 7.855516483516483
+            },
+            {
+              "name": "aclnnNeg",
+              "calls": 896,
+              "total_us": 6960.32,
+              "mean_us": 7.7682142857142855
+            },
+            {
+              "name": "HcclAllgather",
+              "calls": 14,
+              "total_us": 5513.5,
+              "mean_us": 393.82142857142856
+            },
+            {
+              "name": "aclnnArange",
+              "calls": 518,
+              "total_us": 5340.78,
+              "mean_us": 10.3103861003861
+            },
+            {
+              "name": "aclnnSilu",
+              "calls": 448,
+              "total_us": 4147.26,
+              "mean_us": 9.257276785714286
+            },
+            {
+              "name": "aclnnNonzero",
+              "calls": 192,
+              "total_us": 3596.02,
+              "mean_us": 18.729270833333334
+            },
+            {
+              "name": "aclnnBitwiseAndTensor",
+              "calls": 199,
+              "total_us": 3003.8,
+              "mean_us": 15.094472361809046
+            }
+          ]
+        },
+        "step_trace": {
+          "rows": 4,
+          "totals_us": {
+            "computing": 749232.379999998,
+            "communication_not_overlapped": 682350.8799999999,
+            "overlapped": 0.0,
+            "communication": 682350.8799999999,
+            "free": 554400.4599999563,
+            "stage": 1985983.5,
+            "bubble": 0.0,
+            "preparing": 1486.5
+          },
+          "fractions": {
+            "computing": 0.3772601232588277,
+            "communication_not_overlapped": 0.3435833580691883,
+            "free": 0.27915662944830927,
+            "overlapped_of_communication": 0.0
+          }
+        }
+      },
+      {
+        "global_rank": 1,
+        "logical_device_id": 1,
+        "kernel": {
+          "rows": 43421,
+          "total_duration_us": 1556832.639,
+          "communication_duration_us": 806934.467,
+          "compute_duration_us": 749898.172,
+          "top": [
+            {
+              "name": "allreduceAicpuKernel",
+              "calls": 919,
+              "total_us": 253899.619,
+              "mean_us": 276.2781490750816
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexPut_IndexPut",
+              "calls": 896,
+              "total_us": 174830.446,
+              "mean_us": 195.123265625
+            },
+            {
+              "name": "aclnnIndex_IndexAiCpu_Index",
+              "calls": 384,
+              "total_us": 109738.973,
+              "mean_us": 285.77857552083333
+            },
+            {
+              "name": "aclnnMatmul_MatMulCommon_MatMulV2",
+              "calls": 3143,
+              "total_us": 101237.513,
+              "mean_us": 32.210471842188994
+            },
+            {
+              "name": "aclnnIndex_IndexAiCore_Index",
+              "calls": 2190,
+              "total_us": 64135.221,
+              "mean_us": 29.28548904109589
+            },
+            {
+              "name": "aclnnMul_MulAiCore_Mul",
+              "calls": 5845,
+              "total_us": 55883.806,
+              "mean_us": 9.560959110350726
+            },
+            {
+              "name": "aclnnFlashAttentionScore_FlashAttentionScore_FlashAttentionScore",
+              "calls": 448,
+              "total_us": 33222.844,
+              "mean_us": 74.15813392857142
+            },
+            {
+              "name": "aclnnInplaceCopy_CastAiCore_Cast",
+              "calls": 3654,
+              "total_us": 24074.481,
+              "mean_us": 6.588527914614121
+            },
+            {
+              "name": "aclnnPowTensorScalar_PowsAiCore_Pows",
+              "calls": 1799,
+              "total_us": 22439.569,
+              "mean_us": 12.473356864924957
+            },
+            {
+              "name": "aclnnMean_ReduceMeanAiCore_ReduceMean",
+              "calls": 1799,
+              "total_us": 22346.416,
+              "mean_us": 12.42157643135075
+            },
+            {
+              "name": "aclnnIndex_IndexCheck_IndexCheck",
+              "calls": 2574,
+              "total_us": 19750.686,
+              "mean_us": 7.673149184149184
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_NonZero",
+              "calls": 1024,
+              "total_us": 16999.973,
+              "mean_us": 16.6015361328125
+            },
+            {
+              "name": "aclnnIndex_SliceAiCore_Slice",
+              "calls": 3200,
+              "total_us": 16280.058,
+              "mean_us": 5.087518125
+            },
+            {
+              "name": "aclnnAdd_AddAiCore_Add",
+              "calls": 1796,
+              "total_us": 13940.375,
+              "mean_us": 7.76190144766147
+            },
+            {
+              "name": "hcom_allReduce__612_227_1",
+              "calls": 1,
+              "total_us": 9611.472,
+              "mean_us": 9611.472
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexCheck_IndexCheck",
+              "calls": 903,
+              "total_us": 8540.828,
+              "mean_us": 9.458281284606866
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_MemSet",
+              "calls": 1024,
+              "total_us": 8177.302,
+              "mean_us": 7.985646484375
+            },
+            {
+              "name": "hcom_allReduce__612_625_1",
+              "calls": 1,
+              "total_us": 7788.956,
+              "mean_us": 7788.956
+            },
+            {
+              "name": "aclnnArange_ArangeAiCore_Range",
+              "calls": 518,
+              "total_us": 6072.43,
+              "mean_us": 11.722837837837838
+            },
+            {
+              "name": "hcom_allReduce__612_832_1",
+              "calls": 1,
+              "total_us": 5065.681,
+              "mean_us": 5065.681
+            }
+          ]
+        },
+        "operator": {
+          "rows": 185951,
+          "duration_field": "Device Self Duration(us)",
+          "top": [
+            {
+              "name": "wait_event",
+              "calls": 2352,
+              "total_us": 819884.24475,
+              "mean_us": 348.5902401147959
+            },
+            {
+              "name": "HcclAllreduce",
+              "calls": 1838,
+              "total_us": 789168.34125,
+              "mean_us": 429.36253604461376
+            },
+            {
+              "name": "aclnnIndex",
+              "calls": 2574,
+              "total_us": 209904.90275,
+              "mean_us": 81.54813626651126
+            },
+            {
+              "name": "aclnnIndexPutImpl",
+              "calls": 903,
+              "total_us": 183432.14325,
+              "mean_us": 203.13637126245845
+            },
+            {
+              "name": "aclnnMatmul",
+              "calls": 3143,
+              "total_us": 101237.4955,
+              "mean_us": 32.21046627426026
+            },
+            {
+              "name": "aclnnMul",
+              "calls": 5845,
+              "total_us": 60107.3775,
+              "mean_us": 10.283554747647562
+            },
+            {
+              "name": "aclnnFlashAttentionScore",
+              "calls": 448,
+              "total_us": 33222.84575,
+              "mean_us": 74.15813783482143
+            },
+            {
+              "name": "aclnnInplaceCopy",
+              "calls": 3923,
+              "total_us": 27598.52525,
+              "mean_us": 7.035056143257711
+            },
+            {
+              "name": "aclnnNonzeroV2",
+              "calls": 1024,
+              "total_us": 25177.28625,
+              "mean_us": 24.587193603515626
+            },
+            {
+              "name": "aclnnPowTensorScalar",
+              "calls": 1799,
+              "total_us": 22439.58825,
+              "mean_us": 12.473367565314064
+            },
+            {
+              "name": "aclnnMean",
+              "calls": 1799,
+              "total_us": 22346.387,
+              "mean_us": 12.421560311284045
+            },
+            {
+              "name": "HcclBroadcast",
+              "calls": 52,
+              "total_us": 16454.7335,
+              "mean_us": 316.43718269230766
+            },
+            {
+              "name": "aclnnAdd",
+              "calls": 1796,
+              "total_us": 13940.3605,
+              "mean_us": 7.761893374164811
+            },
+            {
+              "name": "aclnnCat",
+              "calls": 910,
+              "total_us": 7073.50575,
+              "mean_us": 7.773083241758242
+            },
+            {
+              "name": "aclnnNeg",
+              "calls": 896,
+              "total_us": 6853.37525,
+              "mean_us": 7.648856305803571
+            },
+            {
+              "name": "aclnnArange",
+              "calls": 518,
+              "total_us": 6072.44225,
+              "mean_us": 11.722861486486487
+            },
+            {
+              "name": "HcclAllgather",
+              "calls": 14,
+              "total_us": 5377.6255,
+              "mean_us": 384.1161071428572
+            },
+            {
+              "name": "aclnnSilu",
+              "calls": 448,
+              "total_us": 3925.37675,
+              "mean_us": 8.762001674107143
+            },
+            {
+              "name": "aclnnNonzero",
+              "calls": 192,
+              "total_us": 3325.64975,
+              "mean_us": 17.321092447916666
+            },
+            {
+              "name": "aclnnBitwiseAndTensor",
+              "calls": 199,
+              "total_us": 2731.05325,
+              "mean_us": 13.723885678391959
+            }
+          ]
+        },
+        "step_trace": {
+          "rows": 4,
+          "totals_us": {
+            "computing": 745824.0229999997,
+            "communication_not_overlapped": 551333.2350000001,
+            "overlapped": 0.0,
+            "communication": 551333.2350000001,
+            "free": 690195.888999973,
+            "stage": 1987353.25,
+            "bubble": 0.0,
+            "preparing": 1636.25
+          },
+          "fractions": {
+            "computing": 0.37528507979142595,
+            "communication_not_overlapped": 0.2774208535900702,
+            "free": 0.34729401479076405,
+            "overlapped_of_communication": 0.0
+          }
+        }
+      },
+      {
+        "global_rank": 2,
+        "logical_device_id": 2,
+        "kernel": {
+          "rows": 43421,
+          "total_duration_us": 1880062.748,
+          "communication_duration_us": 1130060.05,
+          "compute_duration_us": 750002.698,
+          "top": [
+            {
+              "name": "allreduceAicpuKernel",
+              "calls": 919,
+              "total_us": 244071.766,
+              "mean_us": 265.5840761697497
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexPut_IndexPut",
+              "calls": 896,
+              "total_us": 174664.993,
+              "mean_us": 194.93860825892855
+            },
+            {
+              "name": "aclnnIndex_IndexAiCpu_Index",
+              "calls": 384,
+              "total_us": 107319.805,
+              "mean_us": 279.47865885416667
+            },
+            {
+              "name": "aclnnMatmul_MatMulCommon_MatMulV2",
+              "calls": 3143,
+              "total_us": 101325.776,
+              "mean_us": 32.2385542475342
+            },
+            {
+              "name": "aclnnIndex_IndexAiCore_Index",
+              "calls": 2190,
+              "total_us": 65402.192,
+              "mean_us": 29.864014611872147
+            },
+            {
+              "name": "aclnnMul_MulAiCore_Mul",
+              "calls": 5845,
+              "total_us": 55874.755,
+              "mean_us": 9.559410607356714
+            },
+            {
+              "name": "aclnnFlashAttentionScore_FlashAttentionScore_FlashAttentionScore",
+              "calls": 448,
+              "total_us": 32899.587,
+              "mean_us": 73.436578125
+            },
+            {
+              "name": "aclnnInplaceCopy_CastAiCore_Cast",
+              "calls": 3654,
+              "total_us": 23787.569,
+              "mean_us": 6.510007936507936
+            },
+            {
+              "name": "aclnnMean_ReduceMeanAiCore_ReduceMean",
+              "calls": 1799,
+              "total_us": 22882.709,
+              "mean_us": 12.719682601445246
+            },
+            {
+              "name": "aclnnPowTensorScalar_PowsAiCore_Pows",
+              "calls": 1799,
+              "total_us": 22293.972,
+              "mean_us": 12.392424680377989
+            },
+            {
+              "name": "aclnnIndex_IndexCheck_IndexCheck",
+              "calls": 2574,
+              "total_us": 19747.485,
+              "mean_us": 7.671905594405595
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_NonZero",
+              "calls": 1024,
+              "total_us": 17479.283,
+              "mean_us": 17.0696123046875
+            },
+            {
+              "name": "aclnnIndex_SliceAiCore_Slice",
+              "calls": 3200,
+              "total_us": 16290.654,
+              "mean_us": 5.090829375
+            },
+            {
+              "name": "aclnnAdd_AddAiCore_Add",
+              "calls": 1796,
+              "total_us": 13941.742,
+              "mean_us": 7.762662583518931
+            },
+            {
+              "name": "hcom_allReduce__612_227_1",
+              "calls": 1,
+              "total_us": 11607.632,
+              "mean_us": 11607.632
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_MemSet",
+              "calls": 1024,
+              "total_us": 8593.371,
+              "mean_us": 8.3919638671875
+            },
+            {
+              "name": "hcom_allReduce__612_625_1",
+              "calls": 1,
+              "total_us": 8577.612,
+              "mean_us": 8577.612
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexCheck_IndexCheck",
+              "calls": 903,
+              "total_us": 8432.259,
+              "mean_us": 9.338049833887043
+            },
+            {
+              "name": "aclnnArange_ArangeAiCore_Range",
+              "calls": 518,
+              "total_us": 5175.087,
+              "mean_us": 9.990515444015445
+            },
+            {
+              "name": "hcom_broadcast__612_274_1",
+              "calls": 1,
+              "total_us": 5000.48,
+              "mean_us": 5000.48
+            }
+          ]
+        },
+        "operator": {
+          "rows": 185951,
+          "duration_field": "Device Self Duration(us)",
+          "top": [
+            {
+              "name": "wait_event",
+              "calls": 2352,
+              "total_us": 1270175.0177499999,
+              "mean_us": 540.0403987032313
+            },
+            {
+              "name": "HcclAllreduce",
+              "calls": 1838,
+              "total_us": 1104909.7435,
+              "mean_us": 601.1478473884657
+            },
+            {
+              "name": "aclnnIndex",
+              "calls": 2574,
+              "total_us": 208760.15025,
+              "mean_us": 81.10339947552448
+            },
+            {
+              "name": "aclnnIndexPutImpl",
+              "calls": 903,
+              "total_us": 183165.6575,
+              "mean_us": 202.84125968992248
+            },
+            {
+              "name": "aclnnMatmul",
+              "calls": 3143,
+              "total_us": 101325.8125,
+              "mean_us": 32.2385658606427
+            },
+            {
+              "name": "aclnnMul",
+              "calls": 5845,
+              "total_us": 59913.61325,
+              "mean_us": 10.250404319931565
+            },
+            {
+              "name": "aclnnFlashAttentionScore",
+              "calls": 448,
+              "total_us": 32899.5745,
+              "mean_us": 73.4365502232143
+            },
+            {
+              "name": "aclnnInplaceCopy",
+              "calls": 3923,
+              "total_us": 27118.7095,
+              "mean_us": 6.91274776956411
+            },
+            {
+              "name": "aclnnNonzeroV2",
+              "calls": 1024,
+              "total_us": 26072.654,
+              "mean_us": 25.461576171875
+            },
+            {
+              "name": "HcclBroadcast",
+              "calls": 52,
+              "total_us": 23143.36275,
+              "mean_us": 445.06466826923076
+            },
+            {
+              "name": "aclnnMean",
+              "calls": 1799,
+              "total_us": 22882.7125,
+              "mean_us": 12.71968454697054
+            },
+            {
+              "name": "aclnnPowTensorScalar",
+              "calls": 1799,
+              "total_us": 22293.982,
+              "mean_us": 12.392430239021678
+            },
+            {
+              "name": "aclnnAdd",
+              "calls": 1796,
+              "total_us": 13941.7385,
+              "mean_us": 7.762660634743875
+            },
+            {
+              "name": "aclnnCat",
+              "calls": 910,
+              "total_us": 7072.13025,
+              "mean_us": 7.771571703296703
+            },
+            {
+              "name": "aclnnNeg",
+              "calls": 896,
+              "total_us": 6995.49,
+              "mean_us": 7.807466517857143
+            },
+            {
+              "name": "HcclAllgather",
+              "calls": 14,
+              "total_us": 6648.11075,
+              "mean_us": 474.8650535714286
+            },
+            {
+              "name": "aclnnArange",
+              "calls": 518,
+              "total_us": 5175.08725,
+              "mean_us": 9.990515926640926
+            },
+            {
+              "name": "aclnnSilu",
+              "calls": 448,
+              "total_us": 4146.4815,
+              "mean_us": 9.2555390625
+            },
+            {
+              "name": "aclnnNonzero",
+              "calls": 192,
+              "total_us": 3642.33225,
+              "mean_us": 18.97048046875
+            },
+            {
+              "name": "aclnnBitwiseAndTensor",
+              "calls": 199,
+              "total_us": 2974.5185,
+              "mean_us": 14.947329145728643
+            }
+          ]
+        },
+        "step_trace": {
+          "rows": 4,
+          "totals_us": {
+            "computing": 745353.5829999985,
+            "communication_not_overlapped": 884410.2919999998,
+            "overlapped": 0.0,
+            "communication": 884410.2919999998,
+            "free": 357874.1769999999,
+            "stage": 1987637.75,
+            "bubble": 0.0,
+            "preparing": 1447.5
+          },
+          "fractions": {
+            "computing": 0.3749946804944706,
+            "communication_not_overlapped": 0.44495547138808356,
+            "free": 0.1800500000565998,
+            "overlapped_of_communication": 0.0
+          }
+        }
+      },
+      {
+        "global_rank": 3,
+        "logical_device_id": 3,
+        "kernel": {
+          "rows": 43421,
+          "total_duration_us": 1640047.027,
+          "communication_duration_us": 889684.552,
+          "compute_duration_us": 750362.475,
+          "top": [
+            {
+              "name": "allreduceAicpuKernel",
+              "calls": 919,
+              "total_us": 246629.339,
+              "mean_us": 268.3670718171926
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexPut_IndexPut",
+              "calls": 896,
+              "total_us": 168822.985,
+              "mean_us": 188.41851004464283
+            },
+            {
+              "name": "aclnnIndex_IndexAiCpu_Index",
+              "calls": 384,
+              "total_us": 107425.863,
+              "mean_us": 279.7548515625
+            },
+            {
+              "name": "aclnnMatmul_MatMulCommon_MatMulV2",
+              "calls": 3143,
+              "total_us": 101437.511,
+              "mean_us": 32.27410467706013
+            },
+            {
+              "name": "aclnnIndex_IndexAiCore_Index",
+              "calls": 2190,
+              "total_us": 64892.778,
+              "mean_us": 29.631405479452056
+            },
+            {
+              "name": "aclnnMul_MulAiCore_Mul",
+              "calls": 5845,
+              "total_us": 59035.231,
+              "mean_us": 10.1001250641574
+            },
+            {
+              "name": "aclnnFlashAttentionScore_FlashAttentionScore_FlashAttentionScore",
+              "calls": 448,
+              "total_us": 33185.903,
+              "mean_us": 74.0756763392857
+            },
+            {
+              "name": "aclnnPowTensorScalar_PowsAiCore_Pows",
+              "calls": 1799,
+              "total_us": 27375.309,
+              "mean_us": 15.216958866036688
+            },
+            {
+              "name": "aclnnInplaceCopy_CastAiCore_Cast",
+              "calls": 3654,
+              "total_us": 24081.518,
+              "mean_us": 6.590453749315818
+            },
+            {
+              "name": "aclnnMean_ReduceMeanAiCore_ReduceMean",
+              "calls": 1799,
+              "total_us": 22318.436,
+              "mean_us": 12.406023346303503
+            },
+            {
+              "name": "aclnnIndex_IndexCheck_IndexCheck",
+              "calls": 2574,
+              "total_us": 19538.709,
+              "mean_us": 7.590796037296037
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_NonZero",
+              "calls": 1024,
+              "total_us": 17182.72,
+              "mean_us": 16.78
+            },
+            {
+              "name": "aclnnIndex_SliceAiCore_Slice",
+              "calls": 3200,
+              "total_us": 16244.403,
+              "mean_us": 5.0763759375
+            },
+            {
+              "name": "aclnnAdd_AddAiCore_Add",
+              "calls": 1796,
+              "total_us": 13769.953,
+              "mean_us": 7.667011692650334
+            },
+            {
+              "name": "hcom_allReduce__612_227_1",
+              "calls": 1,
+              "total_us": 11593.232,
+              "mean_us": 11593.232
+            },
+            {
+              "name": "hcom_allReduce__612_625_1",
+              "calls": 1,
+              "total_us": 8501.35,
+              "mean_us": 8501.35
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexCheck_IndexCheck",
+              "calls": 903,
+              "total_us": 8294.678,
+              "mean_us": 9.18568992248062
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_MemSet",
+              "calls": 1024,
+              "total_us": 8129.534,
+              "mean_us": 7.938998046875
+            },
+            {
+              "name": "hcom_allReduce__612_231_1",
+              "calls": 1,
+              "total_us": 6169.743,
+              "mean_us": 6169.743
+            },
+            {
+              "name": "aclnnArange_ArangeAiCore_Range",
+              "calls": 518,
+              "total_us": 6127.224,
+              "mean_us": 11.82861776061776
+            }
+          ]
+        },
+        "operator": {
+          "rows": 185951,
+          "duration_field": "Device Self Duration(us)",
+          "top": [
+            {
+              "name": "wait_event",
+              "calls": 2352,
+              "total_us": 940657.67625,
+              "mean_us": 399.9394882015306
+            },
+            {
+              "name": "HcclAllreduce",
+              "calls": 1838,
+              "total_us": 873119.08875,
+              "mean_us": 475.0375890914037
+            },
+            {
+              "name": "aclnnIndex",
+              "calls": 2574,
+              "total_us": 208101.757,
+              "mean_us": 80.84761344211344
+            },
+            {
+              "name": "aclnnIndexPutImpl",
+              "calls": 903,
+              "total_us": 177194.62375,
+              "mean_us": 196.228819213732
+            },
+            {
+              "name": "aclnnMatmul",
+              "calls": 3143,
+              "total_us": 101437.50825,
+              "mean_us": 32.2741038020999
+            },
+            {
+              "name": "aclnnMul",
+              "calls": 5845,
+              "total_us": 63243.028,
+              "mean_us": 10.820021899059025
+            },
+            {
+              "name": "aclnnFlashAttentionScore",
+              "calls": 448,
+              "total_us": 33185.905,
+              "mean_us": 74.07568080357143
+            },
+            {
+              "name": "aclnnInplaceCopy",
+              "calls": 3923,
+              "total_us": 27594.59625,
+              "mean_us": 7.0340546138159565
+            },
+            {
+              "name": "aclnnPowTensorScalar",
+              "calls": 1799,
+              "total_us": 27375.28275,
+              "mean_us": 15.216944274596997
+            },
+            {
+              "name": "aclnnNonzeroV2",
+              "calls": 1024,
+              "total_us": 25312.2225,
+              "mean_us": 24.71896728515625
+            },
+            {
+              "name": "aclnnMean",
+              "calls": 1799,
+              "total_us": 22318.43175,
+              "mean_us": 12.406020983879934
+            },
+            {
+              "name": "HcclBroadcast",
+              "calls": 52,
+              "total_us": 16404.127,
+              "mean_us": 315.4639807692308
+            },
+            {
+              "name": "aclnnAdd",
+              "calls": 1796,
+              "total_us": 13769.9705,
+              "mean_us": 7.667021436525612
+            },
+            {
+              "name": "aclnnCat",
+              "calls": 910,
+              "total_us": 7158.0675,
+              "mean_us": 7.866008241758242
+            },
+            {
+              "name": "aclnnNeg",
+              "calls": 896,
+              "total_us": 6761.6545,
+              "mean_us": 7.546489397321428
+            },
+            {
+              "name": "aclnnArange",
+              "calls": 518,
+              "total_us": 6127.22375,
+              "mean_us": 11.828617277992278
+            },
+            {
+              "name": "HcclAllgather",
+              "calls": 14,
+              "total_us": 4316.64925,
+              "mean_us": 308.3320892857143
+            },
+            {
+              "name": "aclnnSilu",
+              "calls": 448,
+              "total_us": 3928.63525,
+              "mean_us": 8.769275111607142
+            },
+            {
+              "name": "aclnnNonzero",
+              "calls": 192,
+              "total_us": 3341.02975,
+              "mean_us": 17.401196614583334
+            },
+            {
+              "name": "aclnnBitwiseAndTensor",
+              "calls": 199,
+              "total_us": 2742.01425,
+              "mean_us": 13.77896608040201
+            }
+          ]
+        },
+        "step_trace": {
+          "rows": 4,
+          "totals_us": {
+            "computing": 746199.1140000008,
+            "communication_not_overlapped": 641268.9370000002,
+            "overlapped": 0.0,
+            "communication": 641268.9370000002,
+            "free": 598589.4909999636,
+            "stage": 1986057.25,
+            "bubble": 0.0,
+            "preparing": 3851.5
+          },
+          "fractions": {
+            "computing": 0.3757188338855795,
+            "communication_not_overlapped": 0.32288542387184466,
+            "free": 0.3013958892675242,
+            "overlapped_of_communication": 0.0
+          }
+        }
+      },
+      {
+        "global_rank": 4,
+        "logical_device_id": 4,
+        "kernel": {
+          "rows": 43421,
+          "total_duration_us": 1901882.088,
+          "communication_duration_us": 1153930.76,
+          "compute_duration_us": 747951.328,
+          "top": [
+            {
+              "name": "allreduceAicpuKernel",
+              "calls": 919,
+              "total_us": 249770.386,
+              "mean_us": 271.78496844396085
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexPut_IndexPut",
+              "calls": 896,
+              "total_us": 171265.528,
+              "mean_us": 191.14456249999998
+            },
+            {
+              "name": "aclnnIndex_IndexAiCpu_Index",
+              "calls": 384,
+              "total_us": 107318.519,
+              "mean_us": 279.47530989583333
+            },
+            {
+              "name": "aclnnMatmul_MatMulCommon_MatMulV2",
+              "calls": 3143,
+              "total_us": 101331.762,
+              "mean_us": 32.24045879732739
+            },
+            {
+              "name": "aclnnIndex_IndexAiCore_Index",
+              "calls": 2190,
+              "total_us": 64648.923,
+              "mean_us": 29.52005616438356
+            },
+            {
+              "name": "aclnnMul_MulAiCore_Mul",
+              "calls": 5845,
+              "total_us": 55872.047,
+              "mean_us": 9.558947305389221
+            },
+            {
+              "name": "aclnnFlashAttentionScore_FlashAttentionScore_FlashAttentionScore",
+              "calls": 448,
+              "total_us": 32850.337,
+              "mean_us": 73.32664508928572
+            },
+            {
+              "name": "aclnnInplaceCopy_CastAiCore_Cast",
+              "calls": 3654,
+              "total_us": 23820.214,
+              "mean_us": 6.518941981390257
+            },
+            {
+              "name": "aclnnMean_ReduceMeanAiCore_ReduceMean",
+              "calls": 1799,
+              "total_us": 22851.211,
+              "mean_us": 12.702173985547526
+            },
+            {
+              "name": "aclnnPowTensorScalar_PowsAiCore_Pows",
+              "calls": 1799,
+              "total_us": 22450.788,
+              "mean_us": 12.479593107281824
+            },
+            {
+              "name": "aclnnIndex_IndexCheck_IndexCheck",
+              "calls": 2574,
+              "total_us": 19752.717,
+              "mean_us": 7.673938228438229
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_NonZero",
+              "calls": 1024,
+              "total_us": 17781.672,
+              "mean_us": 17.3649140625
+            },
+            {
+              "name": "aclnnIndex_SliceAiCore_Slice",
+              "calls": 3200,
+              "total_us": 16136.17,
+              "mean_us": 5.042553125
+            },
+            {
+              "name": "aclnnAdd_AddAiCore_Add",
+              "calls": 1796,
+              "total_us": 13968.873,
+              "mean_us": 7.777768930957683
+            },
+            {
+              "name": "hcom_allReduce__612_227_1",
+              "calls": 1,
+              "total_us": 11687.194,
+              "mean_us": 11687.194
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexCheck_IndexCheck",
+              "calls": 903,
+              "total_us": 8539.167,
+              "mean_us": 9.456441860465116
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_MemSet",
+              "calls": 1024,
+              "total_us": 8532.294,
+              "mean_us": 8.332318359375
+            },
+            {
+              "name": "hcom_allReduce__612_625_1",
+              "calls": 1,
+              "total_us": 8530.531,
+              "mean_us": 8530.531
+            },
+            {
+              "name": "aclnnArange_ArangeAiCore_Range",
+              "calls": 518,
+              "total_us": 6942.497,
+              "mean_us": 13.402503861003861
+            },
+            {
+              "name": "hcom_allReduce__612_231_1",
+              "calls": 1,
+              "total_us": 6602.532,
+              "mean_us": 6602.532
+            }
+          ]
+        },
+        "operator": {
+          "rows": 185951,
+          "duration_field": "Device Self Duration(us)",
+          "top": [
+            {
+              "name": "wait_event",
+              "calls": 2352,
+              "total_us": 1289184.01475,
+              "mean_us": 548.1224552508504
+            },
+            {
+              "name": "HcclAllreduce",
+              "calls": 1838,
+              "total_us": 1127475.69725,
+              "mean_us": 613.425297742111
+            },
+            {
+              "name": "aclnnIndex",
+              "calls": 2574,
+              "total_us": 207856.333,
+              "mean_us": 80.75226612276613
+            },
+            {
+              "name": "aclnnIndexPutImpl",
+              "calls": 903,
+              "total_us": 179885.3995,
+              "mean_us": 199.2086373200443
+            },
+            {
+              "name": "aclnnMatmul",
+              "calls": 3143,
+              "total_us": 101331.76525,
+              "mean_us": 32.240459831371304
+            },
+            {
+              "name": "aclnnMul",
+              "calls": 5845,
+              "total_us": 60026.314,
+              "mean_us": 10.269685885372112
+            },
+            {
+              "name": "aclnnFlashAttentionScore",
+              "calls": 448,
+              "total_us": 32850.33775,
+              "mean_us": 73.32664676339286
+            },
+            {
+              "name": "aclnnInplaceCopy",
+              "calls": 3923,
+              "total_us": 27351.6565,
+              "mean_us": 6.97212758093296
+            },
+            {
+              "name": "aclnnNonzeroV2",
+              "calls": 1024,
+              "total_us": 26313.961,
+              "mean_us": 25.6972275390625
+            },
+            {
+              "name": "HcclBroadcast",
+              "calls": 52,
+              "total_us": 23484.028,
+              "mean_us": 451.615923076923
+            },
+            {
+              "name": "aclnnMean",
+              "calls": 1799,
+              "total_us": 22851.19925,
+              "mean_us": 12.70216745414119
+            },
+            {
+              "name": "aclnnPowTensorScalar",
+              "calls": 1799,
+              "total_us": 22450.827,
+              "mean_us": 12.479614785992219
+            },
+            {
+              "name": "aclnnAdd",
+              "calls": 1796,
+              "total_us": 13968.862,
+              "mean_us": 7.77776280623608
+            },
+            {
+              "name": "aclnnCat",
+              "calls": 910,
+              "total_us": 7142.82425,
+              "mean_us": 7.849257417582417
+            },
+            {
+              "name": "HcclAllgather",
+              "calls": 14,
+              "total_us": 6966.8415,
+              "mean_us": 497.63153571428575
+            },
+            {
+              "name": "aclnnNeg",
+              "calls": 896,
+              "total_us": 6949.541,
+              "mean_us": 7.756184151785715
+            },
+            {
+              "name": "aclnnArange",
+              "calls": 518,
+              "total_us": 6942.49525,
+              "mean_us": 13.402500482625483
+            },
+            {
+              "name": "aclnnSilu",
+              "calls": 448,
+              "total_us": 4138.8655,
+              "mean_us": 9.2385390625
+            },
+            {
+              "name": "aclnnNonzero",
+              "calls": 192,
+              "total_us": 3576.5679999999998,
+              "mean_us": 18.627958333333332
+            },
+            {
+              "name": "aclnnBitwiseAndTensor",
+              "calls": 199,
+              "total_us": 3107.0025,
+              "mean_us": 15.613077889447236
+            }
+          ]
+        },
+        "step_trace": {
+          "rows": 4,
+          "totals_us": {
+            "computing": 743947.4939999988,
+            "communication_not_overlapped": 902445.3990000004,
+            "overlapped": 0.0,
+            "communication": 902445.3990000004,
+            "free": 341314.58099999605,
+            "stage": 1987707.5,
+            "bubble": 0.0,
+            "preparing": 1412.25
+          },
+          "fractions": {
+            "computing": 0.37427412936762516,
+            "communication_not_overlapped": 0.45401317799525354,
+            "free": 0.17171267955672354,
+            "overlapped_of_communication": 0.0
+          }
+        }
+      },
+      {
+        "global_rank": 5,
+        "logical_device_id": 5,
+        "kernel": {
+          "rows": 43421,
+          "total_duration_us": 1921616.87,
+          "communication_duration_us": 1167651.389,
+          "compute_duration_us": 753965.481,
+          "top": [
+            {
+              "name": "allreduceAicpuKernel",
+              "calls": 919,
+              "total_us": 253617.203,
+              "mean_us": 275.9708411316649
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexPut_IndexPut",
+              "calls": 896,
+              "total_us": 176591.481,
+              "mean_us": 197.08870647321427
+            },
+            {
+              "name": "aclnnIndex_IndexAiCpu_Index",
+              "calls": 384,
+              "total_us": 109706.808,
+              "mean_us": 285.6948125
+            },
+            {
+              "name": "aclnnMatmul_MatMulCommon_MatMulV2",
+              "calls": 3143,
+              "total_us": 101378.452,
+              "mean_us": 32.255314031180404
+            },
+            {
+              "name": "aclnnIndex_IndexAiCore_Index",
+              "calls": 2190,
+              "total_us": 64204.945,
+              "mean_us": 29.317326484018263
+            },
+            {
+              "name": "aclnnMul_MulAiCore_Mul",
+              "calls": 5845,
+              "total_us": 55875.47,
+              "mean_us": 9.559532934131736
+            },
+            {
+              "name": "aclnnFlashAttentionScore_FlashAttentionScore_FlashAttentionScore",
+              "calls": 448,
+              "total_us": 33514.404,
+              "mean_us": 74.8089375
+            },
+            {
+              "name": "aclnnInplaceCopy_CastAiCore_Cast",
+              "calls": 3654,
+              "total_us": 24094.076,
+              "mean_us": 6.593890530925014
+            },
+            {
+              "name": "aclnnPowTensorScalar_PowsAiCore_Pows",
+              "calls": 1799,
+              "total_us": 22490.171,
+              "mean_us": 12.50148471372985
+            },
+            {
+              "name": "aclnnMean_ReduceMeanAiCore_ReduceMean",
+              "calls": 1799,
+              "total_us": 22414.097999999998,
+              "mean_us": 12.459198443579766
+            },
+            {
+              "name": "aclnnIndex_IndexCheck_IndexCheck",
+              "calls": 2574,
+              "total_us": 19751.004,
+              "mean_us": 7.673272727272727
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_NonZero",
+              "calls": 1024,
+              "total_us": 17026.16,
+              "mean_us": 16.627109375
+            },
+            {
+              "name": "aclnnIndex_SliceAiCore_Slice",
+              "calls": 3200,
+              "total_us": 16228.397,
+              "mean_us": 5.0713740625
+            },
+            {
+              "name": "aclnnAdd_AddAiCore_Add",
+              "calls": 1796,
+              "total_us": 13919.027,
+              "mean_us": 7.750015033407572
+            },
+            {
+              "name": "hcom_allReduce__612_227_1",
+              "calls": 1,
+              "total_us": 11624.973,
+              "mean_us": 11624.973
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexCheck_IndexCheck",
+              "calls": 903,
+              "total_us": 8553.252,
+              "mean_us": 9.472039867109634
+            },
+            {
+              "name": "hcom_allReduce__612_625_1",
+              "calls": 1,
+              "total_us": 8495.129,
+              "mean_us": 8495.129
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_MemSet",
+              "calls": 1024,
+              "total_us": 8110.73,
+              "mean_us": 7.920634765625
+            },
+            {
+              "name": "aclnnArange_ArangeAiCore_Range",
+              "calls": 518,
+              "total_us": 6939.276,
+              "mean_us": 13.396285714285714
+            },
+            {
+              "name": "hcom_allReduce__612_231_1",
+              "calls": 1,
+              "total_us": 6679.513,
+              "mean_us": 6679.513
+            }
+          ]
+        },
+        "operator": {
+          "rows": 185951,
+          "duration_field": "Device Self Duration(us)",
+          "top": [
+            {
+              "name": "wait_event",
+              "calls": 2352,
+              "total_us": 1337651.9552499999,
+              "mean_us": 568.7295728103741
+            },
+            {
+              "name": "HcclAllreduce",
+              "calls": 1838,
+              "total_us": 1139924.92325,
+              "mean_us": 620.1985436615887
+            },
+            {
+              "name": "aclnnIndex",
+              "calls": 2574,
+              "total_us": 209891.1545,
+              "mean_us": 81.54279506604507
+            },
+            {
+              "name": "aclnnIndexPutImpl",
+              "calls": 903,
+              "total_us": 185210.78075,
+              "mean_us": 205.10606949058695
+            },
+            {
+              "name": "aclnnMatmul",
+              "calls": 3143,
+              "total_us": 101378.44875,
+              "mean_us": 32.25531299713649
+            },
+            {
+              "name": "aclnnMul",
+              "calls": 5845,
+              "total_us": 60212.40975,
+              "mean_us": 10.301524337040204
+            },
+            {
+              "name": "aclnnFlashAttentionScore",
+              "calls": 448,
+              "total_us": 33514.4085,
+              "mean_us": 74.80894754464285
+            },
+            {
+              "name": "aclnnInplaceCopy",
+              "calls": 3923,
+              "total_us": 27667.32575,
+              "mean_us": 7.052593869487637
+            },
+            {
+              "name": "aclnnNonzeroV2",
+              "calls": 1024,
+              "total_us": 25136.88375,
+              "mean_us": 24.547738037109376
+            },
+            {
+              "name": "HcclBroadcast",
+              "calls": 52,
+              "total_us": 24869.9935,
+              "mean_us": 478.2691057692308
+            },
+            {
+              "name": "aclnnPowTensorScalar",
+              "calls": 1799,
+              "total_us": 22490.17525,
+              "mean_us": 12.501487076153419
+            },
+            {
+              "name": "aclnnMean",
+              "calls": 1799,
+              "total_us": 22414.123,
+              "mean_us": 12.459212340188994
+            },
+            {
+              "name": "aclnnAdd",
+              "calls": 1796,
+              "total_us": 13919.02925,
+              "mean_us": 7.750016286191537
+            },
+            {
+              "name": "aclnnCat",
+              "calls": 910,
+              "total_us": 7092.27825,
+              "mean_us": 7.793712362637363
+            },
+            {
+              "name": "aclnnArange",
+              "calls": 518,
+              "total_us": 6939.27775,
+              "mean_us": 13.396289092664093
+            },
+            {
+              "name": "HcclAllgather",
+              "calls": 14,
+              "total_us": 6904.65925,
+              "mean_us": 493.18994642857143
+            },
+            {
+              "name": "aclnnNeg",
+              "calls": 896,
+              "total_us": 6854.35575,
+              "mean_us": 7.649950613839286
+            },
+            {
+              "name": "aclnnSilu",
+              "calls": 448,
+              "total_us": 3935.11725,
+              "mean_us": 8.783743861607142
+            },
+            {
+              "name": "aclnnNonzero",
+              "calls": 192,
+              "total_us": 3439.0555,
+              "mean_us": 17.911747395833334
+            },
+            {
+              "name": "aclnnLtTensor",
+              "calls": 256,
+              "total_us": 2873.33875,
+              "mean_us": 11.2239794921875
+            }
+          ]
+        },
+        "step_trace": {
+          "rows": 4,
+          "totals_us": {
+            "computing": 749909.3800000001,
+            "communication_not_overlapped": 912381.8320000003,
+            "overlapped": 0.0,
+            "communication": 912381.8320000003,
+            "free": 325432.34199999564,
+            "stage": 1987723.25,
+            "bubble": 0.0,
+            "preparing": 1358.0
+          },
+          "fractions": {
+            "computing": 0.37727051791540905,
+            "communication_not_overlapped": 0.4590084821918747,
+            "free": 0.16372115283150995,
+            "overlapped_of_communication": 0.0
+          }
+        }
+      },
+      {
+        "global_rank": 6,
+        "logical_device_id": 6,
+        "kernel": {
+          "rows": 43421,
+          "total_duration_us": 1889184.902,
+          "communication_duration_us": 1132659.477,
+          "compute_duration_us": 756525.425,
+          "top": [
+            {
+              "name": "allreduceAicpuKernel",
+              "calls": 919,
+              "total_us": 246819.474,
+              "mean_us": 268.573965179543
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexPut_IndexPut",
+              "calls": 896,
+              "total_us": 174112.94,
+              "mean_us": 194.32247767857143
+            },
+            {
+              "name": "aclnnIndex_IndexAiCpu_Index",
+              "calls": 384,
+              "total_us": 108652.355,
+              "mean_us": 282.94884114583334
+            },
+            {
+              "name": "aclnnMatmul_MatMulCommon_MatMulV2",
+              "calls": 3143,
+              "total_us": 101494.49,
+              "mean_us": 32.292233534839326
+            },
+            {
+              "name": "aclnnIndex_IndexAiCore_Index",
+              "calls": 2190,
+              "total_us": 64772.485,
+              "mean_us": 29.576477168949772
+            },
+            {
+              "name": "aclnnMul_MulAiCore_Mul",
+              "calls": 5845,
+              "total_us": 55827.205,
+              "mean_us": 9.551275449101796
+            },
+            {
+              "name": "aclnnFlashAttentionScore_FlashAttentionScore_FlashAttentionScore",
+              "calls": 448,
+              "total_us": 33913.334,
+              "mean_us": 75.69940625000001
+            },
+            {
+              "name": "aclnnInplaceCopy_CastAiCore_Cast",
+              "calls": 3654,
+              "total_us": 26885.915,
+              "mean_us": 7.357940613026821
+            },
+            {
+              "name": "aclnnMean_ReduceMeanAiCore_ReduceMean",
+              "calls": 1799,
+              "total_us": 23085.092,
+              "mean_us": 12.832180100055586
+            },
+            {
+              "name": "aclnnPowTensorScalar_PowsAiCore_Pows",
+              "calls": 1799,
+              "total_us": 23062.444,
+              "mean_us": 12.819590883824347
+            },
+            {
+              "name": "aclnnIndex_IndexCheck_IndexCheck",
+              "calls": 2574,
+              "total_us": 19740.74,
+              "mean_us": 7.66928515928516
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_NonZero",
+              "calls": 1024,
+              "total_us": 17521.518,
+              "mean_us": 17.110857421875
+            },
+            {
+              "name": "aclnnIndex_SliceAiCore_Slice",
+              "calls": 3200,
+              "total_us": 16308.962,
+              "mean_us": 5.096550625
+            },
+            {
+              "name": "aclnnAdd_AddAiCore_Add",
+              "calls": 1796,
+              "total_us": 13710.062,
+              "mean_us": 7.633664810690423
+            },
+            {
+              "name": "hcom_allReduce__612_227_1",
+              "calls": 1,
+              "total_us": 11654.093,
+              "mean_us": 11654.093
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_MemSet",
+              "calls": 1024,
+              "total_us": 8879.706,
+              "mean_us": 8.671587890625
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexCheck_IndexCheck",
+              "calls": 903,
+              "total_us": 8477.984,
+              "mean_us": 9.388686600221485
+            },
+            {
+              "name": "hcom_allReduce__612_625_1",
+              "calls": 1,
+              "total_us": 8465.529,
+              "mean_us": 8465.529
+            },
+            {
+              "name": "hcom_allReduce__612_231_1",
+              "calls": 1,
+              "total_us": 6643.253,
+              "mean_us": 6643.253
+            },
+            {
+              "name": "aclnnArange_ArangeAiCore_Range",
+              "calls": 518,
+              "total_us": 5818.883,
+              "mean_us": 11.233364864864864
+            }
+          ]
+        },
+        "operator": {
+          "rows": 185951,
+          "duration_field": "Device Self Duration(us)",
+          "top": [
+            {
+              "name": "wait_event",
+              "calls": 2352,
+              "total_us": 1277096.92525,
+              "mean_us": 542.9833865858844
+            },
+            {
+              "name": "HcclAllreduce",
+              "calls": 1838,
+              "total_us": 1106990.944,
+              "mean_us": 602.2801653971708
+            },
+            {
+              "name": "aclnnIndex",
+              "calls": 2574,
+              "total_us": 209474.531,
+              "mean_us": 81.38093667443667
+            },
+            {
+              "name": "aclnnIndexPutImpl",
+              "calls": 903,
+              "total_us": 182669.386,
+              "mean_us": 202.2916788482835
+            },
+            {
+              "name": "aclnnMatmul",
+              "calls": 3143,
+              "total_us": 101494.48925,
+              "mean_us": 32.29223329621381
+            },
+            {
+              "name": "aclnnMul",
+              "calls": 5845,
+              "total_us": 60526.855,
+              "mean_us": 10.355321642429427
+            },
+            {
+              "name": "aclnnFlashAttentionScore",
+              "calls": 448,
+              "total_us": 33913.3335,
+              "mean_us": 75.69940513392858
+            },
+            {
+              "name": "aclnnInplaceCopy",
+              "calls": 3923,
+              "total_us": 30434.743,
+              "mean_us": 7.758027784858526
+            },
+            {
+              "name": "aclnnNonzeroV2",
+              "calls": 1024,
+              "total_us": 26401.213,
+              "mean_us": 25.7824345703125
+            },
+            {
+              "name": "HcclBroadcast",
+              "calls": 52,
+              "total_us": 23136.8805,
+              "mean_us": 444.9400096153846
+            },
+            {
+              "name": "aclnnMean",
+              "calls": 1799,
+              "total_us": 23085.09575,
+              "mean_us": 12.832182184546971
+            },
+            {
+              "name": "aclnnPowTensorScalar",
+              "calls": 1799,
+              "total_us": 23062.43875,
+              "mean_us": 12.81958796553641
+            },
+            {
+              "name": "aclnnAdd",
+              "calls": 1796,
+              "total_us": 13710.066,
+              "mean_us": 7.633667037861915
+            },
+            {
+              "name": "aclnnCat",
+              "calls": 910,
+              "total_us": 7212.48225,
+              "mean_us": 7.92580467032967
+            },
+            {
+              "name": "aclnnNeg",
+              "calls": 896,
+              "total_us": 7156.14075,
+              "mean_us": 7.9867642299107136
+            },
+            {
+              "name": "HcclAllgather",
+              "calls": 14,
+              "total_us": 6498.29,
+              "mean_us": 464.1635714285714
+            },
+            {
+              "name": "aclnnArange",
+              "calls": 518,
+              "total_us": 5818.87875,
+              "mean_us": 11.23335666023166
+            },
+            {
+              "name": "aclnnSilu",
+              "calls": 448,
+              "total_us": 4362.60825,
+              "mean_us": 9.737964843750001
+            },
+            {
+              "name": "aclnnNonzero",
+              "calls": 192,
+              "total_us": 3571.38825,
+              "mean_us": 18.60098046875
+            },
+            {
+              "name": "aclnnBitwiseAndTensor",
+              "calls": 199,
+              "total_us": 2810.355,
+              "mean_us": 14.122386934673367
+            }
+          ]
+        },
+        "step_trace": {
+          "rows": 4,
+          "totals_us": {
+            "computing": 752550.7169999995,
+            "communication_not_overlapped": 884152.3890000001,
+            "overlapped": 0.0,
+            "communication": 884152.3890000001,
+            "free": 350721.68299999926,
+            "stage": 1987424.75,
+            "bubble": 0.0,
+            "preparing": 1503.0
+          },
+          "fractions": {
+            "computing": 0.3786562067318521,
+            "communication_not_overlapped": 0.4448733915585987,
+            "free": 0.17647042133293311,
+            "overlapped_of_communication": 0.0
+          }
+        }
+      },
+      {
+        "global_rank": 7,
+        "logical_device_id": 7,
+        "kernel": {
+          "rows": 43421,
+          "total_duration_us": 1834473.723,
+          "communication_duration_us": 1061328.422,
+          "compute_duration_us": 773145.301,
+          "top": [
+            {
+              "name": "allreduceAicpuKernel",
+              "calls": 919,
+              "total_us": 254919.515,
+              "mean_us": 277.3879379760609
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexPut_IndexPut",
+              "calls": 896,
+              "total_us": 181867.3,
+              "mean_us": 202.97689732142857
+            },
+            {
+              "name": "aclnnIndex_IndexAiCpu_Index",
+              "calls": 384,
+              "total_us": 115959.815,
+              "mean_us": 301.97868489583334
+            },
+            {
+              "name": "aclnnMatmul_MatMulCommon_MatMulV2",
+              "calls": 3143,
+              "total_us": 101320.598,
+              "mean_us": 32.23690677696468
+            },
+            {
+              "name": "aclnnIndex_IndexAiCore_Index",
+              "calls": 2190,
+              "total_us": 64895.986,
+              "mean_us": 29.6328703196347
+            },
+            {
+              "name": "aclnnMul_MulAiCore_Mul",
+              "calls": 5845,
+              "total_us": 58988.596,
+              "mean_us": 10.092146449957228
+            },
+            {
+              "name": "aclnnFlashAttentionScore_FlashAttentionScore_FlashAttentionScore",
+              "calls": 448,
+              "total_us": 33874.839,
+              "mean_us": 75.61347991071429
+            },
+            {
+              "name": "aclnnPowTensorScalar_PowsAiCore_Pows",
+              "calls": 1799,
+              "total_us": 27463.12,
+              "mean_us": 15.265769872151195
+            },
+            {
+              "name": "aclnnInplaceCopy_CastAiCore_Cast",
+              "calls": 3654,
+              "total_us": 24081.109,
+              "mean_us": 6.590341817186645
+            },
+            {
+              "name": "aclnnMean_ReduceMeanAiCore_ReduceMean",
+              "calls": 1799,
+              "total_us": 21956.75,
+              "mean_us": 12.204974986103391
+            },
+            {
+              "name": "aclnnIndex_IndexCheck_IndexCheck",
+              "calls": 2574,
+              "total_us": 19685.107,
+              "mean_us": 7.6476717171717175
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_NonZero",
+              "calls": 1024,
+              "total_us": 17175.661,
+              "mean_us": 16.7731064453125
+            },
+            {
+              "name": "aclnnIndex_SliceAiCore_Slice",
+              "calls": 3200,
+              "total_us": 16225.47,
+              "mean_us": 5.0704593749999995
+            },
+            {
+              "name": "aclnnAdd_AddAiCore_Add",
+              "calls": 1796,
+              "total_us": 13771.956,
+              "mean_us": 7.668126948775056
+            },
+            {
+              "name": "hcom_allReduce__612_227_1",
+              "calls": 1,
+              "total_us": 11650.533,
+              "mean_us": 11650.533
+            },
+            {
+              "name": "hcom_allReduce__612_625_1",
+              "calls": 1,
+              "total_us": 8413.408,
+              "mean_us": 8413.408
+            },
+            {
+              "name": "aclnnIndexPutImpl_IndexCheck_IndexCheck",
+              "calls": 903,
+              "total_us": 8360.955,
+              "mean_us": 9.25908637873754
+            },
+            {
+              "name": "aclnnNonzeroV2_NonzeroAiCore_MemSet",
+              "calls": 1024,
+              "total_us": 8158.704,
+              "mean_us": 7.967484375
+            },
+            {
+              "name": "hcom_allReduce__612_231_1",
+              "calls": 1,
+              "total_us": 6727.955,
+              "mean_us": 6727.955
+            },
+            {
+              "name": "aclnnArange_ArangeAiCore_Range",
+              "calls": 518,
+              "total_us": 6100.657,
+              "mean_us": 11.777330115830116
+            }
+          ]
+        },
+        "operator": {
+          "rows": 185951,
+          "duration_field": "Device Self Duration(us)",
+          "top": [
+            {
+              "name": "wait_event",
+              "calls": 2352,
+              "total_us": 1202487.12175,
+              "mean_us": 511.2615313562925
+            },
+            {
+              "name": "HcclAllreduce",
+              "calls": 1838,
+              "total_us": 1038200.8755,
+              "mean_us": 564.8535775299238
+            },
+            {
+              "name": "aclnnIndex",
+              "calls": 2574,
+              "total_us": 216766.3735,
+              "mean_us": 84.21382031857031
+            },
+            {
+              "name": "aclnnIndexPutImpl",
+              "calls": 903,
+              "total_us": 190293.157,
+              "mean_us": 210.7343931339978
+            },
+            {
+              "name": "aclnnMatmul",
+              "calls": 3143,
+              "total_us": 101320.5885,
+              "mean_us": 32.2369037543748
+            },
+            {
+              "name": "aclnnMul",
+              "calls": 5845,
+              "total_us": 63192.45775,
+              "mean_us": 10.81137001710864
+            },
+            {
+              "name": "aclnnFlashAttentionScore",
+              "calls": 448,
+              "total_us": 33874.83975,
+              "mean_us": 75.61348158482143
+            },
+            {
+              "name": "aclnnInplaceCopy",
+              "calls": 3923,
+              "total_us": 28500.44425,
+              "mean_us": 7.2649615727759365
+            },
+            {
+              "name": "aclnnPowTensorScalar",
+              "calls": 1799,
+              "total_us": 27463.10675,
+              "mean_us": 15.265762506948304
+            },
+            {
+              "name": "aclnnNonzeroV2",
+              "calls": 1024,
+              "total_us": 25334.366,
+              "mean_us": 24.740591796875
+            },
+            {
+              "name": "aclnnMean",
+              "calls": 1799,
+              "total_us": 21956.75675,
+              "mean_us": 12.204978738187883
+            },
+            {
+              "name": "HcclBroadcast",
+              "calls": 52,
+              "total_us": 20668.293,
+              "mean_us": 397.46717307692313
+            },
+            {
+              "name": "aclnnAdd",
+              "calls": 1796,
+              "total_us": 13771.9595,
+              "mean_us": 7.668128897550112
+            },
+            {
+              "name": "aclnnCat",
+              "calls": 910,
+              "total_us": 7153.403,
+              "mean_us": 7.860882417582418
+            },
+            {
+              "name": "aclnnNeg",
+              "calls": 896,
+              "total_us": 6732.6335,
+              "mean_us": 7.514099888392857
+            },
+            {
+              "name": "HcclAllgather",
+              "calls": 14,
+              "total_us": 6374.68725,
+              "mean_us": 455.33480357142855
+            },
+            {
+              "name": "aclnnArange",
+              "calls": 518,
+              "total_us": 6100.646,
+              "mean_us": 11.77730888030888
+            },
+            {
+              "name": "aclnnSilu",
+              "calls": 448,
+              "total_us": 3932.4035,
+              "mean_us": 8.777686383928572
+            },
+            {
+              "name": "aclnnNonzero",
+              "calls": 192,
+              "total_us": 3363.2465,
+              "mean_us": 17.51690885416667
+            },
+            {
+              "name": "aclnnBitwiseAndTensor",
+              "calls": 199,
+              "total_us": 2788.57475,
+              "mean_us": 14.012938442211057
+            }
+          ]
+        },
+        "step_trace": {
+          "rows": 4,
+          "totals_us": {
+            "computing": 769221.8150000011,
+            "communication_not_overlapped": 804706.5739999999,
+            "overlapped": 0.0,
+            "communication": 804706.5739999999,
+            "free": 411424.19799997716,
+            "stage": 1985352.75,
+            "bubble": 0.0,
+            "preparing": 2436.5
+          },
+          "fractions": {
+            "computing": 0.387448434541419,
+            "communication_not_overlapped": 0.40532171121731386,
+            "free": 0.20722977213997723,
+            "overlapped_of_communication": 0.0
+          }
+        }
+      }
+    ]
+  }
+}

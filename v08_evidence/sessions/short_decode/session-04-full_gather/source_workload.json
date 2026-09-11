@@ -1,0 +1,1040 @@
+{
+  "schema_version": 1,
+  "workload_id": "short_short-n64-interval50-seed2026",
+  "workload_class": "short_short",
+  "request_sha256": "380a9af8544252650e8464cf73b2a3f614170b1694c75d440abac3b43ec71fbf",
+  "metadata": {
+    "generator": "minigpt.workload.generate_workload",
+    "request_count": 64,
+    "arrival_interval_ms": 50.0,
+    "seed": 2026,
+    "prompt_lengths_are": "tokenizer-dependent; report encoded lengths"
+  },
+  "partition": null,
+  "requests": [
+    {
+      "request_id": "short_short-00000",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 0.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2026,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00001",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 50.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2027,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00002",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 100.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2028,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00003",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 150.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2029,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00004",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 200.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2030,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00005",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 250.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2031,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00006",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 300.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2032,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00007",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 350.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2033,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00008",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 400.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2034,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00009",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 450.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2035,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00010",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 500.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2036,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00011",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 550.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2037,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00012",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 600.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2038,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00013",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 650.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2039,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00014",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 700.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2040,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00015",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 750.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2041,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00016",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 800.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2042,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00017",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 850.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2043,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00018",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 900.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2044,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00019",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 950.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2045,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00020",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 1000.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2046,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00021",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 1050.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2047,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00022",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 1100.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2048,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00023",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 1150.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2049,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00024",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 1200.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2050,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00025",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 1250.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2051,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00026",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 1300.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2052,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00027",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 1350.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2053,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00028",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 1400.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2054,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00029",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 1450.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2055,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00030",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 1500.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2056,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00031",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 1550.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2057,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00032",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 1600.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2058,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00033",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 1650.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2059,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00034",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 1700.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2060,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00035",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 1750.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2061,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00036",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 1800.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2062,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00037",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 1850.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2063,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00038",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 1900.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2064,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00039",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 1950.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2065,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00040",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 2000.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2066,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00041",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 2050.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2067,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00042",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 2100.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2068,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00043",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 2150.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2069,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00044",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 2200.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2070,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00045",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 2250.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2071,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00046",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 2300.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2072,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00047",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 2350.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2073,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00048",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 2400.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2074,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00049",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 2450.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2075,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00050",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 2500.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2076,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00051",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 2550.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2077,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00052",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 2600.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2078,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00053",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 2650.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2079,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00054",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 2700.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2080,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00055",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 2750.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2081,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00056",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 2800.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2082,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00057",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 2850.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2083,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00058",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 2900.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2084,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00059",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 2950.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2085,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00060",
+      "prompt": "用一句话解释 KV Cache。",
+      "arrival_time_ms": 3000.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2086,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00061",
+      "prompt": "什么是 TTFT？",
+      "arrival_time_ms": 3050.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2087,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00062",
+      "prompt": "说明 Prefill 和 Decode 的区别。",
+      "arrival_time_ms": 3100.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2088,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    },
+    {
+      "request_id": "short_short-00063",
+      "prompt": "为什么推理服务需要 batching？",
+      "arrival_time_ms": 3150.0,
+      "deadline_ms": null,
+      "generation": {
+        "max_new_tokens": 16,
+        "strategy": "greedy",
+        "temperature": 1.0,
+        "top_k": null,
+        "top_p": null,
+        "seed": 2089,
+        "eos_token_id": null,
+        "eos_token_ids": null
+      }
+    }
+  ]
+}

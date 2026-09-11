@@ -1,0 +1,46 @@
+W0911 09:39:03.391000 3490265 site-packages/torch/distributed/run.py:852] 
+W0911 09:39:03.391000 3490265 site-packages/torch/distributed/run.py:852] *****************************************
+W0911 09:39:03.391000 3490265 site-packages/torch/distributed/run.py:852] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0911 09:39:03.391000 3490265 site-packages/torch/distributed/run.py:852] *****************************************
+[rank0]:[W911 09:39:07.185528440 NPUCachingAllocator.cpp:204] Warning: The current CANN and HDK(driver) versions require processing for 32 padding size, with memory allocation. (function operator())
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+[2026-09-11 09:40:01] [INFO] [3502155] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-03-distributed_argmax/profiler/rank_003/rank_003_3490500_20260911093958146_ascend_pt
+|[2026-09-11 09:40:01] [INFO] [3502170] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-03-distributed_argmax/profiler/rank_007/rank_007_3490504_20260911093958146_ascend_pt
+|[2026-09-11 09:40:02] [INFO] [3502284] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-03-distributed_argmax/profiler/rank_000/rank_000_3490497_20260911093958146_ascend_pt
+|[2026-09-11 09:40:02] [INFO] [3502314] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-03-distributed_argmax/profiler/rank_002/rank_002_3490499_20260911093958146_ascend_pt
+[2026-09-11 09:40:02] [INFO] [3502320] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-03-distributed_argmax/profiler/rank_004/rank_004_3490501_20260911093958146_ascend_pt
+||[2026-09-11 09:40:02] [INFO] [3502340] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-03-distributed_argmax/profiler/rank_006/rank_006_3490503_20260911093958146_ascend_pt
+|[2026-09-11 09:40:02] [INFO] [3502441] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-03-distributed_argmax/profiler/rank_005/rank_005_3490502_20260911093958146_ascend_pt
+|/[2026-09-11 09:40:02] [INFO] [3502459] profiler.py: Start parsing profiling data in sync mode at: /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-03-distributed_argmax/profiler/rank_001/rank_001_3490498_20260911093958149_ascend_pt
+|//////-/------\-\\\\\\|\||||||/|//////-/------\-\\\\\\|\||||||/|//////-/------\-\\\\\\\|[2026-09-11 09:40:13] [INFO] [3502164] profiler.py: CANN profiling data parsed in a total time of 0:00:12.097039
+|[2026-09-11 09:40:14] [INFO] [3502257] profiler.py: CANN profiling data parsed in a total time of 0:00:12.090591
+|[2026-09-11 09:40:14] [INFO] [3502324] profiler.py: CANN profiling data parsed in a total time of 0:00:12.130946
+|[2026-09-11 09:40:14] [INFO] [3502332] profiler.py: CANN profiling data parsed in a total time of 0:00:12.107225|
+|[2026-09-11 09:40:14] [INFO] [3502404] profiler.py: CANN profiling data parsed in a total time of 0:00:12.102637
+/|[2026-09-11 09:40:14] [INFO] [3502460] profiler.py: CANN profiling data parsed in a total time of 0:00:12.116021
+[2026-09-11 09:40:14] [INFO] [3502599] profiler.py: CANN profiling data parsed in a total time of 0:00:12.110492|
+[2026-09-11 09:40:15] [INFO] [3502350] profiler.py: CANN profiling data parsed in a total time of 0:00:13.069635
+/////-//-----\--[2026-09-11 09:40:17] [INFO] [3502155] profiler.py: All profiling data parsed in a total time of 0:00:15.991442
+\\\\[2026-09-11 09:40:17] [INFO] [3502314] profiler.py: All profiling data parsed in a total time of 0:00:15.752892
+\[2026-09-11 09:40:17] [INFO] [3502284] profiler.py: All profiling data parsed in a total time of 0:00:15.919610
+[2026-09-11 09:40:18] [INFO] [3502320] profiler.py: All profiling data parsed in a total time of 0:00:15.800453
+[2026-09-11 09:40:18] [INFO] [3502340] profiler.py: All profiling data parsed in a total time of 0:00:15.713348
+[2026-09-11 09:40:18] [INFO] [3502170] profiler.py: All profiling data parsed in a total time of 0:00:16.275229
+\[2026-09-11 09:40:18] [INFO] [3502441] profiler.py: All profiling data parsed in a total time of 0:00:15.908066
+\[2026-09-11 09:40:18] [INFO] [3502459] profiler.py: All profiling data parsed in a total time of 0:00:16.095451
+/usr/local/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+================================================================================
+Qwen3 Continuous Batching Benchmark（measured repeats 中位数）
+layout / replica : tp8 / 0
+TP size          : 8
+workload         : short_short-n64-interval50-seed2026
+mode             : open_loop
+request/s        : 7.823
+goodput request/s: 7.823
+output token/s   : 125.160
+evidence class   : qwen3_32b_ascend_continuous_batching_candidate
+report           : /root/minigpt-train-v07/runs/v08_decode_vocab_ab/short_decode/session-03-distributed_argmax/replica-00.json
