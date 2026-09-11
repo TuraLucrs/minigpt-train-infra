@@ -67,6 +67,15 @@ print(json.dumps({'python': platform.python_version(), 'executable': os.path.rea
 """
 
 
+def _public_version(value: object) -> str | None:
+    # The report side records torch.__version__ while the matrix identity records
+    # importlib.metadata; the two can disagree on the local segment for one install
+    # (e.g. "2.10.0+cpu" vs "2.10.0"), so compare the public version.
+    if value is None:
+        return None
+    return str(value).split("+", 1)[0]
+
+
 def _utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -1117,7 +1126,7 @@ def inspect_point_output(point: MatrixPoint, config: Mapping[str, Any], output_d
         raise ValueError("benchmark has no verified model weight manifest")
     if identity is not None:
         software = identity["software"]
-        if environment.get("python") != software["python"] or environment.get("torch") != software["packages"]["torch"]:
+        if environment.get("python") != software["python"] or _public_version(environment.get("torch")) != _public_version(software["packages"]["torch"]):
             raise ValueError("benchmark software environment differs from the saved interpreter identity")
         if provenance.get("git", {}).get("commit") != identity["source"]["git"].get("commit"):
             raise ValueError("benchmark Git commit differs from the matrix identity")
