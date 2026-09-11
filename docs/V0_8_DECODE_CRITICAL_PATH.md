@@ -154,3 +154,29 @@ preflight 拒绝、benchmark 失败还是收到中断，都尝试输出 incomple
 
 当前交付是软件检查点，不打正式硬件验收 tag。根据本轮明确授权，v0.9 软件开发可以先于
 v0.8 真机实验完成；v0.7/v0.7.1 冻结 tag 与历史证据保持不变。
+
+## 8. Atlas A3 最终验收
+
+2026-09-11 在 Atlas A3（4 张双芯卡、8 个逻辑 NPU）上以 TP8 完成了全部 8 个独立
+session。运行提交为 `2a661b1372b521d04c26fefc91cfc6080c72054b`，所有 session
+均正常退出，未发生 OOM；启动前检查的 HBM 最大占用为 4.0%，AICore 最大占用为 0.0%。
+
+| case | 完成吞吐变化 | goodput 变化 | 非重叠通信占比变化 | 判定 |
+|---|---:|---:|---:|---|
+| `short_decode` | -1.1% | -1.1% | +8.8pp | 未达到收益门槛 |
+| `mixed_decode` | +0.2% | +0.9% | +0.9pp | 未达到收益门槛 |
+
+两组同路径 session 的 goodput CV 均低于 10%，候选路径没有超过 2% 的回退，终态、
+计算长度和实际 token-selection 路径也通过核验。但它在两个场景中都没有带来至少 3%
+的完成吞吐提升，非重叠通信占比也没有下降至少 3 个百分点。因此最终研究状态为
+`full_vocab_gather_not_end_to_end_bottleneck`：候选 collective 的理论输入字节虽缩小
+4748 倍，但 full-vocab AllGather 不是当前 Decode 端到端主瓶颈。本项目停止扩展该优化，
+继续以 `full_gather` 为默认路径；`distributed_argmax` 仅保留为经过正确性验证的实验实现。
+
+真机原始汇总中的 `complete=false` 和 `EXIT_STATUS=2` 原样保留。其唯一 incomplete 原因是
+checker 错把 Python 类名 `SlotCachedTensorParallelQwen3ModelRunner` 当作报告值，而 serving
+管线一直记录稳定的 `implementation_name=qwen3_tp_slot_kv_cache`。最终代码已对齐真实报告
+schema，并增加反向回归用例，防止合成 fixture 再次接受类名字符串。最终提交
+`8ab44345e008f3b4f90d33ff852459dd9dfff893` 的 GitHub Actions run
+`34564171875` 已通过完整 CPU/Gloo 回归。原始输出、独立复核、8 个 profile manifest 与
+精选 rank 产物均保存在 `v08_evidence/`，其中原始失败状态不作事后改写。
